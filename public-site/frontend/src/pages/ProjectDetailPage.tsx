@@ -13,7 +13,9 @@ import {
   CircularProgress,
   Card,
   CardContent,
-  Avatar
+  Avatar,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import {
   Download as DownloadIcon,
@@ -35,6 +37,10 @@ import StructuredData from '../components/StructuredData';
 const ProjectDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -81,18 +87,18 @@ const ProjectDetailPage: React.FC = () => {
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 4 } }}>
         <SEOHead title="Loading Research Project..." />
         <Box sx={{ 
           display: 'flex', 
           justifyContent: 'center', 
           alignItems: 'center', 
-          height: 400,
+          height: { xs: 300, sm: 400 },
           flexDirection: 'column',
           gap: 2
         }}>
           <CircularProgress 
-            size={60} 
+            size={isMobile ? 40 : 60} 
             sx={{ 
               color: '#1b5e20',
               '& .MuiCircularProgress-circle': {
@@ -100,7 +106,7 @@ const ProjectDetailPage: React.FC = () => {
               }
             }} 
           />
-          <Typography variant="h6" sx={{ color: '#2e7d32' }}>
+          <Typography variant={isMobile ? "body1" : "h6"} sx={{ color: '#2e7d32', textAlign: 'center' }}>
             Loading Research Project...
           </Typography>
         </Box>
@@ -110,7 +116,7 @@ const ProjectDetailPage: React.FC = () => {
 
   if (error || !project) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 4 } }}>
         <SEOHead 
           title="Research Project Not Found - School of Public Health"
           description="The requested research project could not be found in our public health database."
@@ -132,14 +138,15 @@ const ProjectDetailPage: React.FC = () => {
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/projects')}
           variant="contained"
+          fullWidth={isMobile}
           sx={{
             bgcolor: '#1b5e20',
             color: 'white',
-            px: 3,
-            py: 1.5,
+            px: { xs: 2, sm: 3 },
+            py: { xs: 1, sm: 1.5 },
             borderRadius: 3,
             textTransform: 'none',
-            fontSize: '1rem',
+            fontSize: { xs: '0.9rem', sm: '1rem' },
             fontWeight: 'bold',
             boxShadow: '0 4px 16px rgba(27, 94, 32, 0.3)',
             '&:hover': {
@@ -173,7 +180,7 @@ const ProjectDetailPage: React.FC = () => {
 
   return (
     <Box sx={{ bgcolor: '#fafafa', minHeight: '100vh' }}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 4 } }}>
         {/* SEO Components */}
         <SEOHead
           title={`${project.title} - School of Public Health Research`}
@@ -198,15 +205,16 @@ const ProjectDetailPage: React.FC = () => {
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/projects')}
           variant="outlined"
+          size={isMobile ? "small" : "medium"}
           sx={{ 
-            mb: 4,
+            mb: { xs: 2, sm: 4 },
             borderColor: '#1b5e20',
             color: '#1b5e20',
-            px: 3,
-            py: 1,
+            px: { xs: 2, sm: 3 },
+            py: { xs: 0.5, sm: 1 },
             borderRadius: 3,
             textTransform: 'none',
-            fontSize: '1rem',
+            fontSize: { xs: '0.875rem', sm: '1rem' },
             fontWeight: 600,
             borderWidth: 2,
             '&:hover': {
@@ -222,48 +230,62 @@ const ProjectDetailPage: React.FC = () => {
 
         {/* Project Header */}
         <Paper sx={{ 
-          p: 4, 
-          mb: 4, 
+          p: { xs: 2, sm: 4 }, 
+          mb: { xs: 2, sm: 4 }, 
           borderRadius: 4,
           border: '2px solid #c8e6c9',
           background: 'linear-gradient(135deg, #ffffff 0%, #f1f8e9 100%)',
           boxShadow: '0 8px 32px rgba(27, 94, 32, 0.1)'
         }}>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 3, mb: 3 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'flex-start', 
+            gap: { xs: 2, sm: 3 }, 
+            mb: 3,
+            flexDirection: { xs: 'column', sm: 'row' }
+          }}>
             <Avatar
               sx={{
                 bgcolor: '#1b5e20',
-                width: 60,
-                height: 60,
+                width: { xs: 48, sm: 60 },
+                height: { xs: 48, sm: 60 },
                 boxShadow: '0 4px 16px rgba(27, 94, 32, 0.3)'
               }}
             >
-              <ResearchIcon sx={{ fontSize: 30, color: 'white' }} />
+              <ResearchIcon sx={{ fontSize: { xs: 24, sm: 30 }, color: 'white' }} />
             </Avatar>
-            <Box sx={{ flexGrow: 1 }}>
+            <Box sx={{ flexGrow: 1, width: '100%' }}>
               <Typography 
-                variant="h3" 
+                variant={isMobile ? "h5" : "h3"}
                 component="h1" 
                 gutterBottom
                 sx={{ 
                   color: '#1b5e20',
                   fontWeight: 'bold',
                   lineHeight: 1.2,
-                  textShadow: '0 2px 4px rgba(27, 94, 32, 0.1)'
+                  textShadow: '0 2px 4px rgba(27, 94, 32, 0.1)',
+                  fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' }
                 }}
               >
                 {project.title}
               </Typography>
               
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 3 }}>
+              <Box sx={{ 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: { xs: 1, sm: 1.5 }, 
+                mb: 3 
+              }}>
                 {project.research_area && (
                   <Chip 
                     icon={<HealthIcon />}
                     label={project.research_area} 
+                    size={isMobile ? "small" : "medium"}
                     sx={{
                       bgcolor: '#1b5e20',
                       color: 'white',
                       fontWeight: 'bold',
+                      fontSize: { xs: '0.75rem', sm: '0.875rem' },
                       '& .MuiChip-icon': { color: 'white' },
                       boxShadow: '0 2px 8px rgba(27, 94, 32, 0.3)'
                     }}
@@ -273,10 +295,12 @@ const ProjectDetailPage: React.FC = () => {
                   <Chip 
                     icon={<SchoolIcon />}
                     label={project.degree_type} 
+                    size={isMobile ? "small" : "medium"}
                     sx={{
                       bgcolor: '#2e7d32',
                       color: 'white',
                       fontWeight: 'bold',
+                      fontSize: { xs: '0.75rem', sm: '0.875rem' },
                       '& .MuiChip-icon': { color: 'white' },
                       boxShadow: '0 2px 8px rgba(46, 125, 50, 0.3)'
                     }}
@@ -287,10 +311,12 @@ const ProjectDetailPage: React.FC = () => {
                     icon={<CalendarIcon />}
                     label={project.academic_year} 
                     variant="outlined"
+                    size={isMobile ? "small" : "medium"}
                     sx={{
                       borderColor: '#388e3c',
                       color: '#388e3c',
                       fontWeight: 'bold',
+                      fontSize: { xs: '0.75rem', sm: '0.875rem' },
                       borderWidth: 2,
                       '& .MuiChip-icon': { color: '#388e3c' }
                     }}
@@ -301,22 +327,29 @@ const ProjectDetailPage: React.FC = () => {
           </Box>
 
           {/* Action Buttons */}
-          <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
+          <Box sx={{ 
+            display: 'flex', 
+            gap: { xs: 2, sm: 3 }, 
+            mb: { xs: 3, sm: 4 }, 
+            flexWrap: 'wrap',
+            flexDirection: { xs: 'column', sm: 'row' }
+          }}>
             {project.document_url && (
               <>
                 <Button
                   variant="contained"
                   startIcon={<ViewIcon />}
                   onClick={handleViewDocument}
-                  size="large"
+                  size={isMobile ? "medium" : "large"}
+                  fullWidth={isMobile}
                   sx={{
                     bgcolor: '#1b5e20',
                     color: 'white',
-                    px: 4,
-                    py: 1.5,
+                    px: { xs: 3, sm: 4 },
+                    py: { xs: 1, sm: 1.5 },
                     borderRadius: 3,
                     textTransform: 'none',
-                    fontSize: '1.1rem',
+                    fontSize: { xs: '1rem', sm: '1.1rem' },
                     fontWeight: 'bold',
                     boxShadow: '0 6px 20px rgba(27, 94, 32, 0.3)',
                     '&:hover': {
@@ -333,15 +366,16 @@ const ProjectDetailPage: React.FC = () => {
                   startIcon={<DownloadIcon />}
                   onClick={handleDownload}
                   disabled={downloading}
-                  size="large"
+                  size={isMobile ? "medium" : "large"}
+                  fullWidth={isMobile}
                   sx={{
                     borderColor: '#2e7d32',
                     color: '#2e7d32',
-                    px: 4,
-                    py: 1.5,
+                    px: { xs: 3, sm: 4 },
+                    py: { xs: 1, sm: 1.5 },
                     borderRadius: 3,
                     textTransform: 'none',
-                    fontSize: '1.1rem',
+                    fontSize: { xs: '1rem', sm: '1.1rem' },
                     fontWeight: 'bold',
                     borderWidth: 2,
                     boxShadow: '0 4px 16px rgba(46, 125, 50, 0.2)',
@@ -367,34 +401,36 @@ const ProjectDetailPage: React.FC = () => {
           {/* Project Stats */}
           <Box sx={{ 
             display: 'flex', 
-            gap: 4, 
-            p: 3,
+            gap: { xs: 2, sm: 4 }, 
+                        p: { xs: 2, sm: 3 },
             bgcolor: 'rgba(27, 94, 32, 0.05)',
             borderRadius: 3,
-            border: '1px solid #c8e6c9'
+            border: '1px solid #c8e6c9',
+            flexDirection: { xs: 'row', sm: 'row' },
+            justifyContent: 'space-around'
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Avatar sx={{ bgcolor: '#2e7d32', width: 32, height: 32 }}>
-                <ViewIcon sx={{ fontSize: 18 }} />
+              <Avatar sx={{ bgcolor: '#2e7d32', width: { xs: 28, sm: 32 }, height: { xs: 28, sm: 32 } }}>
+                <ViewIcon sx={{ fontSize: { xs: 16, sm: 18 } }} />
               </Avatar>
               <Box>
-                <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
+                <Typography variant={isMobile ? "body1" : "h6"} sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
                   {project.view_count}
                 </Typography>
-                <Typography variant="caption" sx={{ color: '#2e7d32', fontWeight: 500 }}>
+                <Typography variant="caption" sx={{ color: '#2e7d32', fontWeight: 500, fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
                   Views
                 </Typography>
               </Box>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Avatar sx={{ bgcolor: '#388e3c', width: 32, height: 32 }}>
-                <DownloadIcon sx={{ fontSize: 18 }} />
+              <Avatar sx={{ bgcolor: '#388e3c', width: { xs: 28, sm: 32 }, height: { xs: 28, sm: 32 } }}>
+                <DownloadIcon sx={{ fontSize: { xs: 16, sm: 18 } }} />
               </Avatar>
               <Box>
-                <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
+                <Typography variant={isMobile ? "body1" : "h6"} sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
                   {project.download_count}
                 </Typography>
-                <Typography variant="caption" sx={{ color: '#2e7d32', fontWeight: 500 }}>
+                <Typography variant="caption" sx={{ color: '#2e7d32', fontWeight: 500, fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
                   Downloads
                 </Typography>
               </Box>
@@ -402,33 +438,33 @@ const ProjectDetailPage: React.FC = () => {
           </Box>
         </Paper>
 
-        <Grid container spacing={4}>
+        <Grid container spacing={{ xs: 2, sm: 4 }}>
           {/* Main Content */}
           <Grid item xs={12} md={8}>
             {/* Abstract */}
             {project.abstract && (
               <Paper sx={{ 
-                p: 4, 
-                mb: 4, 
+                p: { xs: 2, sm: 4 }, 
+                mb: { xs: 2, sm: 4 }, 
                 borderRadius: 4,
                 border: '2px solid #c8e6c9',
                 boxShadow: '0 4px 16px rgba(27, 94, 32, 0.1)',
                 background: 'linear-gradient(135deg, #ffffff 0%, #f9fbe7 100%)'
               }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                  <Avatar sx={{ bgcolor: '#2e7d32', width: 40, height: 40 }}>
-                    <CategoryIcon />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: { xs: 2, sm: 3 } }}>
+                  <Avatar sx={{ bgcolor: '#2e7d32', width: { xs: 32, sm: 40 }, height: { xs: 32, sm: 40 } }}>
+                    <CategoryIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
                   </Avatar>
-                  <Typography variant="h5" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
+                  <Typography variant={isMobile ? "h6" : "h5"} sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
                     Research Abstract
-                                    </Typography>
+                  </Typography>
                 </Box>
                 <Typography 
                   variant="body1" 
                   sx={{ 
                     lineHeight: 1.8,
                     color: '#2e7d32',
-                    fontSize: '1.1rem',
+                    fontSize: { xs: '0.95rem', sm: '1.1rem' },
                     textAlign: 'justify'
                   }}
                 >
@@ -440,31 +476,32 @@ const ProjectDetailPage: React.FC = () => {
             {/* Keywords */}
             {project.keywords && (
               <Paper sx={{ 
-                p: 4, 
-                mb: 4, 
+                p: { xs: 2, sm: 4 }, 
+                mb: { xs: 2, sm: 4 }, 
                 borderRadius: 4,
                 border: '2px solid #c8e6c9',
                 boxShadow: '0 4px 16px rgba(27, 94, 32, 0.1)',
                 background: 'linear-gradient(135deg, #ffffff 0%, #f1f8e9 100%)'
               }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                  <Avatar sx={{ bgcolor: '#388e3c', width: 40, height: 40 }}>
-                    <PublicIcon />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: { xs: 2, sm: 3 } }}>
+                  <Avatar sx={{ bgcolor: '#388e3c', width: { xs: 32, sm: 40 }, height: { xs: 32, sm: 40 } }}>
+                    <PublicIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
                   </Avatar>
-                  <Typography variant="h5" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
+                  <Typography variant={isMobile ? "h6" : "h5"} sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
                     Research Keywords
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: { xs: 1, sm: 1.5 } }}>
                   {project.keywords.split(',').map((keyword, index) => (
                     <Chip 
                       key={index} 
                       label={keyword.trim()} 
-                      size="medium"
+                      size={isMobile ? "small" : "medium"}
                       sx={{
                         bgcolor: '#e8f5e9',
                         color: '#1b5e20',
                         fontWeight: 600,
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
                         border: '1px solid #c8e6c9',
                         '&:hover': {
                           bgcolor: '#c8e6c9',
@@ -480,17 +517,17 @@ const ProjectDetailPage: React.FC = () => {
 
             {/* Additional Research Information */}
             <Paper sx={{ 
-              p: 4, 
+              p: { xs: 2, sm: 4 }, 
               borderRadius: 4,
               border: '2px solid #c8e6c9',
               boxShadow: '0 4px 16px rgba(27, 94, 32, 0.1)',
               background: 'linear-gradient(135deg, #ffffff 0%, #e8f5e9 100%)'
             }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                <Avatar sx={{ bgcolor: '#4caf50', width: 40, height: 40 }}>
-                  <HealthIcon />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: { xs: 2, sm: 3 } }}>
+                <Avatar sx={{ bgcolor: '#4caf50', width: { xs: 32, sm: 40 }, height: { xs: 32, sm: 40 } }}>
+                  <HealthIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
                 </Avatar>
-                <Typography variant="h5" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
+                <Typography variant={isMobile ? "h6" : "h5"} sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
                   Public Health Impact
                 </Typography>
               </Box>
@@ -499,7 +536,7 @@ const ProjectDetailPage: React.FC = () => {
                 sx={{ 
                   lineHeight: 1.7,
                   color: '#2e7d32',
-                  fontSize: '1rem',
+                  fontSize: { xs: '0.9rem', sm: '1rem' },
                   fontStyle: 'italic'
                 }}
               >
@@ -518,33 +555,34 @@ const ProjectDetailPage: React.FC = () => {
               boxShadow: '0 8px 32px rgba(27, 94, 32, 0.1)',
               background: 'linear-gradient(135deg, #ffffff 0%, #f1f8e9 100%)'
             }}>
-              <CardContent sx={{ p: 4 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                  <Avatar sx={{ bgcolor: '#1b5e20', width: 40, height: 40 }}>
-                    <PersonIcon />
+              <CardContent sx={{ p: { xs: 2, sm: 4 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: { xs: 2, sm: 3 } }}>
+                  <Avatar sx={{ bgcolor: '#1b5e20', width: { xs: 32, sm: 40 }, height: { xs: 32, sm: 40 } }}>
+                    <PersonIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
                   </Avatar>
-                  <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
+                  <Typography variant={isMobile ? "body1" : "h6"} sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
                     Research Details
                   </Typography>
                 </Box>
-                <Divider sx={{ mb: 3, borderColor: '#c8e6c9' }} />
+                <Divider sx={{ mb: { xs: 2, sm: 3 }, borderColor: '#c8e6c9' }} />
                 
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 3 } }}>
                   <Box sx={{
-                    p: 2,
+                    p: { xs: 1.5, sm: 2 },
                     bgcolor: 'rgba(27, 94, 32, 0.05)',
                     borderRadius: 2,
                     border: '1px solid #e8f5e9'
                   }}>
-                    <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1 }}>
+                    <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                       Principal Researcher
                     </Typography>
-                    <Typography variant="body1" sx={{ 
+                    <Typography variant={isMobile ? "body2" : "body1"} sx={{ 
                       display: 'flex', 
                       alignItems: 'center', 
                       gap: 1,
                       color: '#1b5e20',
-                      fontWeight: 'bold'
+                      fontWeight: 'bold',
+                      fontSize: { xs: '0.875rem', sm: '1rem' }
                     }}>
                       <PersonIcon fontSize="small" />
                       {project.author_name}
@@ -553,20 +591,21 @@ const ProjectDetailPage: React.FC = () => {
 
                   {project.institution && (
                     <Box sx={{
-                      p: 2,
+                      p: { xs: 1.5, sm: 2 },
                       bgcolor: 'rgba(46, 125, 50, 0.05)',
                       borderRadius: 2,
                       border: '1px solid #e8f5e9'
                     }}>
-                      <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1 }}>
+                      <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                         Institution
                       </Typography>
-                      <Typography variant="body1" sx={{ 
+                      <Typography variant={isMobile ? "body2" : "body1"} sx={{ 
                         display: 'flex', 
                         alignItems: 'center', 
                         gap: 1,
                         color: '#2e7d32',
-                        fontWeight: 600
+                        fontWeight: 600,
+                        fontSize: { xs: '0.875rem', sm: '1rem' }
                       }}>
                         <SchoolIcon fontSize="small" />
                         {project.institution}
@@ -576,15 +615,15 @@ const ProjectDetailPage: React.FC = () => {
 
                   {project.department && (
                     <Box sx={{
-                      p: 2,
+                      p: { xs: 1.5, sm: 2 },
                       bgcolor: 'rgba(56, 142, 60, 0.05)',
                       borderRadius: 2,
                       border: '1px solid #e8f5e9'
                     }}>
-                      <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1 }}>
+                      <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                         Department
                       </Typography>
-                      <Typography variant="body1" sx={{ color: '#2e7d32', fontWeight: 600 }}>
+                      <Typography variant={isMobile ? "body2" : "body1"} sx={{ color: '#2e7d32', fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
                         {project.department}
                       </Typography>
                     </Box>
@@ -592,35 +631,36 @@ const ProjectDetailPage: React.FC = () => {
 
                   {project.supervisor && (
                     <Box sx={{
-                      p: 2,
+                      p: { xs: 1.5, sm: 2 },
                       bgcolor: 'rgba(76, 175, 80, 0.05)',
                       borderRadius: 2,
                       border: '1px solid #e8f5e9'
                     }}>
-                      <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1 }}>
+                      <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                         Research Supervisor
                       </Typography>
-                      <Typography variant="body1" sx={{ color: '#2e7d32', fontWeight: 600 }}>
+                      <Typography variant={isMobile ? "body2" : "body1"} sx={{ color: '#2e7d32', fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
                         {project.supervisor}
                       </Typography>
                     </Box>
                   )}
 
                   <Box sx={{
-                    p: 2,
+                    p: { xs: 1.5, sm: 2 },
                     bgcolor: 'rgba(27, 94, 32, 0.08)',
                     borderRadius: 2,
                     border: '1px solid #c8e6c9'
                   }}>
-                    <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1 }}>
+                    <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                       Publication Date
                     </Typography>
-                    <Typography variant="body1" sx={{ 
+                    <Typography variant={isMobile ? "body2" : "body1"} sx={{ 
                       display: 'flex', 
                       alignItems: 'center', 
                       gap: 1,
                       color: '#1b5e20',
-                      fontWeight: 'bold'
+                      fontWeight: 'bold',
+                      fontSize: { xs: '0.875rem', sm: '1rem' }
                     }}>
                       <CalendarIcon fontSize="small" />
                       {new Date(project.publication_date).toLocaleDateString('en-US', {
@@ -633,25 +673,32 @@ const ProjectDetailPage: React.FC = () => {
 
                   {project.document_filename && (
                     <Box sx={{
-                      p: 2,
+                      p: { xs: 1.5, sm: 2 },
                       bgcolor: 'rgba(46, 125, 50, 0.08)',
                       borderRadius: 2,
                       border: '1px solid #c8e6c9'
                     }}>
-                      <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1 }}>
+                      <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                         Document Information
                       </Typography>
-                      <Typography variant="body1" sx={{ color: '#2e7d32', fontWeight: 600, mb: 1 }}>
+                      <Typography variant={isMobile ? "body2" : "body1"} sx={{ 
+                        color: '#2e7d32', 
+                        fontWeight: 600, 
+                        mb: 1,
+                        fontSize: { xs: '0.875rem', sm: '1rem' },
+                        wordBreak: 'break-word'
+                      }}>
                         {project.document_filename}
                       </Typography>
                       {project.document_size && (
                         <Chip
                           label={`${(project.document_size / 1024 / 1024).toFixed(2)} MB`}
                           size="small"
-                          sx={{
+                                                    sx={{
                             bgcolor: '#c8e6c9',
                             color: '#1b5e20',
-                            fontWeight: 'bold'
+                            fontWeight: 'bold',
+                            fontSize: { xs: '0.7rem', sm: '0.75rem' }
                           }}
                         />
                       )}
@@ -660,23 +707,47 @@ const ProjectDetailPage: React.FC = () => {
                 </Box>
 
                 {/* Call to Action */}
-                <Box sx={{ mt: 4, p: 3, bgcolor: '#1b5e20', borderRadius: 3, textAlign: 'center' }}>
-                  <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mb: 2 }}>
+                <Box sx={{ 
+                  mt: { xs: 3, sm: 4 }, 
+                  p: { xs: 2, sm: 3 }, 
+                  bgcolor: '#1b5e20', 
+                  borderRadius: 3, 
+                  textAlign: 'center' 
+                }}>
+                  <Typography 
+                    variant={isMobile ? "body1" : "h6"} 
+                    sx={{ 
+                      color: 'white', 
+                      fontWeight: 'bold', 
+                      mb: { xs: 1, sm: 2 },
+                      fontSize: { xs: '1rem', sm: '1.25rem' }
+                    }}
+                  >
                     Advance Public Health Research
                   </Typography>
-                  <Typography variant="body2" sx={{ color: '#c8e6c9', mb: 2, lineHeight: 1.5 }}>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      color: '#c8e6c9', 
+                      mb: { xs: 1.5, sm: 2 }, 
+                      lineHeight: 1.5,
+                      fontSize: { xs: '0.8rem', sm: '0.875rem' }
+                    }}
+                  >
                     Explore more research projects that contribute to improving global health outcomes.
                   </Typography>
                   <Button
                     variant="contained"
                     onClick={() => navigate('/projects')}
+                    size={isMobile ? "small" : "medium"}
                     sx={{
                       bgcolor: 'white',
                       color: '#1b5e20',
                       fontWeight: 'bold',
                       textTransform: 'none',
                       borderRadius: 2,
-                      px: 3,
+                      px: { xs: 2, sm: 3 },
+                      fontSize: { xs: '0.875rem', sm: '1rem' },
                       '&:hover': {
                         bgcolor: '#f1f8e9',
                         transform: 'translateY(-1px)'
