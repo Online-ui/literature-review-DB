@@ -12,5 +12,4 @@ python -m alembic upgrade head
 
 echo "Creating admin user..."
 python create_admin.py
-pyhton create_sample_data_fixed.py
 echo "Admin portal build completed successfully!"
