@@ -1001,7 +1001,7 @@ const HomePage: React.FC = () => {
               {
                 icon: PublicIcon,
                 title: 'Global Impact',
-                description: 'Our research and programs reach communities across 6 continents, addressing health challenges at local and global scales.',
+                description: 'Our research and programs reach communities across all regions, addressing health challenges at local and global scales.',
                 color: '#0a4f3c'
               },
               {
@@ -1025,7 +1025,7 @@ const HomePage: React.FC = () => {
               {
                 icon: ResearchIcon,
                 title: 'Research Excellence',
-                description: 'Leading groundbreaking studies that shape health policy and practice worldwide, with over $100M in research funding.',
+                description: 'Leading groundbreaking studies that shape health policy.',
                 color: '#1a7a5e'
               },
               {
