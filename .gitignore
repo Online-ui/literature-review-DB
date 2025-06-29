@@ -1,0 +1,308 @@
+# =============================================================================
+# SECURITY & SENSITIVE FILES - NEVER UPLOAD THESE
+# =============================================================================
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+public-site/backend/.env
+admin-portal/backend/.env
+public-site/frontend/.env
+admin-portal/frontend/.env
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+literature_db.db
+admin_literature_review.db
+
+# =============================================================================
+# YOUR SPECIFIC PROJECT FOLDERS TO EXCLUDE
+# =============================================================================
+
+# Virtual environments (Python backend environments)
+public-site/backend/venv/
+admin-portal/backend/venv/
+venv/
+env/
+ENV/
+
+# Node modules (Frontend dependencies)
+public-site/frontend/node_modules/
+admin-portal/frontend/node_modules/
+node_modules/
+
+# React build directories
+public-site/frontend/build/
+admin-portal/frontend/build/
+build/
+dist/
+
+# Upload directories (user-uploaded files)
+shared/uploads/
+public-site/backend/uploads/
+admin-portal/backend/uploads/
+uploads/
+
+# =============================================================================
+# PYTHON CACHE & COMPILED FILES
+# =============================================================================
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Specific cache locations in your project
+public-site/backend/__pycache__/
+public-site/backend/app/__pycache__/
+public-site/backend/app/api/__pycache__/
+public-site/backend/app/core/__pycache__/
+public-site/backend/app/models/__pycache__/
+public-site/backend/app/schemas/__pycache__/
+public-site/backend/alembic/__pycache__/
+public-site/backend/alembic/versions/__pycache__/
+
+admin-portal/backend/__pycache__/
+admin-portal/backend/app/__pycache__/
+admin-portal/backend/app/api/__pycache__/
+admin-portal/backend/app/core/__pycache__/
+admin-portal/backend/app/models/__pycache__/
+admin-portal/backend/app/schemas/__pycache__/
+admin-portal/backend/alembic/__pycache__/
+admin-portal/backend/alembic/versions/__pycache__/
+
+# Python distribution / packaging
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# =============================================================================
+# NODE.JS / REACT SPECIFIC TO YOUR PROJECT
+# =============================================================================
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory
+coverage/
+*.lcov
+.nyc_output
+
+# Dependency directories (your specific paths)
+public-site/frontend/node_modules/
+admin-portal/frontend/node_modules/
+jspm_packages/
+
+# Build directories (your specific paths)
+public-site/frontend/build/
+admin-portal/frontend/build/
+public-site/frontend/dist/
+admin-portal/frontend/dist/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache
+.cache
+.parcel-cache
+
+# =============================================================================
+# YOUR UPLOADED FILES & MEDIA
+# =============================================================================
+
+# Main shared uploads directory
+shared/uploads/
+
+# Backend upload directories
+public-site/backend/uploads/
+admin-portal/backend/uploads/
+
+# Specific file types that users upload
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+*.zip
+*.rar
+*.tar.gz
+
+# Image uploads (but keep small static assets)
+uploads/*.jpg
+uploads/*.jpeg
+uploads/*.png
+uploads/*.gif
+uploads/*.bmp
+uploads/*.svg
+uploads/*.webp
+
+# =============================================================================
+# DATABASE & MIGRATION SPECIFIC
+# =============================================================================
+
+# SQLite databases (but keep migration files)
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Keep these important migration files:
+# !public-site/backend/alembic/
+# !admin-portal/backend/alembic/
+# !public-site/backend/alembic/versions/
+# !admin-portal/backend/alembic/versions/
+
+# =============================================================================
+# IDE & EDITOR FILES
+# =============================================================================
+
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# OPERATING SYSTEM FILES
+# =============================================================================
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# =============================================================================
+# TEMPORARY & CACHE FILES
+# =============================================================================
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Cache directories
+.cache/
+cache/
+
+# =============================================================================
+# TESTING & DEVELOPMENT
+# =============================================================================
+
+# Test coverage
+htmlcov/
+.coverage
+.pytest_cache/
+.tox/
+
+# Development files you might create
+debug.py
+test_local.py
+sample_data.py
+quick_test.py
+debug_projects.py
+test_*.py
+
+# =============================================================================
+# LOGS & MONITORING
+# =============================================================================
+
+# Log files
+*.log
+logs/
+log/
+
+# =============================================================================
+# BACKUP & TEMPORARY FILES
+# =============================================================================
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# =============================================================================
+# CUSTOM PROJECT FILES TO EXCLUDE
+# =============================================================================
+
+# Your specific test/debug files
+public-site/backend/debug_projects.py
+public-site/backend/test_file_access.py
+admin-portal/backend/check_admin.py
+admin-portal/backend/recreate_admin.py
+admin-portal/backend/test_startup.py
+
+# Any local configuration
+local_config.py
+local_settings.py
+
+# Development databases
+dev.db
+test.db
+local.db
