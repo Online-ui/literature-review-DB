@@ -2,15 +2,21 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from ..database import get_db
 from ..models.user import User
 from ..schemas.user import Token, UserResponse
 from ..core.config import settings
-from ..core.security import verify_password, create_access_token
+from ..core.security import verify_password, create_access_token, get_password_hash
 from ..core.auth import get_current_active_user
 
 router = APIRouter()
+
+# Create a schema for password change request
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 @router.post("/login", response_model=Token)
 async def login(
@@ -55,21 +61,19 @@ async def read_users_me(current_user: User = Depends(get_current_active_user)):
 
 @router.post("/change-password")
 async def change_password(
-    current_password: str,
-    new_password: str,
+    password_data: PasswordChangeRequest,  # Now accepts JSON body
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     # Verify current password
-    if not verify_password(current_password, current_user.hashed_password):
+    if not verify_password(password_data.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect current password"
         )
     
     # Update password
-    from ..core.security import get_password_hash
-    current_user.hashed_password = get_password_hash(new_password)
+    current_user.hashed_password = get_password_hash(password_data.new_password)
     db.commit()
     
     return {"message": "Password updated successfully"}
