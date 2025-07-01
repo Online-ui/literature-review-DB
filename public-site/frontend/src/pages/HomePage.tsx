@@ -284,7 +284,7 @@ const HomePage: React.FC = () => {
                 {/* Quick Stats - Mobile Optimized */}
                 <Grid container spacing={2}>
                   {[
-                    { number: '11+', label: 'Years of Excellence' },
+                    { number: '12+', label: 'Years of Excellence' },
                     { number: '10K+', label: 'Alumni Worldwide' },
                   ].map((stat, index) => (
                     <Grid item xs={6} key={index}>
