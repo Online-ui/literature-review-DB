@@ -1,61 +1,35 @@
 from pydantic_settings import BaseSettings
-from typing import Optional, List, Union
-import json
+from typing import List
 
 class Settings(BaseSettings):
-    # Database
-    DATABASE_URL: str = "postgresql://username:password@localhost/literature_db"
+    # Database - Same as public site
+    DATABASE_URL: str
     
-    # App Settings
-    PROJECT_NAME: str = "Literature Review Database"
-    VERSION: str = "1.0.0"
-    DESCRIPTION: str = "Discover and explore academic research projects and literature reviews"
-    
-    # SEO
-    SITE_URL: str = "https://literature-db.com"
+    # Admin Authentication
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     
     # File Upload
-    UPLOAD_DIR: str = "uploads"
-    MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50MB
+    UPLOAD_DIR: str = "../../shared/uploads"
+    MAX_FILE_SIZE: int = 52428800
+    ALLOWED_FILE_TYPES: List[str] = [".pdf", ".doc", ".docx", ".txt", ".rtf"]
     
-    # CORS Settings
-    CORS_ORIGINS: Union[List[str], str] = [
-        "http://localhost:3000",
-        "https://literature-public-frontend.onrender.com"
+    # Admin Portal
+    PROJECT_NAME: str = "Literature Review Database - Admin Portal"
+    VERSION: str = "1.0.0"
+    DESCRIPTION: str = "Admin portal for managing literature review database"
+    ADMIN_SITE_URL: str = "https://admin.literature-db.com"
+    
+    # CORS - Add localhost:3001
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:3001", 
+        "http://127.0.0.1:3001",
     ]
-    
-    # API Settings
-    API_V1_STR: str = "/api"
-    
-    # Environment
-    ENVIRONMENT: str = "development"  # development, staging, production
     
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
-        case_sensitive = True
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        # Parse CORS_ORIGINS if it's a string (from env var)
-        if isinstance(self.CORS_ORIGINS, str):
-            # Try to parse as JSON first
-            try:
-                self.CORS_ORIGINS = json.loads(self.CORS_ORIGINS)
-            except json.JSONDecodeError:
-                # If not JSON, try comma-separated
-                if "," in self.CORS_ORIGINS:
-                    self.CORS_ORIGINS = [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
-                else:
-                    # Single origin
-                    self.CORS_ORIGINS = [self.CORS_ORIGINS.strip()]
-    
-    @property
-    def is_production(self) -> bool:
-        return self.ENVIRONMENT == "production"
-    
-    @property
-    def is_development(self) -> bool:
-        return self.ENVIRONMENT == "development"
+        case_sensitive = False
 
 settings = Settings()
