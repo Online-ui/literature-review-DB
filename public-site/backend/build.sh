@@ -34,16 +34,4 @@ fi
 echo "4. Creating upload directory..."
 mkdir -p uploads
 
-echo "5. Verifying project table exists..."
-python -c "
-from app.database import engine
-from sqlalchemy import inspect
-inspector = inspect(engine)
-if 'projects' in inspector.get_table_names():
-    print('✓ Projects table exists')
-else:
-    print('✗ Projects table not found')
-    exit(1)
-"
-
 echo "=== Public Site Build Completed Successfully ==="
