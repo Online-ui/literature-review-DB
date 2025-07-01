@@ -1,6 +1,6 @@
 """Create admin tables
 
-Revision ID: 001_create_admin_tables
+Revision ID: 8f7e9d2c4b5a
 Revises: 7246b26025e9
 Create Date: 2024-01-01 00:00:00.000000
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 # revision identifiers
-revision = '001_create_admin_tables'
+revision = '8f7e9d2c4b5a'
 down_revision = '7246b26025e9'
 branch_labels = None
 depends_on = None
