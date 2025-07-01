@@ -45,7 +45,6 @@ def create_admin():
         
         print("🎉 Admin user created successfully!")
         print(f"   Username: {admin_username}")
-        print(f"   Password: {admin_password}")
         print(f"   Email: {admin_email}")
         print(f"   Role: {admin_user.role}")
         print("")
