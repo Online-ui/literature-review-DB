@@ -13,6 +13,7 @@ from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
 from ..core.auth import get_current_active_user
 from ..core.config import settings
 from ..core.constants import RESEARCH_AREAS, DEGREE_TYPES, ACADEMIC_YEARS, INSTITUTIONS
+from ..services.storage import storage_service
 
 router = APIRouter()
 
@@ -22,23 +23,6 @@ def create_slug(title: str) -> str:
     slug = re.sub(r'[^\w\s-]', '', title.lower())
     slug = re.sub(r'[-\s]+', '-', slug)
     return slug.strip('-')
-
-def save_uploaded_file(file: UploadFile) -> tuple[str, str, int]:
-    """Save uploaded file and return (filename, file_path, file_size)"""
-    # Create upload directory if it doesn't exist
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    
-    # Generate unique filename
-    file_extension = os.path.splitext(file.filename)[1]
-    unique_filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
-    
-    # Save file
-    with open(file_path, "wb") as buffer:
-        content = file.file.read()
-        buffer.write(content)
-    
-    return file.filename, f"/uploads/{unique_filename}", len(content)
 
 @router.get("/", response_model=List[ProjectResponse])
 async def get_projects(
@@ -86,12 +70,12 @@ async def create_project(
     abstract: Optional[str] = Form(None),
     keywords: Optional[str] = Form(None),
     research_area: Optional[str] = Form(None),
-    custom_research_area: Optional[str] = Form(None),  # New field
+    custom_research_area: Optional[str] = Form(None),
     degree_type: Optional[str] = Form(None),
-    custom_degree_type: Optional[str] = Form(None),  # New field
+    custom_degree_type: Optional[str] = Form(None),
     academic_year: Optional[str] = Form(None),
     institution: Optional[str] = Form(None),
-    custom_institution: Optional[str] = Form(None),  # New field
+    custom_institution: Optional[str] = Form(None),
     department: Optional[str] = Form(None),
     supervisor: Optional[str] = Form(None),
     author_name: str = Form(...),
@@ -139,6 +123,8 @@ async def create_project(
     document_filename = None
     document_url = None
     document_size = None
+    document_public_id = None
+    document_storage = "local"
     
     if file and file.filename:
         # Validate file type
@@ -149,7 +135,7 @@ async def create_project(
                 detail=f"File type {file_extension} not allowed. Allowed types: {', '.join(settings.ALLOWED_FILE_TYPES)}"
             )
         
-        # Validate file size
+                # Validate file size
         file.file.seek(0, 2)  # Seek to end
         file_size = file.file.tell()
         file.file.seek(0)  # Reset to beginning
@@ -161,11 +147,17 @@ async def create_project(
             )
         
         try:
-            document_filename, document_url, document_size = save_uploaded_file(file)
+            # Upload file using storage service
+            upload_result = await storage_service.upload_file(file, folder="projects")
+            document_filename = file.filename
+            document_url = upload_result["url"]
+            document_size = upload_result["size"]
+            document_public_id = upload_result["public_id"]
+            document_storage = upload_result["storage"]
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to save uploaded file"
+                detail=f"Failed to save uploaded file: {str(e)}"
             )
     
     # Create project
@@ -188,6 +180,8 @@ async def create_project(
         document_filename=document_filename,
         document_url=document_url,
         document_size=document_size,
+        document_public_id=document_public_id,
+        document_storage=document_storage,
         created_by_id=current_user.id
     )
     
@@ -199,11 +193,8 @@ async def create_project(
     except Exception as e:
         db.rollback()
         # Clean up uploaded file if project creation failed
-        if document_url:
-            try:
-                os.remove(document_url.replace("/uploads/", settings.UPLOAD_DIR + "/"))
-            except:
-                pass
+        if document_public_id:
+            await storage_service.delete_file(document_public_id, document_storage)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create project"
@@ -238,12 +229,12 @@ async def update_project(
     abstract: Optional[str] = Form(None),
     keywords: Optional[str] = Form(None),
     research_area: Optional[str] = Form(None),
-    custom_research_area: Optional[str] = Form(None),  # New field
+    custom_research_area: Optional[str] = Form(None),
     degree_type: Optional[str] = Form(None),
-    custom_degree_type: Optional[str] = Form(None),  # New field
+    custom_degree_type: Optional[str] = Form(None),
     academic_year: Optional[str] = Form(None),
     institution: Optional[str] = Form(None),
-    custom_institution: Optional[str] = Form(None),  # New field
+    custom_institution: Optional[str] = Form(None),
     department: Optional[str] = Form(None),
     supervisor: Optional[str] = Form(None),
     author_name: Optional[str] = Form(None),
@@ -332,32 +323,22 @@ async def update_project(
         project.is_published = is_published
     
     # Handle file removal
-    if remove_file and project.document_url:
+    if remove_file and project.document_public_id:
         # Delete old file
-        old_file_path = project.document_url.replace("/uploads/", settings.UPLOAD_DIR + "/")
-        try:
-            if os.path.exists(old_file_path):
-                os.remove(old_file_path)
-                print(f"Deleted file: {old_file_path}")
-        except Exception as e:
-            print(f"Error deleting file: {e}")
+        await storage_service.delete_file(project.document_public_id, project.document_storage)
         
         # Clear file fields
         project.document_filename = None
         project.document_url = None
         project.document_size = None
+        project.document_public_id = None
+        project.document_storage = "local"
     
     # Handle new file upload
     if file and file.filename:
         # Delete old file if exists
-        if project.document_url and not remove_file:
-            old_file_path = project.document_url.replace("/uploads/", settings.UPLOAD_DIR + "/")
-            try:
-                if os.path.exists(old_file_path):
-                    os.remove(old_file_path)
-                    print(f"Replaced file: {old_file_path}")
-            except Exception as e:
-                print(f"Error deleting old file: {e}")
+        if project.document_public_id and not remove_file:
+            await storage_service.delete_file(project.document_public_id, project.document_storage)
         
         # Validate file type
         file_extension = os.path.splitext(file.filename)[1].lower()
@@ -379,14 +360,17 @@ async def update_project(
             )
         
         try:
-            document_filename, document_url, document_size = save_uploaded_file(file)
-            project.document_filename = document_filename
-            project.document_url = document_url
-            project.document_size = document_size
+            # Upload file using storage service
+            upload_result = await storage_service.upload_file(file, folder="projects")
+            project.document_filename = file.filename
+            project.document_url = upload_result["url"]
+            project.document_size = upload_result["size"]
+            project.document_public_id = upload_result["public_id"]
+            project.document_storage = upload_result["storage"]
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to save uploaded file"
+                detail=f"Failed to save uploaded file: {str(e)}"
             )
     
     try:
@@ -400,7 +384,6 @@ async def update_project(
             detail="Failed to update project"
         )
 
-# Keep all the other endpoints as they are
 @router.delete("/{project_id}/file")
 async def delete_project_file(
     project_id: int,
@@ -421,26 +404,21 @@ async def delete_project_file(
             detail="Not enough permissions to delete file"
         )
     
-    if not project.document_url:
+    if not project.document_public_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No file to delete"
         )
     
-    # Delete file from filesystem
-    file_path = project.document_url.replace("/uploads/", settings.UPLOAD_DIR + "/")
-    try:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            print(f"Deleted file: {file_path}")
-    except Exception as e:
-        print(f"Error deleting file: {e}")
-        # Continue anyway to clear database fields
+    # Delete file from storage
+    await storage_service.delete_file(project.document_public_id, project.document_storage)
     
     # Clear file fields in database
     project.document_filename = None
     project.document_url = None
     project.document_size = None
+    project.document_public_id = None
+    project.document_storage = "local"
     
     try:
         db.commit()
@@ -473,12 +451,8 @@ async def delete_project(
         )
     
     # Delete associated file
-    if project.document_url:
-        file_path = project.document_url.replace("/uploads/", settings.UPLOAD_DIR + "/")
-        try:
-            os.remove(file_path)
-        except:
-            pass
+    if project.document_public_id:
+        await storage_service.delete_file(project.document_public_id, project.document_storage)
     
     try:
         db.delete(project)
@@ -491,7 +465,7 @@ async def delete_project(
             detail="Failed to delete project"
         )
 
-# Update these endpoints to return predefined values instead of database values
+# Keep all other endpoints as they are
 @router.get("/research-areas/list")
 async def get_research_areas(
     current_user: User = Depends(get_current_active_user),
@@ -548,3 +522,17 @@ async def toggle_project_publish_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update project status"
         )
+
+# Add endpoint for serving local files
+@router.get("/files/{filename}")
+async def serve_file(filename: str):
+    """Serve files from local storage"""
+    if settings.STORAGE_BACKEND != "local":
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    file_path = os.path.join(settings.UPLOAD_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    from fastapi.responses import FileResponse
+    return FileResponse(path=file_path)
