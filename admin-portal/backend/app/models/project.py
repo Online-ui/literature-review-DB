@@ -33,8 +33,10 @@ class Project(BaseModel):
     
     # File Info
     document_url = Column(String)
+    document_public_id = Column(String, nullable=True)  # For Cloudinary
     document_filename = Column(String)
     document_size = Column(Integer)
+    document_storage = Column(String, default="local")  # "local" or "cloudinary"
     
     # Stats
     view_count = Column(Integer, default=0)
