@@ -30,7 +30,7 @@ import {
   Public as PublicIcon
 } from '@mui/icons-material';
 import { apiService, Project } from '../services/api';
-import DocumentViewer from '../components/DocumentViewer';
+import { DocumentViewerModal } from '../components/DocumentViewer';
 import SEOHead from '../components/SEOHead';
 import StructuredData from '../components/StructuredData';
 
@@ -762,15 +762,13 @@ const ProjectDetailPage: React.FC = () => {
           </Grid>
         </Grid>
 
-        {/* Document Viewer */}
+        {/* Document Viewer Modal */}
         {project.document_url && (
-          <DocumentViewer
+          <DocumentViewerModal
             open={viewerOpen}
             onClose={() => setViewerOpen(false)}
-            documentUrl={apiService.getDocumentViewUrl(project.slug)}
-            filename={project.document_filename}
             projectSlug={project.slug}
-            onDownload={handleDownload}
+            documentFilename={project.document_filename}
           />
         )}
       </Container>
