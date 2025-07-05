@@ -12,6 +12,7 @@ from ..models.project import Project
 from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
 from ..core.auth import get_current_active_user
 from ..core.config import settings
+from ..core.constants import RESEARCH_AREAS, DEGREE_TYPES, ACADEMIC_YEARS, INSTITUTIONS
 
 router = APIRouter()
 
@@ -85,9 +86,12 @@ async def create_project(
     abstract: Optional[str] = Form(None),
     keywords: Optional[str] = Form(None),
     research_area: Optional[str] = Form(None),
+    custom_research_area: Optional[str] = Form(None),  # New field
     degree_type: Optional[str] = Form(None),
+    custom_degree_type: Optional[str] = Form(None),  # New field
     academic_year: Optional[str] = Form(None),
     institution: Optional[str] = Form(None),
+    custom_institution: Optional[str] = Form(None),  # New field
     department: Optional[str] = Form(None),
     supervisor: Optional[str] = Form(None),
     author_name: str = Form(...),
@@ -99,6 +103,30 @@ async def create_project(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
+    # Handle custom fields
+    final_research_area = custom_research_area if research_area == "Others" else research_area
+    final_degree_type = custom_degree_type if degree_type == "Others" else degree_type
+    final_institution = custom_institution if institution == "Others" else institution
+    
+    # Validate custom fields
+    if research_area == "Others" and not custom_research_area:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Custom research area is required when 'Others' is selected"
+        )
+    
+    if degree_type == "Others" and not custom_degree_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Custom degree type is required when 'Others' is selected"
+        )
+    
+    if institution == "Others" and not custom_institution:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Custom institution is required when 'Others' is selected"
+        )
+    
     # Generate slug
     base_slug = create_slug(title)
     slug = base_slug
@@ -146,10 +174,10 @@ async def create_project(
         slug=slug,
         abstract=abstract,
         keywords=keywords,
-        research_area=research_area,
-        degree_type=degree_type,
+        research_area=final_research_area,
+        degree_type=final_degree_type,
         academic_year=academic_year,
-        institution=institution or current_user.institution,
+        institution=final_institution or current_user.institution,
         department=department or current_user.department,
         supervisor=supervisor,
         author_name=author_name,
@@ -210,9 +238,12 @@ async def update_project(
     abstract: Optional[str] = Form(None),
     keywords: Optional[str] = Form(None),
     research_area: Optional[str] = Form(None),
+    custom_research_area: Optional[str] = Form(None),  # New field
     degree_type: Optional[str] = Form(None),
+    custom_degree_type: Optional[str] = Form(None),  # New field
     academic_year: Optional[str] = Form(None),
     institution: Optional[str] = Form(None),
+    custom_institution: Optional[str] = Form(None),  # New field
     department: Optional[str] = Form(None),
     supervisor: Optional[str] = Form(None),
     author_name: Optional[str] = Form(None),
@@ -221,7 +252,7 @@ async def update_project(
     meta_keywords: Optional[str] = Form(None),
     is_published: Optional[bool] = Form(None),
     file: Optional[UploadFile] = File(None),
-    remove_file: Optional[bool] = Form(False),  # NEW: Flag to remove existing file
+    remove_file: Optional[bool] = Form(False),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
@@ -239,7 +270,35 @@ async def update_project(
             detail="Not enough permissions to update this project"
         )
     
-    # Update fields
+    # Handle custom fields
+    if research_area is not None:
+        final_research_area = custom_research_area if research_area == "Others" else research_area
+        if research_area == "Others" and not custom_research_area:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Custom research area is required when 'Others' is selected"
+            )
+        project.research_area = final_research_area
+    
+    if degree_type is not None:
+        final_degree_type = custom_degree_type if degree_type == "Others" else degree_type
+        if degree_type == "Others" and not custom_degree_type:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Custom degree type is required when 'Others' is selected"
+            )
+        project.degree_type = final_degree_type
+    
+    if institution is not None:
+        final_institution = custom_institution if institution == "Others" else institution
+        if institution == "Others" and not custom_institution:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Custom institution is required when 'Others' is selected"
+            )
+        project.institution = final_institution
+    
+    # Update other fields
     if title is not None:
         project.title = title
         # Update slug if title changed
@@ -255,14 +314,8 @@ async def update_project(
         project.abstract = abstract
     if keywords is not None:
         project.keywords = keywords
-    if research_area is not None:
-        project.research_area = research_area
-    if degree_type is not None:
-        project.degree_type = degree_type
     if academic_year is not None:
         project.academic_year = academic_year
-    if institution is not None:
-        project.institution = institution
     if department is not None:
         project.department = department
     if supervisor is not None:
@@ -347,7 +400,7 @@ async def update_project(
             detail="Failed to update project"
         )
 
-# Add a separate endpoint for file deletion
+# Keep all the other endpoints as they are
 @router.delete("/{project_id}/file")
 async def delete_project_file(
     project_id: int,
@@ -438,25 +491,22 @@ async def delete_project(
             detail="Failed to delete project"
         )
 
+# Update these endpoints to return predefined values instead of database values
 @router.get("/research-areas/list")
 async def get_research_areas(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    areas = db.query(Project.research_area).filter(
-        Project.research_area.isnot(None)
-    ).distinct().all()
-    return [area[0] for area in areas if area[0]]
+    """Get predefined research areas"""
+    return RESEARCH_AREAS
 
 @router.get("/degree-types/list")
 async def get_degree_types(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    types = db.query(Project.degree_type).filter(
-        Project.degree_type.isnot(None)
-    ).distinct().all()
-    return [type_[0] for type_ in types if type_[0]]
+    """Get predefined degree types"""
+    return DEGREE_TYPES
 
 @router.patch("/{project_id}/toggle-publish")
 async def toggle_project_publish_status(
