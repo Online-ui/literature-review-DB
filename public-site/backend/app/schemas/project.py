@@ -27,6 +27,7 @@ class ProjectResponse(ProjectBase):
     download_count: int
     document_url: Optional[str] = None
     document_filename: Optional[str] = None
+    document_storage: Optional[str] = None  # Add this field
     meta_description: Optional[str] = None
     
     class Config:
