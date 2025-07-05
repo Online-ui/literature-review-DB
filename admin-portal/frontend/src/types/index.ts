@@ -1,3 +1,32 @@
+// types/index.ts
+
+export interface FormConstants {
+  research_areas: string[];
+  degree_types: string[];
+  academic_years: string[];
+  institutions: string[];
+}
+
+export interface ProjectFormData {
+  title: string;
+  abstract?: string;
+  keywords?: string;
+  research_area?: string;
+  custom_research_area?: string;
+  degree_type?: string;
+  custom_degree_type?: string;
+  academic_year?: string;
+  institution?: string;
+  custom_institution?: string;
+  department?: string;
+  supervisor?: string;
+  author_name: string;
+  author_email?: string;
+  meta_description?: string;
+  meta_keywords?: string;
+  is_published?: boolean;
+}
+
 export interface User {
   id: number;
   username: string;
