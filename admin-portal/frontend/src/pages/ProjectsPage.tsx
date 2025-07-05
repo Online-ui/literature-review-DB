@@ -58,8 +58,9 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { adminApi } from '../services/api';
-import { Project } from '../types';
+import { Project, FormConstants } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { ResearchAreaSelect } from '../components/ResearchAreaSelect';
 
 interface ProjectFormData {
   title: string;
@@ -110,10 +111,35 @@ const ProjectsPage: React.FC = () => {
   const { user: currentUser } = useAuth();
   const theme = useTheme();
 
+  // Add these new state variables
+  const [formConstants, setFormConstants] = useState<FormConstants>({
+    research_areas: [],
+    degree_types: [],
+    academic_years: [],
+    institutions: []
+  });
+
+  const [customFields, setCustomFields] = useState({
+    custom_research_area: '',
+    custom_degree_type: '',
+    custom_institution: ''
+  });
+
   useEffect(() => {
     loadProjects();
     loadFilterOptions();
+    fetchFormConstants();
   }, [searchTerm, filterPublished]);
+
+  const fetchFormConstants = async () => {
+    try {
+      const constants = await adminApi.getFormConstants();
+      setFormConstants(constants);
+    } catch (error) {
+      console.error('Failed to fetch form constants:', error);
+      // Fallback to empty arrays if API fails
+    }
+  };
 
   const loadProjects = async () => {
     try {
@@ -188,6 +214,11 @@ const ProjectsPage: React.FC = () => {
     setOpenDialog(false);
     setEditingProject(null);
     setFormError('');
+    setCustomFields({
+      custom_research_area: '',
+      custom_degree_type: '',
+      custom_institution: ''
+    });
   };
 
   const handleSubmit = async () => {
@@ -213,10 +244,10 @@ const ProjectsPage: React.FC = () => {
       submitData.append('title', formData.title);
       submitData.append('abstract', formData.abstract);
       submitData.append('keywords', formData.keywords);
-      submitData.append('research_area', formData.research_area);
-      submitData.append('degree_type', formData.degree_type);
+      submitData.append('research_area', formData.research_area || '');
+      submitData.append('degree_type', formData.degree_type || '');
       submitData.append('academic_year', formData.academic_year);
-      submitData.append('institution', formData.institution);
+      submitData.append('institution', formData.institution || '');
       submitData.append('department', formData.department);
       submitData.append('supervisor', formData.supervisor);
       submitData.append('author_name', formData.author_name);
@@ -224,6 +255,17 @@ const ProjectsPage: React.FC = () => {
       submitData.append('meta_description', formData.meta_description);
       submitData.append('meta_keywords', formData.meta_keywords);
       submitData.append('is_published', formData.is_published.toString());
+
+      // Add custom fields if "Others" is selected
+      if (formData.research_area === 'Others') {
+        submitData.append('custom_research_area', customFields.custom_research_area);
+      }
+      if (formData.degree_type === 'Others') {
+        submitData.append('custom_degree_type', customFields.custom_degree_type);
+      }
+      if (formData.institution === 'Others') {
+        submitData.append('custom_institution', customFields.custom_institution);
+      }
 
       if (formData.file) {
         submitData.append('file', formData.file);
@@ -423,7 +465,7 @@ const ProjectsPage: React.FC = () => {
                   <Card
                     elevation={0}
                     sx={{
-                      background: 'white',
+                                            background: 'white',
                       borderRadius: 3,
                       border: '1px solid',
                       borderColor: alpha(stat.color, 0.1),
@@ -453,7 +495,7 @@ const ProjectsPage: React.FC = () => {
                           }}
                         >
                           <stat.icon sx={{ color: 'white', fontSize: 24 }} />
-                                        </Avatar>
+                        </Avatar>
                       </Box>
                     </CardContent>
                   </Card>
@@ -825,7 +867,7 @@ const ProjectsPage: React.FC = () => {
                   width: 80,
                   height: 80,
                   bgcolor: alpha('#0a4f3c', 0.1),
-                  mx: 'auto',
+                                    mx: 'auto',
                   mb: 3
                 }}
               >
@@ -869,7 +911,7 @@ const ProjectsPage: React.FC = () => {
           }
         }}
       >
-        <DialogTitle sx={{ pb: 2        }}>
+        <DialogTitle sx={{ pb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Avatar
@@ -1067,23 +1109,23 @@ const ProjectsPage: React.FC = () => {
                 </Grid>
                 
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    label="Institution"
-                    fullWidth
-                    variant="outlined"
-                    value={formData.institution}
-                    onChange={handleInputChange('institution')}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#0a4f3c',
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#0a4f3c',
-                      },
+                  <ResearchAreaSelect
+                    value={formData.institution || ''}
+                    onChange={(value) => {
+                      setFormData(prev => ({ ...prev, institution: value }));
+                      if (value !== 'Others' || !value) {
+                        setCustomFields(prev => ({ ...prev, custom_institution: '' }));
+                      } else {
+                        setCustomFields(prev => ({ ...prev, custom_institution: value }));
+                      }
                     }}
+                    options={formConstants.institutions}
+                    error={false}
+                    helperText=""
+                    required
+                    label="Institution"
+                    customLabel="Specify Institution"
+                    customPlaceholder="e.g., University of Cape Coast"
                   />
                 </Grid>
                 
@@ -1147,60 +1189,58 @@ const ProjectsPage: React.FC = () => {
               </Typography>
               <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Research Area</InputLabel>
-                    <Select
-                      value={formData.research_area}
-                      label="Research Area"
-                      onChange={handleInputChange('research_area')}
-                      sx={{
-                        borderRadius: 3,
-                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#0a4f3c',
-                        },
-                      }}
-                    >
-                      <MenuItem value="">Select Research Area</MenuItem>
-                      {researchAreas.map((area) => (
-                        <MenuItem key={area} value={area}>{area}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <ResearchAreaSelect
+                    value={formData.research_area || ''}
+                    onChange={(value) => {
+                      setFormData(prev => ({ ...prev, research_area: value }));
+                      if (value !== 'Others' || !value) {
+                        setCustomFields(prev => ({ ...prev, custom_research_area: '' }));
+                      } else {
+                        setCustomFields(prev => ({ ...prev, custom_research_area: value }));
+                      }
+                    }}
+                    options={formConstants.research_areas}
+                    error={false}
+                    helperText=""
+                    required
+                    label="Research Area"
+                    customLabel="Specify Research Area"
+                    customPlaceholder="e.g., Tropical Medicine, Health Informatics"
+                  />
                 </Grid>
                 
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Degree Type</InputLabel>
-                    <Select
-                      value={formData.degree_type}
-                      label="Degree Type"
-                      onChange={handleInputChange('degree_type')}
-                      sx={{
-                        borderRadius: 3,
-                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#0a4f3c',
-                        },
-                      }}
-                    >
-                      <MenuItem value="">Select Degree Type</MenuItem>
-                      <MenuItem value="Bachelor's">Bachelor's</MenuItem>
-                      <MenuItem value="Master's">Master's</MenuItem>
-                      <MenuItem value="PhD">PhD</MenuItem>
-                      {degreeTypes.map((type) => (
-                        <MenuItem key={type} value={type}>{type}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <ResearchAreaSelect
+                    value={formData.degree_type || ''}
+                    onChange={(value) => {
+                      setFormData(prev => ({ ...prev, degree_type: value }));
+                      if (value !== 'Others' || !value) {
+                        setCustomFields(prev => ({ ...prev, custom_degree_type: '' }));
+                      } else {
+                        setCustomFields(prev => ({ ...prev, custom_degree_type: value }));
+                      }
+                    }}
+                    options={formConstants.degree_types}
+                    error={false}
+                    helperText=""
+                    required
+                    label="Degree Type"
+                    customLabel="Specify Degree Type"
+                    customPlaceholder="e.g., PGDip, DNP"
+                  />
                 </Grid>
                 
                 <Grid item xs={12}>
                   <TextField
-                    label="Academic Year"
+                    select
                     fullWidth
-                    variant="outlined"
-                    value={formData.academic_year}
+                    label="Academic Year"
+                    name="academic_year"
+                    value={formData.academic_year || ''}
                     onChange={handleInputChange('academic_year')}
-                    placeholder="e.g., 2023-2024"
+                    error={false}
+                    helperText=""
+                    required
                     sx={{
                       '& .MuiOutlinedInput-root': {
                         borderRadius: 3,
@@ -1212,7 +1252,13 @@ const ProjectsPage: React.FC = () => {
                         color: '#0a4f3c',
                       },
                     }}
-                  />
+                  >
+                    {formConstants.academic_years.map((year) => (
+                      <MenuItem key={year} value={year}>
+                        {year}
+                      </MenuItem>
+                    ))}
+                  </TextField>
                 </Grid>
               </Grid>
             </Paper>
@@ -1282,7 +1328,7 @@ const ProjectsPage: React.FC = () => {
             </Paper>
 
             {/* File Management Section */}
-            <Paper
+                        <Paper
               elevation={0}
               sx={{
                 p: 3,
@@ -1320,7 +1366,7 @@ const ProjectsPage: React.FC = () => {
                           setFormError(err.response?.data?.detail || 'Failed to delete file');
                         }
                       }
-                                        }}
+                    }}
                     sx={{ borderRadius: 2 }}
                   >
                     Delete Current File
