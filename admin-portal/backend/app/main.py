@@ -8,7 +8,7 @@ import os
 from .core.config import settings
 from .database import engine
 from .models import Base
-from .api import auth, users, dashboard, projects  # Add projects import
+from .api import auth, users, dashboard, projects, utils  # Add utils import
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -52,7 +52,8 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
-app.include_router(projects.router, prefix="/api/projects", tags=["projects"])  # Add projects router
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
+app.include_router(utils.router, prefix="/api/utils", tags=["utilities"])  # Add utils router
 
 @app.get("/")
 async def root():
