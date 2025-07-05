@@ -124,7 +124,7 @@ async def create_project(
     document_url = None
     document_size = None
     document_public_id = None
-    document_storage = "local"
+    document_storage = "cloudinary"  # Default to cloudinary
     
     if file and file.filename:
         # Validate file type
@@ -135,7 +135,7 @@ async def create_project(
                 detail=f"File type {file_extension} not allowed. Allowed types: {', '.join(settings.ALLOWED_FILE_TYPES)}"
             )
         
-                # Validate file size
+        # Validate file size
         file.file.seek(0, 2)  # Seek to end
         file_size = file.file.tell()
         file.file.seek(0)  # Reset to beginning
@@ -147,7 +147,7 @@ async def create_project(
             )
         
         try:
-            # Upload file using storage service
+            # Upload file using storage service (Cloudinary)
             upload_result = await storage_service.upload_file(file, folder="projects")
             document_filename = file.filename
             document_url = upload_result["url"]
@@ -324,7 +324,7 @@ async def update_project(
     
     # Handle file removal
     if remove_file and project.document_public_id:
-        # Delete old file
+        # Delete old file from Cloudinary
         await storage_service.delete_file(project.document_public_id, project.document_storage)
         
         # Clear file fields
@@ -332,7 +332,7 @@ async def update_project(
         project.document_url = None
         project.document_size = None
         project.document_public_id = None
-        project.document_storage = "local"
+        project.document_storage = "cloudinary"
     
     # Handle new file upload
     if file and file.filename:
@@ -360,7 +360,7 @@ async def update_project(
             )
         
         try:
-            # Upload file using storage service
+            # Upload file using storage service (Cloudinary)
             upload_result = await storage_service.upload_file(file, folder="projects")
             project.document_filename = file.filename
             project.document_url = upload_result["url"]
@@ -376,7 +376,7 @@ async def update_project(
     try:
         db.commit()
         db.refresh(project)
-        return project
+                return project
     except Exception as e:
         db.rollback()
         raise HTTPException(
@@ -410,7 +410,7 @@ async def delete_project_file(
             detail="No file to delete"
         )
     
-    # Delete file from storage
+    # Delete file from Cloudinary
     await storage_service.delete_file(project.document_public_id, project.document_storage)
     
     # Clear file fields in database
@@ -418,7 +418,7 @@ async def delete_project_file(
     project.document_url = None
     project.document_size = None
     project.document_public_id = None
-    project.document_storage = "local"
+    project.document_storage = "cloudinary"
     
     try:
         db.commit()
@@ -450,7 +450,7 @@ async def delete_project(
             detail="Not enough permissions to delete this project"
         )
     
-    # Delete associated file
+    # Delete associated file from Cloudinary
     if project.document_public_id:
         await storage_service.delete_file(project.document_public_id, project.document_storage)
     
@@ -465,7 +465,6 @@ async def delete_project(
             detail="Failed to delete project"
         )
 
-# Keep all other endpoints as they are
 @router.get("/research-areas/list")
 async def get_research_areas(
     current_user: User = Depends(get_current_active_user),
@@ -522,17 +521,3 @@ async def toggle_project_publish_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update project status"
         )
-
-# Add endpoint for serving local files
-@router.get("/files/{filename}")
-async def serve_file(filename: str):
-    """Serve files from local storage"""
-    if settings.STORAGE_BACKEND != "local":
-        raise HTTPException(status_code=404, detail="File not found")
-    
-    file_path = os.path.join(settings.UPLOAD_DIR, filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    
-    from fastapi.responses import FileResponse
-    return FileResponse(path=file_path)
