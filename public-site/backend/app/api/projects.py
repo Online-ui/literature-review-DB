@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from typing import List, Optional
@@ -8,6 +8,7 @@ import os
 from ..database import get_db
 from ..models.project import Project
 from ..schemas.project import ProjectResponse
+from ..core.config import settings
 
 router = APIRouter()
 
@@ -124,7 +125,16 @@ async def download_project(slug: str, db: Session = Depends(get_db)):
             detail="No document available for download"
         )
     
-    # Try multiple possible file locations
+    # Increment download count
+    project.download_count += 1
+    db.commit()
+    
+    # If using Cloudinary, redirect to Cloudinary URL with download flag
+    if project.document_storage == "cloudinary":
+        download_url = f"{project.document_url}?fl_attachment"
+        return RedirectResponse(url=download_url)
+    
+    # For local storage, try multiple possible file locations
     possible_paths = [
         # Current directory uploads
         project.document_url.replace("/uploads/", "uploads/"),
@@ -156,10 +166,6 @@ async def download_project(slug: str, db: Session = Depends(get_db)):
             detail=f"Document file not found. Searched: {possible_paths}"
         )
     
-    # Increment download count
-    project.download_count += 1
-    db.commit()
-    
     return FileResponse(
         path=file_path,
         filename=project.document_filename or f"{project.slug}.pdf",
@@ -185,7 +191,11 @@ async def view_document(slug: str, db: Session = Depends(get_db)):
             detail="No document available"
         )
     
-    # Use the same file path logic as download
+    # If using Cloudinary, redirect to Cloudinary URL
+    if project.document_storage == "cloudinary":
+        return RedirectResponse(url=project.document_url)
+    
+    # For local storage, use the same file path logic as download
     possible_paths = [
         # Current directory uploads
         project.document_url.replace("/uploads/", "uploads/"),
