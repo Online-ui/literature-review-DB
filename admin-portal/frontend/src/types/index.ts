@@ -61,6 +61,8 @@ export interface Project {
   document_url?: string;
   document_filename?: string;
   document_size?: number;
+  document_public_id?: string;
+  document_storage?: string;
   created_by_id?: number;
   created_at: string;
   meta_description?: string;
