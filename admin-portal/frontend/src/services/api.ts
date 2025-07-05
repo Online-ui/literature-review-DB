@@ -1,5 +1,7 @@
+// services/adminApi.ts
+
 import axios, { AxiosResponse } from 'axios';
-import { User, Project, DashboardStats, LoginRequest, AuthResponse } from '../types';
+import { User, Project, DashboardStats, LoginRequest, AuthResponse, FormConstants } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001/api';
 
@@ -55,28 +57,27 @@ class AdminApiService {
   }
 
   // Authentication
-
-async login(credentials: LoginRequest): Promise<AuthResponse> {
-  try {
-    const formData = new FormData();
-    formData.append('username', credentials.username);
-    formData.append('password', credentials.password);
-    
-    console.log('Attempting login with:', credentials.username); // Debug log
-    
-    const response = await this.api.post('/auth/login', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    
-    console.log('Login response:', response.data); // Debug log
-    return response.data;
-  } catch (error: any) {
-    console.error('Login error:', error.response?.data || error.message);
-    throw error;
+  async login(credentials: LoginRequest): Promise<AuthResponse> {
+    try {
+      const formData = new FormData();
+      formData.append('username', credentials.username);
+      formData.append('password', credentials.password);
+      
+      console.log('Attempting login with:', credentials.username); // Debug log
+      
+      const response = await this.api.post('/auth/login', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      console.log('Login response:', response.data); // Debug log
+      return response.data;
+    } catch (error: any) {
+      console.error('Login error:', error.response?.data || error.message);
+      throw error;
+    }
   }
-}
 
   async logout(): Promise<void> {
     await this.api.post('/auth/logout');
@@ -185,6 +186,32 @@ async login(credentials: LoginRequest): Promise<AuthResponse> {
 
   async deleteProjectFile(projectId: number): Promise<void> {
     await this.api.delete(`/projects/${projectId}/file`);
+  }
+
+  // Utilities
+  async getFormConstants(): Promise<FormConstants> {
+    const response = await this.api.get('/utils/constants');
+    return response.data;
+  }
+
+  async getPredefinedResearchAreas(): Promise<string[]> {
+    const response = await this.api.get('/utils/research-areas');
+    return response.data.research_areas;
+  }
+
+  async getPredefinedDegreeTypes(): Promise<string[]> {
+    const response = await this.api.get('/utils/degree-types');
+    return response.data.degree_types;
+  }
+
+  async getAcademicYears(): Promise<string[]> {
+    const response = await this.api.get('/utils/academic-years');
+    return response.data.academic_years;
+  }
+
+  async getInstitutions(): Promise<string[]> {
+    const response = await this.api.get('/utils/institutions');
+    return response.data.institutions;
   }
 }
 
