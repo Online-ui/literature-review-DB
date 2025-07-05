@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import {
   Box,
+  Button,
+  CircularProgress,
+  Typography,
+  Alert,
   Dialog,
   DialogTitle,
   DialogContent,
-  Button,
   IconButton,
-  Typography,
-  Alert,
-  CircularProgress,
   Divider
 } from '@mui/material';
 import {
+  Download,
+  Visibility,
   Close as CloseIcon,
   Download as DownloadIcon,
   Fullscreen as FullscreenIcon,
@@ -20,6 +22,120 @@ import {
   Visibility as VisibilityIcon
 } from '@mui/icons-material';
 
+// Simple inline document viewer
+interface DocumentViewerProps {
+  projectSlug: string;
+  documentUrl?: string;
+  documentFilename?: string;
+}
+
+export const DocumentViewer: React.FC<DocumentViewerProps> = ({
+  projectSlug,
+  documentUrl,
+  documentFilename
+}) => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleView = () => {
+    setLoading(true);
+    setError('');
+    
+    // Open in new tab for viewing
+    const viewUrl = `${process.env.REACT_APP_API_URL}/projects/${projectSlug}/view-document`;
+    window.open(viewUrl, '_blank');
+    
+    setTimeout(() => setLoading(false), 1000);
+  };
+
+  const handleDownload = () => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      const downloadUrl = `${process.env.REACT_APP_API_URL}/projects/${projectSlug}/download`;
+      
+      // Direct navigation for download
+      window.location.href = downloadUrl;
+      
+      setTimeout(() => setLoading(false), 1500);
+    } catch (err) {
+      setError('Failed to download document');
+      setLoading(false);
+    }
+  };
+
+  if (!documentUrl && !documentFilename) {
+    return (
+      <Alert severity="info" sx={{ mt: 2 }}>
+        No document available for this project
+      </Alert>
+    );
+  }
+
+  return (
+    <Box sx={{ mt: 3 }}>
+      <Typography variant="h6" gutterBottom>
+        Project Document
+      </Typography>
+      
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+      
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <Button
+          variant="contained"
+          startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <Visibility />}
+          onClick={handleView}
+          disabled={loading}
+          sx={{
+            bgcolor: '#0a4f3c',
+            '&:hover': { bgcolor: '#063d2f' },
+            '&:disabled': {
+              bgcolor: '#0a4f3c',
+              opacity: 0.7
+            }
+          }}
+        >
+          View Document
+        </Button>
+        
+        <Button
+          variant="outlined"
+          startIcon={loading ? <CircularProgress size={20} /> : <Download />}
+          onClick={handleDownload}
+          disabled={loading}
+          sx={{
+            borderColor: '#0a4f3c',
+            color: '#0a4f3c',
+            '&:hover': {
+              borderColor: '#063d2f',
+              bgcolor: 'rgba(10, 79, 60, 0.04)'
+            },
+            '&:disabled': {
+              borderColor: '#0a4f3c',
+              color: '#0a4f3c',
+              opacity: 0.7
+            }
+          }}
+        >
+          Download Document
+        </Button>
+      </Box>
+      
+      {documentFilename && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+          Filename: {documentFilename}
+        </Typography>
+      )}
+    </Box>
+  );
+};
+
+// Modal document viewer with advanced features
 interface DocumentViewerModalProps {
   open: boolean;
   onClose: () => void;
@@ -68,6 +184,15 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
 
   const isPDF = documentFilename?.toLowerCase().endsWith('.pdf') || 
                 documentFilename?.toLowerCase().includes('.pdf');
+
+  // Reset states when modal opens/closes
+  React.useEffect(() => {
+    if (open) {
+      setLoading(true);
+      setError('');
+      setZoom(100);
+    }
+  }, [open]);
 
   return (
     <Dialog
@@ -152,7 +277,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             <Alert severity="error" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
               {error}
             </Alert>
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Button 
                 variant="contained" 
                 onClick={handleDownload} 
@@ -208,7 +333,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                 <Alert severity="info" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
                   Preview is only available for PDF files. This document appears to be in a different format.
                 </Alert>
-                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
                   <Button 
                     variant="contained" 
                     onClick={handleDownload} 
@@ -246,3 +371,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     </Dialog>
   );
 };
+
+// Default export for backward compatibility
+export default DocumentViewer;
