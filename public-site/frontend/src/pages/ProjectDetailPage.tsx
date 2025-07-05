@@ -456,14 +456,14 @@ const ProjectDetailPage: React.FC = () => {
                     <CategoryIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
                   </Avatar>
                   <Typography variant={isMobile ? "h6" : "h5"} sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
-                    Research Abstract
+                    Abstract
                   </Typography>
                 </Box>
                 <Typography 
                   variant="body1" 
                   sx={{ 
                     lineHeight: 1.8,
-                    color: '#2e7d32',
+                    color: '#000000',
                     fontSize: { xs: '0.95rem', sm: '1.1rem' },
                     textAlign: 'justify'
                   }}
@@ -637,7 +637,7 @@ const ProjectDetailPage: React.FC = () => {
                       border: '1px solid #e8f5e9'
                     }}>
                       <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                        Research Supervisor
+                        Research Supervisor(s)
                       </Typography>
                       <Typography variant={isMobile ? "body2" : "body1"} sx={{ color: '#2e7d32', fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
                         {project.supervisor}
