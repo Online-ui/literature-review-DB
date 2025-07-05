@@ -9,7 +9,7 @@ router = APIRouter()
 
 @router.get("/sitemap.xml")
 async def generate_sitemap(db: Session = Depends(get_db)):
-    base_url = "https://literature-db.com"  # Replace with your actual domain
+    base_url = "https://uhas-research-hub.onrender.com/"  # Replace with your actual domain
     
     # Get all published projects
     projects = db.query(Project).filter(Project.is_published == True).all()
@@ -55,6 +55,6 @@ Allow: /projects/*
 Disallow: /admin/
 Disallow: /api/
 
-Sitemap: https://literature-db.com/sitemap.xml
+Sitemap: https://uhas-research-hub.onrender.com//sitemap.xml
 """
     return Response(content=robots_content, media_type="text/plain")
