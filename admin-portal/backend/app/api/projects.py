@@ -376,7 +376,7 @@ async def update_project(
     try:
         db.commit()
         db.refresh(project)
-                return project
+        return project
     except Exception as e:
         db.rollback()
         raise HTTPException(
