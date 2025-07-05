@@ -18,6 +18,8 @@ export interface Project {
   download_count: number;
   document_url?: string;
   document_filename?: string;
+  document_size?: number;
+  document_storage?: string;
   meta_description?: string;
 }
 
