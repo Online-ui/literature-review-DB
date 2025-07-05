@@ -4,41 +4,41 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   Button,
   IconButton,
   Typography,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Divider
 } from '@mui/material';
 import {
   Close as CloseIcon,
   Download as DownloadIcon,
   Fullscreen as FullscreenIcon,
   ZoomIn as ZoomInIcon,
-  ZoomOut as ZoomOutIcon
+  ZoomOut as ZoomOutIcon,
+  Visibility as VisibilityIcon
 } from '@mui/icons-material';
 
-interface DocumentViewerProps {
+interface DocumentViewerModalProps {
   open: boolean;
   onClose: () => void;
-  documentUrl: string;
-  filename?: string;
   projectSlug: string;
-  onDownload: () => void;
+  documentFilename?: string;
 }
 
-const DocumentViewer: React.FC<DocumentViewerProps> = ({
+export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   open,
   onClose,
-  documentUrl,
-  filename,
   projectSlug,
-  onDownload
+  documentFilename
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [zoom, setZoom] = useState(100);
+
+  const viewUrl = `${process.env.REACT_APP_API_URL}/projects/${projectSlug}/view-document`;
+  const downloadUrl = `${process.env.REACT_APP_API_URL}/projects/${projectSlug}/download`;
 
   const handleLoad = () => {
     setLoading(false);
@@ -59,10 +59,15 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   };
 
   const handleFullscreen = () => {
-    window.open(documentUrl, '_blank');
+    window.open(viewUrl, '_blank');
   };
 
-  const isPDF = filename?.toLowerCase().endsWith('.pdf') || documentUrl.includes('.pdf');
+  const handleDownload = () => {
+    window.location.href = downloadUrl;
+  };
+
+  const isPDF = documentFilename?.toLowerCase().endsWith('.pdf') || 
+                documentFilename?.toLowerCase().includes('.pdf');
 
   return (
     <Dialog
@@ -71,94 +76,168 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       maxWidth="lg"
       fullWidth
       PaperProps={{
-        sx: { height: '90vh' }
+        sx: { 
+          height: '90vh',
+          maxHeight: '900px'
+        }
       }}
     >
-      <DialogTitle>
+      <DialogTitle sx={{ pb: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h6" component="div">
-            {filename || 'Document Viewer'}
-          </Typography>
+          <Box>
+            <Typography variant="h6" component="div">
+              Document Viewer
+            </Typography>
+            {documentFilename && (
+              <Typography variant="caption" color="text.secondary">
+                {documentFilename}
+              </Typography>
+            )}
+          </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {isPDF && (
+            {isPDF && !loading && !error && (
               <>
-                <IconButton onClick={handleZoomOut} disabled={zoom <= 50}>
+                <IconButton 
+                  onClick={handleZoomOut} 
+                  disabled={zoom <= 50}
+                  size="small"
+                  title="Zoom out"
+                >
                   <ZoomOutIcon />
                 </IconButton>
-                                <Typography variant="body2" sx={{ minWidth: 60, textAlign: 'center' }}>
+                <Typography variant="body2" sx={{ minWidth: 50, textAlign: 'center' }}>
                   {zoom}%
                 </Typography>
-                <IconButton onClick={handleZoomIn} disabled={zoom >= 200}>
+                <IconButton 
+                  onClick={handleZoomIn} 
+                  disabled={zoom >= 200}
+                  size="small"
+                  title="Zoom in"
+                >
                   <ZoomInIcon />
                 </IconButton>
+                <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
               </>
             )}
-            <IconButton onClick={handleFullscreen} title="Open in new tab">
+            <IconButton onClick={handleFullscreen} size="small" title="Open in new tab">
               <FullscreenIcon />
             </IconButton>
-            <IconButton onClick={onDownload} title="Download">
+            <IconButton onClick={handleDownload} size="small" title="Download">
               <DownloadIcon />
             </IconButton>
-            <IconButton onClick={onClose}>
+            <IconButton onClick={onClose} size="small">
               <CloseIcon />
             </IconButton>
           </Box>
         </Box>
       </DialogTitle>
       
-      <DialogContent sx={{ p: 0, position: 'relative' }}>
+      <DialogContent sx={{ p: 0, position: 'relative', bgcolor: '#f5f5f5' }}>
         {loading && (
           <Box sx={{ 
             display: 'flex', 
+            flexDirection: 'column',
             justifyContent: 'center', 
             alignItems: 'center', 
-            height: '400px' 
+            height: '100%',
+            minHeight: '400px'
           }}>
-            <CircularProgress />
-            <Typography sx={{ ml: 2 }}>Loading document...</Typography>
+            <CircularProgress size={48} sx={{ color: '#0a4f3c' }} />
+            <Typography sx={{ mt: 2 }}>Loading document...</Typography>
           </Box>
         )}
         
         {error && (
-          <Box sx={{ p: 3 }}>
-            <Alert severity="error" sx={{ mb: 2 }}>
+          <Box sx={{ p: 4, textAlign: 'center' }}>
+            <Alert severity="error" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
               {error}
             </Alert>
-            <Button variant="contained" onClick={onDownload} startIcon={<DownloadIcon />}>
-              Download Document Instead
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+              <Button 
+                variant="contained" 
+                onClick={handleDownload} 
+                startIcon={<DownloadIcon />}
+                sx={{
+                  bgcolor: '#0a4f3c',
+                  '&:hover': { bgcolor: '#063d2f' }
+                }}
+              >
+                Download Document
+              </Button>
+              <Button 
+                variant="outlined" 
+                onClick={handleFullscreen} 
+                startIcon={<VisibilityIcon />}
+                sx={{
+                  borderColor: '#0a4f3c',
+                  color: '#0a4f3c',
+                  '&:hover': {
+                    borderColor: '#063d2f',
+                    bgcolor: 'rgba(10, 79, 60, 0.04)'
+                  }
+                }}
+              >
+                Open in New Tab
+              </Button>
+            </Box>
           </Box>
         )}
         
         {!error && (
           <Box sx={{ 
             height: '100%', 
-            display: loading ? 'none' : 'block',
-            overflow: 'auto'
+            display: loading ? 'none' : 'flex',
+            flexDirection: 'column',
+            bgcolor: 'white'
           }}>
             {isPDF ? (
               <iframe
-                src={`${documentUrl}#zoom=${zoom}`}
+                src={`${viewUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=${zoom}`}
                 width="100%"
-                height="600px"
-                style={{ border: 'none' }}
+                height="100%"
+                style={{ 
+                  border: 'none',
+                  flexGrow: 1
+                }}
                 onLoad={handleLoad}
                 onError={handleError}
-                title="Document Viewer"
+                title="PDF Document Viewer"
               />
             ) : (
-              <Box sx={{ p: 3, textAlign: 'center' }}>
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  Preview not available for this file type. Please download to view.
+              <Box sx={{ p: 4, textAlign: 'center', flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <Alert severity="info" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+                  Preview is only available for PDF files. This document appears to be in a different format.
                 </Alert>
-                <Button 
-                  variant="contained" 
-                  onClick={onDownload} 
-                  startIcon={<DownloadIcon />}
-                  size="large"
-                >
-                  Download {filename}
-                </Button>
+                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                  <Button 
+                    variant="contained" 
+                    onClick={handleDownload} 
+                    startIcon={<DownloadIcon />}
+                    size="large"
+                    sx={{
+                      bgcolor: '#0a4f3c',
+                      '&:hover': { bgcolor: '#063d2f' }
+                    }}
+                  >
+                    Download {documentFilename || 'Document'}
+                  </Button>
+                  <Button 
+                    variant="outlined" 
+                    onClick={handleFullscreen} 
+                    startIcon={<VisibilityIcon />}
+                    size="large"
+                    sx={{
+                      borderColor: '#0a4f3c',
+                      color: '#0a4f3c',
+                      '&:hover': {
+                        borderColor: '#063d2f',
+                        bgcolor: 'rgba(10, 79, 60, 0.04)'
+                      }
+                    }}
+                  >
+                    Open in Browser
+                  </Button>
+                </Box>
               </Box>
             )}
           </Box>
@@ -167,5 +246,3 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     </Dialog>
   );
 };
-
-export default DocumentViewer;
