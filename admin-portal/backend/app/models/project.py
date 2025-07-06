@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, ForeignKey
+from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, ForeignKey, LargeBinary
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -31,12 +31,16 @@ class Project(BaseModel):
     meta_description = Column(Text)
     meta_keywords = Column(Text)
     
-    # File Info
-    document_url = Column(String)
-    document_public_id = Column(String, nullable=True)  # For Cloudinary
-    document_filename = Column(String)
-    document_size = Column(Integer)
-    document_storage = Column(String, default="local")  # "local" or "cloudinary"
+    # File Storage Fields (Database Storage)
+    document_filename = Column(String, nullable=True)
+    document_size = Column(Integer, nullable=True)
+    document_data = Column(LargeBinary, nullable=True)  # Stores the actual file data
+    document_content_type = Column(String, nullable=True)  # MIME type (e.g., 'application/pdf')
+    
+    # Backward Compatibility Fields (can be removed later)
+    document_url = Column(String, nullable=True)  # Keep for migration purposes
+    document_public_id = Column(String, nullable=True)  # Keep for migration purposes
+    document_storage = Column(String, default="database")  # Change default to "database"
     
     # Stats
     view_count = Column(Integer, default=0)
