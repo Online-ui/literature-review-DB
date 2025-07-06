@@ -13,7 +13,7 @@ from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
 from ..core.auth import get_current_active_user
 from ..core.config import settings
 from ..core.constants import RESEARCH_AREAS, DEGREE_TYPES, ACADEMIC_YEARS, INSTITUTIONS
-from ..services.storage import storage_service
+from ..services.supabase_storage import supabase_storage
 
 router = APIRouter()
 
@@ -122,9 +122,10 @@ async def create_project(
     # Handle file upload
     document_filename = None
     document_url = None
+    document_path = None
     document_size = None
-    document_public_id = None
-    document_storage = "cloudinary"  # Default to cloudinary
+    document_content_type = None
+    document_storage = "supabase"
     
     if file and file.filename:
         # Validate file type
@@ -147,13 +148,23 @@ async def create_project(
             )
         
         try:
-            # Upload file using storage service (Cloudinary)
-            upload_result = await storage_service.upload_file(file, folder="projects")
+            # Generate unique filename to avoid conflicts
+            unique_filename = f"{uuid.uuid4()}_{file.filename}"
+            
+            # Upload file using Supabase storage
+            upload_result = await supabase_storage.upload_file(
+                file=file, 
+                folder="projects",
+                filename=unique_filename
+            )
+            
             document_filename = file.filename
             document_url = upload_result["url"]
+            document_path = upload_result["path"]
             document_size = upload_result["size"]
-            document_public_id = upload_result["public_id"]
+            document_content_type = upload_result["content_type"]
             document_storage = upload_result["storage"]
+            
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -179,8 +190,9 @@ async def create_project(
         is_published=is_published,
         document_filename=document_filename,
         document_url=document_url,
+        document_path=document_path,
         document_size=document_size,
-        document_public_id=document_public_id,
+        document_content_type=document_content_type,
         document_storage=document_storage,
         created_by_id=current_user.id
     )
@@ -193,8 +205,8 @@ async def create_project(
     except Exception as e:
         db.rollback()
         # Clean up uploaded file if project creation failed
-        if document_public_id:
-            await storage_service.delete_file(document_public_id, document_storage)
+        if document_path:
+            await supabase_storage.delete_file(document_path)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create project"
@@ -323,22 +335,23 @@ async def update_project(
         project.is_published = is_published
     
     # Handle file removal
-    if remove_file and project.document_public_id:
-        # Delete old file from Cloudinary
-        await storage_service.delete_file(project.document_public_id, project.document_storage)
+    if remove_file and project.document_path:
+        # Delete old file from Supabase
+        await supabase_storage.delete_file(project.document_path)
         
         # Clear file fields
         project.document_filename = None
         project.document_url = None
+        project.document_path = None
         project.document_size = None
-        project.document_public_id = None
-        project.document_storage = "cloudinary"
+        project.document_content_type = None
+        project.document_storage = "supabase"
     
     # Handle new file upload
     if file and file.filename:
         # Delete old file if exists
-        if project.document_public_id and not remove_file:
-            await storage_service.delete_file(project.document_public_id, project.document_storage)
+        if project.document_path and not remove_file:
+            await supabase_storage.delete_file(project.document_path)
         
         # Validate file type
         file_extension = os.path.splitext(file.filename)[1].lower()
@@ -360,16 +373,26 @@ async def update_project(
             )
         
         try:
-            # Upload file using storage service (Cloudinary)
-            upload_result = await storage_service.upload_file(file, folder="projects")
+            # Generate unique filename to avoid conflicts
+            unique_filename = f"{uuid.uuid4()}_{file.filename}"
+            
+            # Upload file using Supabase storage
+            upload_result = await supabase_storage.upload_file(
+                file=file, 
+                folder="projects",
+                filename=unique_filename
+            )
+            
             project.document_filename = file.filename
             project.document_url = upload_result["url"]
+            project.document_path = upload_result["path"]
             project.document_size = upload_result["size"]
-            project.document_public_id = upload_result["public_id"]
+            project.document_content_type = upload_result["content_type"]
             project.document_storage = upload_result["storage"]
+            
         except Exception as e:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to save uploaded file: {str(e)}"
             )
     
@@ -404,21 +427,22 @@ async def delete_project_file(
             detail="Not enough permissions to delete file"
         )
     
-    if not project.document_public_id:
+    if not project.document_path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No file to delete"
         )
     
-    # Delete file from Cloudinary
-    await storage_service.delete_file(project.document_public_id, project.document_storage)
+    # Delete file from Supabase
+    await supabase_storage.delete_file(project.document_path)
     
     # Clear file fields in database
     project.document_filename = None
     project.document_url = None
+    project.document_path = None
     project.document_size = None
-    project.document_public_id = None
-    project.document_storage = "cloudinary"
+    project.document_content_type = None
+    project.document_storage = "supabase"
     
     try:
         db.commit()
@@ -450,9 +474,9 @@ async def delete_project(
             detail="Not enough permissions to delete this project"
         )
     
-    # Delete associated file from Cloudinary
-    if project.document_public_id:
-        await storage_service.delete_file(project.document_public_id, project.document_storage)
+    # Delete associated file from Supabase
+    if project.document_path:
+        await supabase_storage.delete_file(project.document_path)
     
     try:
         db.delete(project)
@@ -520,4 +544,78 @@ async def toggle_project_publish_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update project status"
+        )
+
+@router.get("/{project_id}/download")
+async def download_project_file(
+    project_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Download project file and increment download counter"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    # Check if project is published or user has permission
+    if not project.is_published and current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Project is not published"
+        )
+    
+    if not project.document_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No file available for download"
+        )
+    
+    # Increment download counter
+    project.download_count = (project.download_count or 0) + 1
+    
+    try:
+        db.commit()
+        # Return redirect to Supabase file URL
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=project.document_url)
+    except Exception as e:
+        db.rollback()
+        # Still allow download even if counter update fails
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=project.document_url)
+
+@router.patch("/{project_id}/increment-view")
+async def increment_project_view(
+    project_id: int,
+    db: Session = Depends(get_db)
+):
+    """Increment project view counter (public endpoint)"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    # Only increment for published projects
+    if not project.is_published:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    # Increment view counter
+    project.view_count = (project.view_count or 0) + 1
+    
+    try:
+        db.commit()
+        return {"message": "View count incremented", "view_count": project.view_count}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update view count"
         )
