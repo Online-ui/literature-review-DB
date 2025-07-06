@@ -2,6 +2,7 @@ from supabase import create_client, Client
 from fastapi import UploadFile, HTTPException
 import os
 import uuid
+import io
 from typing import Dict, Any, Optional
 from ..core.config import settings
 
@@ -34,26 +35,25 @@ class SupabaseStorageService:
             return True
         except Exception as e:
             print(f"⚠️  Bucket access test failed: {str(e)}")
-            # Try to create bucket if it doesn't exist
-            try:
-                self.supabase.storage.create_bucket(
-                    self.bucket_name,
-                    options={"public": True}
-                )
-                print(f"✅ Created bucket '{self.bucket_name}'")
-                return True
-            except Exception as create_error:
-                print(f"❌ Could not create bucket: {str(create_error)}")
-                return False
+            return False
     
     async def upload_file(self, file: UploadFile, folder: str = "projects", filename: Optional[str] = None) -> Dict[str, Any]:
         """Upload file to Supabase Storage"""
         try:
             print(f"🔄 Starting file upload: {file.filename}")
             
-            # Read file content
+            # Read file content as bytes
             file_content = await file.read()
             print(f"📁 File size: {len(file_content)} bytes")
+            print(f"📁 File content type: {type(file_content)}")
+            
+            # Ensure we have bytes
+            if not isinstance(file_content, bytes):
+                print(f"⚠️  Converting file content to bytes")
+                if hasattr(file_content, 'encode'):
+                    file_content = file_content.encode()
+                else:
+                    file_content = bytes(file_content)
             
             # Reset file position for potential re-reading
             await file.seek(0)
@@ -67,22 +67,31 @@ class SupabaseStorageService:
             file_path = f"{folder}/{filename}"
             print(f"📂 Upload path: {file_path}")
             
-            # Upload to Supabase
+            # Upload to Supabase using BytesIO
             print(f"☁️  Uploading to Supabase bucket: {self.bucket_name}")
+            
+            # Create a BytesIO object from the file content
+            file_obj = io.BytesIO(file_content)
+            
             result = self.supabase.storage.from_(self.bucket_name).upload(
                 path=file_path,
-                file=file_content,
+                file=file_obj,  # Use BytesIO object instead of raw bytes
                 file_options={
                     "content-type": file.content_type or "application/octet-stream",
-                    "upsert": True  # Allow overwriting
+                    "upsert": True
                 }
             )
             
+            print(f"📤 Upload result type: {type(result)}")
             print(f"📤 Upload result: {result}")
             
             # Check if upload was successful
             if hasattr(result, 'error') and result.error:
                 raise Exception(f"Upload failed: {result.error}")
+            
+            # For newer Supabase versions, check for success differently
+            if isinstance(result, dict) and 'error' in result:
+                raise Exception(f"Upload failed: {result['error']}")
             
             # Get public URL
             public_url = self.supabase.storage.from_(self.bucket_name).get_public_url(file_path)
@@ -99,6 +108,9 @@ class SupabaseStorageService:
         except Exception as e:
             error_msg = f"File upload failed: {str(e)}"
             print(f"❌ {error_msg}")
+            print(f"❌ Error type: {type(e)}")
+            import traceback
+            print(f"❌ Full traceback: {traceback.format_exc()}")
             raise HTTPException(status_code=500, detail=error_msg)
     
     async def delete_file(self, file_path: str) -> bool:
@@ -106,7 +118,7 @@ class SupabaseStorageService:
         try:
             print(f"🗑️  Deleting file: {file_path}")
             result = self.supabase.storage.from_(self.bucket_name).remove([file_path])
-            success = len(result) > 0
+            success = len(result) > 0 if result else False
             print(f"✅ Delete successful: {success}")
             return success
         except Exception as e:
