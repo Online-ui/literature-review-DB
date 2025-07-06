@@ -102,7 +102,7 @@ async def get_project(slug: str, db: Session = Depends(get_db)):
         )
     
     # Increment view count
-    project.view_count += 1
+    project.view_count = (project.view_count or 0) + 1
     db.commit()
     
     return project
@@ -127,72 +127,50 @@ async def view_document(slug: str, db: Session = Depends(get_db)):
             detail="No document available"
         )
     
-    # Handle Cloudinary URLs
-    if project.document_url.startswith('http'):
-        return RedirectResponse(url=project.document_url)
+    # For Supabase Storage, redirect directly to the URL
+    # Supabase URLs are already public and can be viewed directly
+    if project.document_storage == "supabase" or project.document_url.startswith('http'):
+        # Add inline parameter for viewing in browser
+        view_url = project.document_url
+        if '?' in view_url:
+            view_url += "&response-content-disposition=inline"
+        else:
+            view_url += "?response-content-disposition=inline"
+        return RedirectResponse(url=view_url)
     
-    # For local storage, try multiple possible file locations
+    # Legacy support for local files (if any exist)
+    # This section can be removed once all files are migrated to Supabase
     possible_paths = [
-        # Current directory uploads
         project.document_url.replace("/uploads/", "uploads/"),
         f"uploads/{os.path.basename(project.document_url)}",
-        
-        # Shared uploads directory
         project.document_url.replace("/uploads/", "../../shared/uploads/"),
         f"../../shared/uploads/{os.path.basename(project.document_url)}",
-        
-        # Admin portal uploads directory
         project.document_url.replace("/uploads/", "../admin-portal/backend/uploads/"),
         f"../admin-portal/backend/uploads/{os.path.basename(project.document_url)}",
-        
-        # Absolute path from document_url
         project.document_url.lstrip('/'),
     ]
     
     file_path = None
     for path in possible_paths:
-        print(f"Checking view path: {path}")  # Debug log
         if os.path.exists(path):
             file_path = path
-            print(f"Found view file at: {path}")  # Debug log
             break
     
     if not file_path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Document file not found for viewing. Searched: {possible_paths}"
+            detail="Document file not found"
         )
     
-    # Determine content type based on file extension or original filename
-    content_type = 'application/pdf'  # Default to PDF
+    # Determine content type
+    content_type = project.document_content_type or 'application/pdf'
     
-    # First try to get mime type from original filename
-    if project.document_filename:
+    if not content_type and project.document_filename:
         mime_type, _ = mimetypes.guess_type(project.document_filename)
-        if mime_type:
-            content_type = mime_type
-    else:
-        # Fallback to file extension from stored file
-        file_extension = os.path.splitext(file_path)[1].lower()
-        mime_types = {
-            '.pdf': 'application/pdf',
-            '.doc': 'application/msword',
-            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            '.txt': 'text/plain',
-            '.rtf': 'application/rtf'
-        }
-        content_type = mime_types.get(file_extension, 'application/octet-stream')
+        content_type = mime_type or 'application/pdf'
     
-    # Get the original filename or use a default with proper extension
-    filename = project.document_filename
-    if not filename:
-        # Extract extension from the stored file
-        _, ext = os.path.splitext(file_path)
-        if not ext:
-            ext = '.pdf'  # Default to PDF
-        filename = f"{project.slug}{ext}"
+    filename = project.document_filename or f"{project.slug}.pdf"
     
-    # Return file with proper headers for viewing
     return FileResponse(
         path=file_path,
         media_type=content_type,
@@ -226,54 +204,45 @@ async def download_document(slug: str, db: Session = Depends(get_db)):
     project.download_count = (project.download_count or 0) + 1
     db.commit()
     
-    # Handle Cloudinary URLs
-    if project.document_url.startswith('http'):
-        # Add fl_attachment to force download
-        download_url = f"{project.document_url}?fl_attachment"
+    # For Supabase Storage, redirect to download URL
+    if project.document_storage == "supabase" or project.document_url.startswith('http'):
+        # Add download parameter to force download instead of viewing
+        download_url = project.document_url
+        filename = project.document_filename or f"{project.slug}.pdf"
+        
+        if '?' in download_url:
+            download_url += f"&response-content-disposition=attachment; filename=\"{filename}\""
+        else:
+            download_url += f"?response-content-disposition=attachment; filename=\"{filename}\""
+        
         return RedirectResponse(url=download_url)
     
-    # For local storage, try multiple possible file locations
+    # Legacy support for local files (if any exist)
+    # This section can be removed once all files are migrated to Supabase
     possible_paths = [
-        # Current directory uploads
         project.document_url.replace("/uploads/", "uploads/"),
         f"uploads/{os.path.basename(project.document_url)}",
-        
-        # Shared uploads directory
         project.document_url.replace("/uploads/", "../../shared/uploads/"),
         f"../../shared/uploads/{os.path.basename(project.document_url)}",
-        
-        # Admin portal uploads directory
         project.document_url.replace("/uploads/", "../admin-portal/backend/uploads/"),
         f"../admin-portal/backend/uploads/{os.path.basename(project.document_url)}",
-        
-        # Absolute path from document_url
         project.document_url.lstrip('/'),
     ]
     
     file_path = None
     for path in possible_paths:
-        print(f"Checking download path: {path}")  # Debug log
         if os.path.exists(path):
             file_path = path
-            print(f"Found download file at: {path}")  # Debug log
             break
     
     if not file_path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Document file not found. Searched: {possible_paths}"
+            detail="Document file not found"
         )
     
-    # Get the original filename or create one with proper extension
-    filename = project.document_filename
-    if not filename:
-        # Try to determine extension from the stored file
-        _, ext = os.path.splitext(file_path)
-        if not ext:
-            ext = '.pdf'  # Default to PDF
-        filename = f"{project.slug}{ext}"
+    filename = project.document_filename or f"{project.slug}.pdf"
     
-    # Return file for download
     return FileResponse(
         path=file_path,
         media_type='application/octet-stream',
@@ -282,8 +251,68 @@ async def download_document(slug: str, db: Session = Depends(get_db)):
         }
     )
 
+@router.get("/{slug}/file-info")
+async def get_file_info(slug: str, db: Session = Depends(get_db)):
+    """Get file information for a project"""
+    project = db.query(Project).filter(
+        Project.slug == slug,
+        Project.is_published == True
+    ).first()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    if not project.document_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No document available"
+        )
+    
+    return {
+        "filename": project.document_filename,
+        "size": project.document_size,
+        "content_type": project.document_content_type,
+        "storage": project.document_storage,
+        "download_count": project.download_count or 0,
+        "view_count": project.view_count or 0
+    }
+
 # Legacy endpoint for backward compatibility
 @router.post("/{slug}/download")
 async def download_project_post(slug: str, db: Session = Depends(get_db)):
     """Legacy POST endpoint for download - redirects to GET"""
     return await download_document(slug, db)
+
+@router.patch("/{slug}/increment-view")
+async def increment_project_view(slug: str, db: Session = Depends(get_db)):
+    """Increment project view counter (for AJAX calls)"""
+    project = db.query(Project).filter(
+        Project.slug == slug,
+        Project.is_published == True
+    ).first()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    # Increment view counter
+    project.view_count = (project.view_count or 0) + 1
+    
+    try:
+        db.commit()
+        return {
+            "message": "View count incremented", 
+            "view_count": project.view_count,
+            "slug": project.slug
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update view count"
+        )
