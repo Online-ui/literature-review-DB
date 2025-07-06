@@ -21,7 +21,7 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Custom validation error handler
+# Fixed validation error handler
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     error_messages = []
@@ -34,7 +34,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=422,
         content={
             "detail": "; ".join(error_messages),
-            "errors": exc.errors()
+            "type": "validation_error",
+            "errors": [
+                {
+                    "loc": list(error["loc"]),
+                    "msg": error["msg"],
+                    "type": error["type"]
+                }
+                for error in exc.errors()
+            ]
         }
     )
 
@@ -59,13 +67,16 @@ async def startup_event():
     if settings.STORAGE_BACKEND == "supabase":
         if settings.has_supabase:
             print("✅ Supabase Storage configured")
+            try:
+                from .services.supabase_storage import supabase_storage
+                if supabase_storage:
+                    print("✅ Supabase Storage service ready")
+                else:
+                    print("⚠️  Supabase Storage service not available")
+            except Exception as e:
+                print(f"⚠️  Supabase Storage initialization error: {str(e)}")
         else:
             print("⚠️  WARNING: Supabase storage selected but credentials not configured")
-    
-    # Create upload directory for legacy support
-    if settings.STORAGE_BACKEND == "local":
-        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-        print(f"📁 Local upload directory: {settings.UPLOAD_DIR}")
 
 # Mount static files only if using local storage
 if settings.STORAGE_BACKEND == "local":
