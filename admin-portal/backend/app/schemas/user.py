@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, validator
-from typing import Optional, List
+from typing import Optional, List, ForwardRef
 from datetime import datetime
 
 class UserBase(BaseModel):
@@ -58,9 +58,12 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
+# Forward reference for circular import
+ProjectResponse = ForwardRef('ProjectResponse')
+
 class UserWithProjects(UserResponse):
     """User response with their projects included"""
-    projects: List['ProjectResponse'] = []
+    projects: List[ProjectResponse] = []
 
 class Token(BaseModel):
     access_token: str
@@ -91,8 +94,3 @@ class UserStats(BaseModel):
     faculty_count: int
     coordinator_count: int
     recent_registrations: int
-
-# Avoid circular imports
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from .project import ProjectResponse
