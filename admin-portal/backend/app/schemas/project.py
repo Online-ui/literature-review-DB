@@ -65,11 +65,49 @@ class ProjectResponse(ProjectBase):
     publication_date: datetime
     view_count: int
     download_count: int
+    
+    # Supabase Storage Fields
     document_url: Optional[str] = None
     document_filename: Optional[str] = None
     document_size: Optional[int] = None
+    document_path: Optional[str] = None  # New: Supabase storage path
+    document_content_type: Optional[str] = None  # New: MIME type
+    document_storage: Optional[str] = None  # New: Storage backend identifier
+    
+    # Legacy fields (for backward compatibility)
+    document_public_id: Optional[str] = None  # Legacy: Cloudinary public ID
+    
+    # Metadata
     created_by_id: Optional[int] = None
     created_at: datetime
     
     class Config:
         from_attributes = True
+
+class ProjectFileInfo(BaseModel):
+    """Schema for file information responses"""
+    filename: Optional[str] = None
+    size: Optional[int] = None
+    content_type: Optional[str] = None
+    storage: Optional[str] = None
+    download_count: int = 0
+    view_count: int = 0
+    url: Optional[str] = None
+    path: Optional[str] = None
+
+class ProjectStats(BaseModel):
+    """Schema for project statistics"""
+    total_projects: int
+    total_institutions: int
+    total_research_areas: int
+    total_downloads: int
+    total_views: int = 0
+
+class ProjectSearchResponse(BaseModel):
+    """Schema for search results with metadata"""
+    projects: list[ProjectResponse]
+    total: int
+    page: int
+    per_page: int
+    has_next: bool
+    has_prev: bool
