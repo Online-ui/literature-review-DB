@@ -10,36 +10,53 @@ class SupabaseStorageService:
         if not settings.has_supabase:
             raise ValueError("Supabase credentials not configured")
         
-        self.supabase: Client = create_client(
-            settings.SUPABASE_URL,
-            settings.SUPABASE_ANON_KEY
-        )
-        self.bucket_name = settings.SUPABASE_BUCKET_NAME
-        
-        # Initialize bucket if it doesn't exist
-        self._ensure_bucket_exists()
-    
-    def _ensure_bucket_exists(self):
-        """Ensure the storage bucket exists"""
         try:
-            # Try to get bucket info
-            self.supabase.storage.get_bucket(self.bucket_name)
-        except Exception:
-            # Bucket doesn't exist, create it
+            self.supabase: Client = create_client(
+                settings.SUPABASE_URL,
+                settings.SUPABASE_ANON_KEY
+            )
+            self.bucket_name = settings.SUPABASE_BUCKET_NAME
+            
+            # Test bucket access
+            self._test_bucket_access()
+            print(f"✅ Supabase Storage initialized with bucket: {self.bucket_name}")
+            
+        except Exception as e:
+            print(f"❌ Supabase Storage initialization failed: {str(e)}")
+            raise e
+    
+    def _test_bucket_access(self):
+        """Test if bucket exists and is accessible"""
+        try:
+            # Try to list files in bucket
+            result = self.supabase.storage.from_(self.bucket_name).list(limit=1)
+            print(f"✅ Bucket '{self.bucket_name}' is accessible")
+            return True
+        except Exception as e:
+            print(f"⚠️  Bucket access test failed: {str(e)}")
+            # Try to create bucket if it doesn't exist
             try:
                 self.supabase.storage.create_bucket(
                     self.bucket_name,
                     options={"public": True}
                 )
-                print(f"✅ Created Supabase bucket: {self.bucket_name}")
-            except Exception as e:
-                print(f"⚠️  Could not create bucket {self.bucket_name}: {str(e)}")
+                print(f"✅ Created bucket '{self.bucket_name}'")
+                return True
+            except Exception as create_error:
+                print(f"❌ Could not create bucket: {str(create_error)}")
+                return False
     
     async def upload_file(self, file: UploadFile, folder: str = "projects", filename: Optional[str] = None) -> Dict[str, Any]:
         """Upload file to Supabase Storage"""
         try:
+            print(f"🔄 Starting file upload: {file.filename}")
+            
             # Read file content
             file_content = await file.read()
+            print(f"📁 File size: {len(file_content)} bytes")
+            
+            # Reset file position for potential re-reading
+            await file.seek(0)
             
             # Generate filename if not provided
             if not filename:
@@ -48,8 +65,10 @@ class SupabaseStorageService:
             
             # Create full path
             file_path = f"{folder}/{filename}"
+            print(f"📂 Upload path: {file_path}")
             
             # Upload to Supabase
+            print(f"☁️  Uploading to Supabase bucket: {self.bucket_name}")
             result = self.supabase.storage.from_(self.bucket_name).upload(
                 path=file_path,
                 file=file_content,
@@ -59,12 +78,15 @@ class SupabaseStorageService:
                 }
             )
             
+            print(f"📤 Upload result: {result}")
+            
             # Check if upload was successful
-            if hasattr(result, 'status_code') and result.status_code != 200:
-                raise HTTPException(status_code=500, detail=f"Upload failed: {result}")
+            if hasattr(result, 'error') and result.error:
+                raise Exception(f"Upload failed: {result.error}")
             
             # Get public URL
             public_url = self.supabase.storage.from_(self.bucket_name).get_public_url(file_path)
+            print(f"🔗 Public URL: {public_url}")
             
             return {
                 "path": file_path,
@@ -75,15 +97,20 @@ class SupabaseStorageService:
             }
             
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+            error_msg = f"File upload failed: {str(e)}"
+            print(f"❌ {error_msg}")
+            raise HTTPException(status_code=500, detail=error_msg)
     
     async def delete_file(self, file_path: str) -> bool:
         """Delete file from Supabase Storage"""
         try:
+            print(f"🗑️  Deleting file: {file_path}")
             result = self.supabase.storage.from_(self.bucket_name).remove([file_path])
-            return len(result) > 0
+            success = len(result) > 0
+            print(f"✅ Delete successful: {success}")
+            return success
         except Exception as e:
-            print(f"Error deleting file {file_path}: {str(e)}")
+            print(f"❌ Error deleting file {file_path}: {str(e)}")
             return False
     
     def get_file_url(self, file_path: str) -> str:
@@ -93,13 +120,13 @@ class SupabaseStorageService:
     def list_files(self, folder: str = "") -> list:
         """List files in a folder"""
         try:
-            result = self.supabase.storage.from_(self.bucket_name).list(folder)
-            return result
+            result = self.supabase.storage.from_(self.bucket_name).list(folder, limit=100)
+            return result if result else []
         except Exception as e:
-            print(f"Error listing files in {folder}: {str(e)}")
+            print(f"❌ Error listing files in {folder}: {str(e)}")
             return []
 
-# Initialize service
+# Initialize service with error handling
 try:
     supabase_storage = SupabaseStorageService()
 except Exception as e:
