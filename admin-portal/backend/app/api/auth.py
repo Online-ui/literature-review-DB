@@ -1,8 +1,8 @@
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from typing import Union
 
 from ..database import get_db
 from ..models.user import User
@@ -24,11 +24,13 @@ def authenticate_user(db: Session, username: str, password: str):
 
 @router.post("/login", response_model=Token)
 async def login(
-    form_data: LoginRequest,  # Accept JSON login data
+    username: str = Form(...),  # Accept form data
+    password: str = Form(...),  # Accept form data
     db: Session = Depends(get_db)
 ):
+    """Login endpoint that accepts form data"""
     # Authenticate user
-    user = authenticate_user(db, form_data.username, form_data.password)
+    user = authenticate_user(db, username, password)
     
     if not user:
         raise HTTPException(
@@ -61,7 +63,7 @@ async def login(
         role=user.role,
         is_active=user.is_active,
         created_at=user.created_at,
-        project_count=0  # You can calculate this if needed
+        project_count=0
     )
     
     return Token(
@@ -70,12 +72,12 @@ async def login(
         user=user_response
     )
 
-@router.post("/login-form", response_model=Token)
-async def login_form(
-    form_data: OAuth2PasswordRequestForm = Depends(),
+@router.post("/login-json", response_model=Token)
+async def login_json(
+    form_data: LoginRequest,  # Accept JSON data
     db: Session = Depends(get_db)
 ):
-    """Alternative login endpoint for form data (OAuth2 compatibility)"""
+    """Alternative login endpoint for JSON data"""
     # Authenticate user
     user = authenticate_user(db, form_data.username, form_data.password)
     
@@ -121,7 +123,6 @@ async def login_form(
 
 @router.post("/logout")
 async def logout():
-    # In a real app, you might want to blacklist the token
     return {"message": "Successfully logged out"}
 
 @router.get("/me", response_model=UserResponse)
@@ -137,7 +138,7 @@ async def read_users_me(current_user: User = Depends(get_current_active_user)):
         role=current_user.role,
         is_active=current_user.is_active,
         created_at=current_user.created_at,
-        project_count=0  # Calculate if needed
+        project_count=0
     )
 
 @router.post("/change-password")
@@ -165,34 +166,3 @@ async def change_password(
     db.commit()
     
     return {"message": "Password updated successfully"}
-
-@router.post("/refresh")
-async def refresh_token(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    """Refresh access token"""
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": current_user.username}, expires_delta=access_token_expires
-    )
-    
-    user_response = UserResponse(
-        id=current_user.id,
-        username=current_user.username,
-        email=current_user.email,
-        full_name=current_user.full_name,
-        institution=current_user.institution,
-        department=current_user.department,
-        phone=current_user.phone,
-        role=current_user.role,
-        is_active=current_user.is_active,
-        created_at=current_user.created_at,
-        project_count=0
-    )
-    
-    return Token(
-        access_token=access_token,
-        token_type="bearer",
-        user=user_response
-    )
