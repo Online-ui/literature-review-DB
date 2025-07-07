@@ -334,7 +334,7 @@ const ProjectDetailPage: React.FC = () => {
             flexWrap: 'wrap',
             flexDirection: { xs: 'column', sm: 'row' }
           }}>
-            {project.document_url && (
+            {project.document_filename && (
               <>
                 <Button
                   variant="contained"
@@ -392,7 +392,7 @@ const ProjectDetailPage: React.FC = () => {
                     }
                   }}
                 >
-                                    {downloading ? 'Downloading...' : 'Download PDF'}
+                  {downloading ? 'Downloading...' : 'Download PDF'}
                 </Button>
               </>
             )}
@@ -403,7 +403,7 @@ const ProjectDetailPage: React.FC = () => {
             display: 'flex', 
             gap: { xs: 2, sm: 4 }, 
             p: { xs: 2, sm: 3 },
-            bgcolor: 'rgba(27, 94, 32, 0.05)',
+                        bgcolor: 'rgba(27, 94, 32, 0.05)',
             borderRadius: 3,
             border: '1px solid #c8e6c9',
             flexDirection: { xs: 'row', sm: 'row' },
@@ -688,7 +688,7 @@ const ProjectDetailPage: React.FC = () => {
                         fontSize: { xs: '0.875rem', sm: '1rem' },
                         wordBreak: 'break-word'
                       }}>
-                                                {project.document_filename}
+                        {project.document_filename}
                       </Typography>
                       {project.document_size && (
                         <Chip
@@ -696,7 +696,7 @@ const ProjectDetailPage: React.FC = () => {
                           size="small"
                           sx={{
                             bgcolor: '#c8e6c9',
-                            color: '#1b5e20',
+                                                        color: '#1b5e20',
                             fontWeight: 'bold',
                             fontSize: { xs: '0.7rem', sm: '0.75rem' }
                           }}
@@ -763,7 +763,7 @@ const ProjectDetailPage: React.FC = () => {
         </Grid>
 
         {/* Document Viewer - Fixed with correct props */}
-        {project.document_url && viewerOpen && (
+        {project.document_filename && viewerOpen && (
           <DocumentViewer
             projectSlug={project.slug}
             documentFilename={project.document_filename || 'document.pdf'}
