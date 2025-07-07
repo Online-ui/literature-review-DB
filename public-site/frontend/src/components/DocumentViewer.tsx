@@ -27,45 +27,88 @@ interface DocumentViewerProps {
   projectSlug: string;
   documentUrl?: string;
   documentFilename?: string;
+  hasDocument?: boolean;
 }
 
 export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   projectSlug,
   documentUrl,
-  documentFilename
+  documentFilename,
+  hasDocument = false
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleView = () => {
-    setLoading(true);
-    setError('');
-    
-    // Open in new tab for viewing
-    const viewUrl = `${process.env.REACT_APP_API_URL}/projects/${projectSlug}/view-document`;
-    window.open(viewUrl, '_blank');
-    
-    setTimeout(() => setLoading(false), 1000);
-  };
+  // Use the correct API base URL for your public site
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://uhas-research-hub.onrender.com';
 
-  const handleDownload = () => {
+  const handleView = async () => {
     setLoading(true);
     setError('');
     
     try {
-      const downloadUrl = `${process.env.REACT_APP_API_URL}/projects/${projectSlug}/download`;
+      // Check if document exists first
+      const checkResponse = await fetch(`${API_BASE_URL}/api/projects/${projectSlug}/file-info`);
       
-      // Direct navigation for download
-      window.location.href = downloadUrl;
+      if (!checkResponse.ok) {
+        throw new Error('Document not found');
+      }
       
-      setTimeout(() => setLoading(false), 1500);
-    } catch (err) {
-      setError('Failed to download document');
+      const fileInfo = await checkResponse.json();
+      
+      if (!fileInfo.available) {
+        throw new Error('No document available for this project');
+      }
+      
+      // Open in new tab for viewing
+      const viewUrl = `${API_BASE_URL}/api/projects/${projectSlug}/view-document`;
+      window.open(viewUrl, '_blank');
+      
+    } catch (err: any) {
+      setError(err.message || 'Failed to view document');
+    } finally {
       setLoading(false);
     }
   };
 
-  if (!documentUrl && !documentFilename) {
+  const handleDownload = async () => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      // Check if document exists first
+      const checkResponse = await fetch(`${API_BASE_URL}/api/projects/${projectSlug}/file-info`);
+      
+      if (!checkResponse.ok) {
+        throw new Error('Document not found');
+      }
+      
+      const fileInfo = await checkResponse.json();
+      
+      if (!fileInfo.available) {
+        throw new Error('No document available for download');
+      }
+      
+      // Create download link
+      const downloadUrl = `${API_BASE_URL}/api/projects/${projectSlug}/download`;
+      
+      // Create a temporary link element for download
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = fileInfo.filename || documentFilename || 'document.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+    } catch (err: any) {
+      setError(err.message || 'Failed to download document');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check if document is available
+  if (!hasDocument && !documentFilename) {
     return (
       <Alert severity="info" sx={{ mt: 2 }}>
         No document available for this project
@@ -80,7 +123,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
       </Typography>
       
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
           {error}
         </Alert>
       )}
@@ -100,7 +143,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
             }
           }}
         >
-          View Document
+          {loading ? 'Loading...' : 'View Document'}
         </Button>
         
         <Button
@@ -122,7 +165,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
             }
           }}
         >
-          Download Document
+          {loading ? 'Loading...' : 'Download Document'}
         </Button>
       </Box>
       
@@ -152,9 +195,39 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [zoom, setZoom] = useState(100);
+  const [fileInfo, setFileInfo] = useState<any>(null);
 
-  const viewUrl = `${process.env.REACT_APP_API_URL}/projects/${projectSlug}/view-document`;
-  const downloadUrl = `${process.env.REACT_APP_API_URL}/projects/${projectSlug}/download`;
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://uhas-research-hub.onrender.com';
+  const viewUrl = `${API_BASE_URL}/api/projects/${projectSlug}/view-document`;
+  const downloadUrl = `${API_BASE_URL}/api/projects/${projectSlug}/download`;
+
+  // Fetch file info when modal opens
+  React.useEffect(() => {
+    if (open) {
+      setLoading(true);
+      setError('');
+      setZoom(100);
+      
+      fetch(`${API_BASE_URL}/api/projects/${projectSlug}/file-info`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Document not found');
+          }
+          return response.json();
+        })
+        .then(data => {
+          setFileInfo(data);
+          if (!data.available) {
+            throw new Error('No document available for this project');
+          }
+          setLoading(false);
+        })
+        .catch(err => {
+          setError(err.message || 'Failed to load document information');
+          setLoading(false);
+        });
+    }
+  }, [open, projectSlug, API_BASE_URL]);
 
   const handleLoad = () => {
     setLoading(false);
@@ -179,20 +252,15 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   };
 
   const handleDownload = () => {
-    window.location.href = downloadUrl;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = fileInfo?.filename || documentFilename || 'document.pdf';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  const isPDF = documentFilename?.toLowerCase().endsWith('.pdf') || 
-                documentFilename?.toLowerCase().includes('.pdf');
-
-  // Reset states when modal opens/closes
-  React.useEffect(() => {
-    if (open) {
-      setLoading(true);
-      setError('');
-      setZoom(100);
-    }
-  }, [open]);
+  const isPDF = (fileInfo?.filename || documentFilename || '').toLowerCase().includes('.pdf');
 
   return (
     <Dialog
@@ -213,14 +281,14 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             <Typography variant="h6" component="div">
               Document Viewer
             </Typography>
-            {documentFilename && (
+            {(fileInfo?.filename || documentFilename) && (
               <Typography variant="caption" color="text.secondary">
-                {documentFilename}
+                {fileInfo?.filename || documentFilename}
               </Typography>
             )}
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {isPDF && !loading && !error && (
+            {isPDF && !loading && !error && fileInfo?.available && (
               <>
                 <IconButton 
                   onClick={handleZoomOut} 
@@ -308,10 +376,10 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           </Box>
         )}
         
-        {!error && (
+        {!error && !loading && fileInfo?.available && (
           <Box sx={{ 
             height: '100%', 
-            display: loading ? 'none' : 'flex',
+            display: 'flex',
             flexDirection: 'column',
             bgcolor: 'white'
           }}>
@@ -344,7 +412,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                       '&:hover': { bgcolor: '#063d2f' }
                     }}
                   >
-                    Download {documentFilename || 'Document'}
+                    Download {fileInfo?.filename || documentFilename || 'Document'}
                   </Button>
                   <Button 
                     variant="outlined" 
