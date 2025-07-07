@@ -1,5 +1,5 @@
-from pydantic import BaseModel, HttpUrl
-from typing import Optional, List
+from pydantic import BaseModel
+from typing import Optional
 from datetime import datetime
 
 class ProjectBase(BaseModel):
@@ -14,9 +14,8 @@ class ProjectBase(BaseModel):
     supervisor: Optional[str] = None
     author_name: str
     author_email: Optional[str] = None
-
-class ProjectCreate(ProjectBase):
-    pass
+    meta_description: Optional[str] = None
+    meta_keywords: Optional[str] = None
 
 class ProjectResponse(ProjectBase):
     id: int
@@ -25,41 +24,34 @@ class ProjectResponse(ProjectBase):
     publication_date: datetime
     view_count: int
     download_count: int
-    document_url: Optional[str] = None
+    
+    # Database Storage Fields
     document_filename: Optional[str] = None
-    document_storage: Optional[str] = None  # Add this field
-    meta_description: Optional[str] = None
+    document_size: Optional[int] = None
+    document_content_type: Optional[str] = None
+    document_storage: Optional[str] = None
+    
+    # Metadata
+    created_by_id: Optional[int] = None
+    created_at: datetime
     
     class Config:
         from_attributes = True
 
-class ProjectSummary(BaseModel):
-    """Lightweight project info for listings"""
-    id: int
-    title: str
-    slug: str
-    abstract: Optional[str] = None
-    research_area: Optional[str] = None
-    degree_type: Optional[str] = None
-    institution: Optional[str] = None
-    author_name: str
-    publication_date: datetime
-    view_count: int
-    
-    class Config:
-        from_attributes = True
+class ProjectStats(BaseModel):
+    """Schema for project statistics"""
+    total_projects: int
+    total_institutions: int
+    total_research_areas: int
+    total_downloads: int
+    total_views: int = 0
 
-class SearchFilters(BaseModel):
-    query: Optional[str] = None
-    research_area: Optional[str] = None
-    degree_type: Optional[str] = None
-    institution: Optional[str] = None
-    academic_year: Optional[str] = None
-    
-class SearchResponse(BaseModel):
-    projects: List[ProjectSummary]
-    total: int
-    page: int
-    per_page: int
-    total_pages: int
-    filters: SearchFilters
+class ProjectFileInfo(BaseModel):
+    """Schema for file information responses"""
+    filename: Optional[str] = None
+    size: Optional[int] = None
+    content_type: Optional[str] = None
+    storage: Optional[str] = None
+    download_count: int = 0
+    view_count: int = 0
+    available: bool = False
