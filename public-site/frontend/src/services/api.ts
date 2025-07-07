@@ -1,6 +1,10 @@
 import axios from 'axios';
 
+// Remove /api if it's already included in the environment variable
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const cleanBaseUrl = API_BASE_URL.endsWith('/api') 
+  ? API_BASE_URL.slice(0, -4) 
+  : API_BASE_URL.replace(/\/$/, ''); // Also remove trailing slash
 
 export interface Project {
   id: number;
@@ -72,9 +76,19 @@ export interface SiteStats {
 
 class ApiService {
   private api = axios.create({
-    baseURL: API_BASE_URL,
+    baseURL: cleanBaseUrl,
     timeout: 30000, // Increased timeout for file operations
   });
+
+  constructor() {
+    // Add request interceptor to log requests in development
+    if (process.env.NODE_ENV === 'development') {
+      this.api.interceptors.request.use(request => {
+        console.log('Starting Request:', request.url);
+        return request;
+      });
+    }
+  }
 
   async getFeaturedProjects(limit: number = 6): Promise<ProjectSummary[]> {
     try {
@@ -173,7 +187,7 @@ class ApiService {
   async downloadProject(slug: string): Promise<void> {
     try {
       // Use GET method instead of POST for download
-      const downloadUrl = `${API_BASE_URL}/api/projects/${slug}/download`;
+      const downloadUrl = `${cleanBaseUrl}/api/projects/${slug}/download`;
       
       // Create a temporary link and click it
       const link = document.createElement('a');
@@ -191,7 +205,7 @@ class ApiService {
 
   // Fixed view method
   getDocumentViewUrl(slug: string): string {
-    return `${API_BASE_URL}/api/projects/${slug}/view-document`;
+    return `${cleanBaseUrl}/api/projects/${slug}/view-document`;
   }
 
   // New method to check file availability
