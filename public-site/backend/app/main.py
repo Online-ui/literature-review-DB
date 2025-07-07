@@ -14,11 +14,18 @@ import io
 import mimetypes
 from pathlib import Path
 
-# Set correct MIME types
+# Set correct MIME types - more comprehensive setup
+mimetypes.init()
 mimetypes.add_type('text/css', '.css')
 mimetypes.add_type('application/javascript', '.js')
 mimetypes.add_type('text/html', '.html')
 mimetypes.add_type('application/json', '.json')
+mimetypes.add_type('image/svg+xml', '.svg')
+mimetypes.add_type('image/png', '.png')
+mimetypes.add_type('image/jpeg', '.jpg')
+mimetypes.add_type('image/jpeg', '.jpeg')
+mimetypes.add_type('image/gif', '.gif')
+mimetypes.add_type('image/webp', '.webp')
 
 # Add current directory to Python path
 current_dir = Path(__file__).parent
@@ -150,54 +157,79 @@ class ProjectFileInfo(BaseModel):
     view_count: int = 0
     available: bool = False
 
-# Static file serving with correct MIME types
-@app.get("/static/css/{file_path:path}")
-async def serve_css(file_path: str):
-    """Serve CSS files with correct MIME type"""
-    file_location = f"static/css/{file_path}"
-    if os.path.exists(file_location):
-        return FileResponse(
-            file_location, 
-            media_type="text/css",
-            headers={
-                "Cache-Control": "public, max-age=31536000",
-                "Content-Type": "text/css"
-            }
-        )
-    raise HTTPException(status_code=404, detail="CSS file not found")
+# Custom static file serving with proper MIME types
+class CustomStaticFiles(StaticFiles):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    def get_response(self, path: str, scope):
+        response = super().get_response(path, scope)
+        
+        # Force correct MIME types
+        if path.endswith('.css'):
+            response.headers['content-type'] = 'text/css'
+        elif path.endswith('.js'):
+            response.headers['content-type'] = 'application/javascript'
+        elif path.endswith('.html'):
+            response.headers['content-type'] = 'text/html'
+        elif path.endswith('.json'):
+            response.headers['content-type'] = 'application/json'
+        elif path.endswith('.svg'):
+            response.headers['content-type'] = 'image/svg+xml'
+        elif path.endswith('.png'):
+            response.headers['content-type'] = 'image/png'
+        elif path.endswith('.jpg') or path.endswith('.jpeg'):
+            response.headers['content-type'] = 'image/jpeg'
+        elif path.endswith('.gif'):
+            response.headers['content-type'] = 'image/gif'
+        elif path.endswith('.webp'):
+            response.headers['content-type'] = 'image/webp'
+        
+        return response
 
-@app.get("/static/js/{file_path:path}")
-async def serve_js(file_path: str):
-    """Serve JS files with correct MIME type"""
-    file_location = f"static/js/{file_path}"
-    if os.path.exists(file_location):
-        return FileResponse(
-            file_location, 
-            media_type="application/javascript",
-            headers={
-                "Cache-Control": "public, max-age=31536000",
-                "Content-Type": "application/javascript"
-            }
-        )
-    raise HTTPException(status_code=404, detail="JS file not found")
-
-@app.get("/static/media/{file_path:path}")
-async def serve_media(file_path: str):
-    """Serve media files with correct MIME type"""
-    file_location = f"static/media/{file_path}"
-    if os.path.exists(file_location):
-        # Determine MIME type based on file extension
-        mime_type, _ = mimetypes.guess_type(file_location)
-        return FileResponse(
-            file_location, 
-            media_type=mime_type or "application/octet-stream",
-            headers={"Cache-Control": "public, max-age=31536000"}
-        )
-    raise HTTPException(status_code=404, detail="Media file not found")
-
-# Mount static files as fallback
+# Mount static files with custom handler
 if os.path.exists("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+    app.mount("/static", CustomStaticFiles(directory="static"), name="static")
+
+# Explicit static file routes for better control
+@app.get("/static/{file_path:path}")
+async def serve_static_files(file_path: str):
+    """Serve static files with explicit MIME type control"""
+    file_location = f"static/{file_path}"
+    
+    if not os.path.exists(file_location):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Determine MIME type
+    mime_type = None
+    if file_path.endswith('.css'):
+        mime_type = 'text/css'
+    elif file_path.endswith('.js'):
+        mime_type = 'application/javascript'
+    elif file_path.endswith('.html'):
+        mime_type = 'text/html'
+    elif file_path.endswith('.json'):
+        mime_type = 'application/json'
+    elif file_path.endswith('.svg'):
+        mime_type = 'image/svg+xml'
+    elif file_path.endswith('.png'):
+        mime_type = 'image/png'
+    elif file_path.endswith('.jpg') or file_path.endswith('.jpeg'):
+        mime_type = 'image/jpeg'
+    elif file_path.endswith('.gif'):
+        mime_type = 'image/gif'
+    elif file_path.endswith('.webp'):
+        mime_type = 'image/webp'
+    else:
+        mime_type, _ = mimetypes.guess_type(file_location)
+        mime_type = mime_type or 'application/octet-stream'
+    
+    headers = {
+        "Cache-Control": "public, max-age=31536000" if not file_path.endswith('.html') else "no-cache",
+        "Content-Type": mime_type
+    }
+    
+    return FileResponse(file_location, media_type=mime_type, headers=headers)
 
 # API Routes
 @app.get("/api/projects/", response_model=List[ProjectResponse])
@@ -442,8 +474,12 @@ async def health_check():
 @app.get("/{full_path:path}")
 async def serve_react_app(full_path: str):
     """Serve React app for all non-API routes"""
-    # Don't serve React app for API routes
-    if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("static/"):
+    # Don't serve React app for API routes, docs, or static files
+    if (full_path.startswith("api/") or 
+        full_path.startswith("docs") or 
+        full_path.startswith("static/") or
+        full_path.startswith("openapi.json") or
+        full_path.startswith("redoc")):
         raise HTTPException(status_code=404, detail="Not found")
     
     # Serve index.html for all other routes (React Router will handle routing)
@@ -455,7 +491,8 @@ async def serve_react_app(full_path: str):
             headers={
                 "Cache-Control": "no-cache, no-store, must-revalidate",
                 "Pragma": "no-cache",
-                "Expires": "0"
+                "Expires": "0",
+                "Content-Type": "text/html"
             }
         )
     else:
