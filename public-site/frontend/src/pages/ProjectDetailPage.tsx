@@ -30,7 +30,7 @@ import {
   Public as PublicIcon
 } from '@mui/icons-material';
 import { apiService, Project } from '../services/api';
-import DocumentViewer, { DocumentViewerModal } from '../components/DocumentViewer';
+import DocumentViewer from '../components/DocumentViewer';
 import SEOHead from '../components/SEOHead';
 import StructuredData from '../components/StructuredData';
 
@@ -456,14 +456,14 @@ const ProjectDetailPage: React.FC = () => {
                     <CategoryIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
                   </Avatar>
                   <Typography variant={isMobile ? "h6" : "h5"} sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
-                    Abstract
+                    Research Abstract
                   </Typography>
                 </Box>
                 <Typography 
                   variant="body1" 
                   sx={{ 
                     lineHeight: 1.8,
-                    color: '#000000',
+                    color: '#2e7d32',
                     fontSize: { xs: '0.95rem', sm: '1.1rem' },
                     textAlign: 'justify'
                   }}
@@ -637,7 +637,7 @@ const ProjectDetailPage: React.FC = () => {
                       border: '1px solid #e8f5e9'
                     }}>
                       <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 600, mb: 1, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                        Research Supervisor(s)
+                        Research Supervisor
                       </Typography>
                       <Typography variant={isMobile ? "body2" : "body1"} sx={{ color: '#2e7d32', fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
                         {project.supervisor}
@@ -762,12 +762,17 @@ const ProjectDetailPage: React.FC = () => {
           </Grid>
         </Grid>
 
-        {/* Document Viewer Modal */}
-        <DocumentViewer
-          projectSlug={project.slug}
-          documentFilename={project.document_filename}
-          hasDocument={!!project.document_filename} // Pass this to indicate if document exists
-        />
+        {/* Document Viewer */}
+        {project.document_url && (
+          <DocumentViewer
+            open={viewerOpen}
+            onClose={() => setViewerOpen(false)}
+            documentUrl={apiService.getDocumentViewUrl(project.slug)}
+            filename={project.document_filename}
+            projectSlug={project.slug}
+            onDownload={handleDownload}
+          />
+        )}
       </Container>
     </Box>
   );
