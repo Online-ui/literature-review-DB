@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import Dict, List, Any
 
@@ -8,6 +8,7 @@ from ..core.auth import get_current_active_user
 from ..core.config import settings
 from ..models.user import User
 from ..models.project import Project
+from ..services.database_storage import database_storage
 
 router = APIRouter()
 
@@ -68,6 +69,13 @@ async def get_system_info(
     active_users = db.query(User).filter(User.is_active == True).count()
     total_projects = db.query(Project).count()
     published_projects = db.query(Project).filter(Project.is_published == True).count()
+    projects_with_files = db.query(Project).filter(Project.document_data.isnot(None)).count()
+    
+    # Calculate total file storage used
+    from sqlalchemy import func
+    total_file_size = db.query(func.sum(Project.document_size)).filter(
+        Project.document_size.isnot(None)
+    ).scalar() or 0
     
     return {
         "system": {
@@ -83,12 +91,15 @@ async def get_system_info(
             "active_users": active_users,
             "total_projects": total_projects,
             "published_projects": published_projects,
-            "unpublished_projects": total_projects - published_projects
+            "unpublished_projects": total_projects - published_projects,
+            "projects_with_files": projects_with_files,
+            "total_file_size_bytes": total_file_size,
+            "total_file_size_mb": round(total_file_size / 1024 / 1024, 2)
         },
         "storage": {
             "backend": settings.STORAGE_BACKEND,
-            "supabase_configured": settings.has_supabase if settings.STORAGE_BACKEND == "supabase" else None,
-            "bucket_name": settings.SUPABASE_BUCKET_NAME if settings.STORAGE_BACKEND == "supabase" else None
+            "type": "database",
+            "status": "healthy"
         },
         "constants": {
             "research_areas_count": len(RESEARCH_AREAS),
@@ -109,66 +120,59 @@ async def test_storage(
             detail="Not enough permissions"
         )
     
-    if settings.STORAGE_BACKEND == "supabase":
-        try:
-            from ..services.supabase_storage import supabase_storage
-            if supabase_storage:
-                # Try to list files to test connection
-                files = supabase_storage.list_files("projects")
-                return {
-                    "status": "success",
-                    "backend": "supabase",
-                    "bucket": settings.SUPABASE_BUCKET_NAME,
-                    "file_count": len(files) if files else 0,
-                    "message": "Supabase storage connection successful"
-                }
-            else:
-                return {
-                    "status": "error",
-                    "backend": "supabase",
-                    "message": "Supabase storage not initialized"
-                }
-        except Exception as e:
-            return {
-                "status": "error",
-                "backend": "supabase",
-                "message": f"Supabase connection failed: {str(e)}"
-            }
+    try:
+        # Test database storage service
+        health_check = database_storage.health_check()
+        
+        return {
+            "status": "success",
+            "backend": "database",
+            "health_check": health_check,
+            "message": "Database storage is working correctly"
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "backend": "database",
+            "message": f"Database storage error: {str(e)}"
+        }
+
+@router.post("/test-upload")
+async def test_file_upload(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user)
+) -> Dict[str, Any]:
+    """Test file upload processing (admin only)"""
+    if current_user.role != "main_coordinator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
     
-    elif settings.STORAGE_BACKEND == "local":
-        import os
-        try:
-            # Check if upload directory exists and is writable
-            upload_dir = settings.UPLOAD_DIR
-            if os.path.exists(upload_dir):
-                # Count files in upload directory
-                file_count = len([f for f in os.listdir(upload_dir) if os.path.isfile(os.path.join(upload_dir, f))])
-                return {
-                    "status": "success",
-                    "backend": "local",
-                    "upload_dir": upload_dir,
-                    "file_count": file_count,
-                    "message": "Local storage accessible"
-                }
-            else:
-                return {
-                    "status": "warning",
-                    "backend": "local",
-                    "upload_dir": upload_dir,
-                    "message": "Upload directory does not exist"
-                }
-        except Exception as e:
-            return {
-                "status": "error",
-                "backend": "local",
-                "message": f"Local storage error: {str(e)}"
+    try:
+        # Test file processing
+        result = await database_storage.upload_file(file)
+        
+        return {
+            "success": True,
+            "message": "File processed successfully",
+            "file_info": {
+                "filename": result["filename"],
+                "size_bytes": result["size"],
+                "size_mb": round(result["size"] / 1024 / 1024, 2),
+                "content_type": result["content_type"],
+                "storage": result["storage"]
             }
-    
-    return {
-        "status": "unknown",
-        "backend": settings.STORAGE_BACKEND,
-        "message": f"Unknown storage backend: {settings.STORAGE_BACKEND}"
-    }
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"File processing failed: {str(e)}"
+        }
 
 @router.get("/health-check")
 async def health_check(
@@ -184,7 +188,7 @@ async def health_check(
     
     health_status = {
         "overall_status": "healthy",
-        "timestamp": "2024-01-01T00:00:00Z",  # Will be set by the API
+        "timestamp": "",
         "checks": {}
     }
     
@@ -203,14 +207,18 @@ async def health_check(
         health_status["overall_status"] = "unhealthy"
     
     # Storage check
-    storage_test = await test_storage(current_user)
-    health_status["checks"]["storage"] = {
-        "status": "healthy" if storage_test["status"] == "success" else "unhealthy",
-        "message": storage_test["message"],
-        "backend": storage_test["backend"]
-    }
-    
-    if storage_test["status"] != "success":
+    try:
+        storage_health = database_storage.health_check()
+        health_status["checks"]["storage"] = {
+            "status": "healthy",
+            "message": "Database storage working correctly",
+            "details": storage_health
+        }
+    except Exception as e:
+        health_status["checks"]["storage"] = {
+            "status": "unhealthy",
+            "message": f"Storage check failed: {str(e)}"
+        }
         health_status["overall_status"] = "degraded"
     
     # Configuration check
@@ -218,8 +226,8 @@ async def health_check(
     if not settings.SECRET_KEY or settings.SECRET_KEY == "your-secret-key":
         config_issues.append("SECRET_KEY not properly configured")
     
-    if settings.STORAGE_BACKEND == "supabase" and not settings.has_supabase:
-        config_issues.append("Supabase credentials missing")
+    if settings.MAX_FILE_SIZE > 50 * 1024 * 1024:  # Warn if over 50MB
+        config_issues.append("MAX_FILE_SIZE is very large for database storage")
     
     health_status["checks"]["configuration"] = {
         "status": "healthy" if not config_issues else "warning",
@@ -232,7 +240,7 @@ async def health_check(
     
     # Set timestamp
     from datetime import datetime
-    health_status["timestamp"] = datetime.utcnow().isoformat() + "Z"
+        health_status["timestamp"] = datetime.utcnow().isoformat() + "Z"
     
     return health_status
 
@@ -251,7 +259,7 @@ async def get_file_stats(
     # Get file statistics from database
     from sqlalchemy import func
     
-    total_files = db.query(Project).filter(Project.document_filename.isnot(None)).count()
+    total_files = db.query(Project).filter(Project.document_data.isnot(None)).count()
     total_size = db.query(func.sum(Project.document_size)).filter(Project.document_size.isnot(None)).scalar() or 0
     
     # Get file type distribution
@@ -264,21 +272,31 @@ async def get_file_stats(
         func.lower(func.right(Project.document_filename, 4))
     ).all()
     
-    # Get storage backend distribution
-    storage_backends = db.query(
-        Project.document_storage,
-        func.count().label('count')
+    # Get largest files
+    largest_files = db.query(
+        Project.document_filename,
+        Project.document_size,
+        Project.title
     ).filter(
-        Project.document_storage.isnot(None)
-    ).group_by(
-        Project.document_storage
-    ).all()
+        Project.document_size.isnot(None)
+    ).order_by(
+        Project.document_size.desc()
+    ).limit(5).all()
     
     return {
         "total_files": total_files,
         "total_size_bytes": total_size,
         "total_size_mb": round(total_size / 1024 / 1024, 2) if total_size else 0,
+        "total_size_gb": round(total_size / 1024 / 1024 / 1024, 3) if total_size else 0,
         "file_types": [{"extension": ext, "count": count} for ext, count in file_types],
-        "storage_backends": [{"backend": backend, "count": count} for backend, count in storage_backends],
-        "average_file_size_mb": round((total_size / total_files) / 1024 / 1024, 2) if total_files > 0 else 0
+        "largest_files": [
+            {
+                "filename": filename,
+                "size_mb": round(size / 1024 / 1024, 2) if size else 0,
+                "project_title": title
+            }
+            for filename, size, title in largest_files
+        ],
+        "average_file_size_mb": round((total_size / total_files) / 1024 / 1024, 2) if total_files > 0 else 0,
+        "storage_backend": "database"
     }
