@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse, FileResponse
@@ -14,10 +14,11 @@ import io
 import mimetypes
 from pathlib import Path
 
-# Set correct MIME types - more comprehensive setup
+# Initialize mimetypes with proper mappings
 mimetypes.init()
 mimetypes.add_type('text/css', '.css')
 mimetypes.add_type('application/javascript', '.js')
+mimetypes.add_type('application/javascript', '.mjs')
 mimetypes.add_type('text/html', '.html')
 mimetypes.add_type('application/json', '.json')
 mimetypes.add_type('image/svg+xml', '.svg')
@@ -26,6 +27,11 @@ mimetypes.add_type('image/jpeg', '.jpg')
 mimetypes.add_type('image/jpeg', '.jpeg')
 mimetypes.add_type('image/gif', '.gif')
 mimetypes.add_type('image/webp', '.webp')
+mimetypes.add_type('application/font-woff', '.woff')
+mimetypes.add_type('application/font-woff2', '.woff2')
+mimetypes.add_type('application/vnd.ms-fontobject', '.eot')
+mimetypes.add_type('application/x-font-ttf', '.ttf')
+mimetypes.add_type('application/x-font-opentype', '.otf')
 
 # Add current directory to Python path
 current_dir = Path(__file__).parent
@@ -49,14 +55,14 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "https://uhas-research-hub.onrender.com",
-        
+        "https://research-hub.onrender.com",  # Add this
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Define Project model
+# Define Project model (keeping your existing model)
 class Project(Base):
     __tablename__ = "projects"
     
@@ -119,7 +125,7 @@ def get_db():
     finally:
         db.close()
 
-# Pydantic models
+# Pydantic models (keeping your existing models)
 class ProjectResponse(BaseModel):
     id: int
     title: str
@@ -157,81 +163,55 @@ class ProjectFileInfo(BaseModel):
     view_count: int = 0
     available: bool = False
 
-# Custom static file serving with proper MIME types
-class CustomStaticFiles(StaticFiles):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+# Remove the custom static files class and explicit static route
+# Instead, use a middleware to ensure correct MIME types
+
+@app.middleware("http")
+async def set_mime_types(request, call_next):
+    response = await call_next(request)
     
-    def get_response(self, path: str, scope):
-        response = super().get_response(path, scope)
+    # Check if this is a static file request
+    if request.url.path.startswith("/static/"):
+        # Get file extension
+        path = request.url.path
         
-        # Force correct MIME types
+        # Set correct MIME type based on file extension
         if path.endswith('.css'):
-            response.headers['content-type'] = 'text/css'
-        elif path.endswith('.js'):
-            response.headers['content-type'] = 'application/javascript'
+            response.headers["content-type"] = "text/css; charset=utf-8"
+        elif path.endswith('.js') or path.endswith('.mjs'):
+            response.headers["content-type"] = "application/javascript; charset=utf-8"
         elif path.endswith('.html'):
-            response.headers['content-type'] = 'text/html'
+            response.headers["content-type"] = "text/html; charset=utf-8"
         elif path.endswith('.json'):
-            response.headers['content-type'] = 'application/json'
+            response.headers["content-type"] = "application/json"
         elif path.endswith('.svg'):
-            response.headers['content-type'] = 'image/svg+xml'
+            response.headers["content-type"] = "image/svg+xml"
         elif path.endswith('.png'):
-            response.headers['content-type'] = 'image/png'
+            response.headers["content-type"] = "image/png"
         elif path.endswith('.jpg') or path.endswith('.jpeg'):
-            response.headers['content-type'] = 'image/jpeg'
+            response.headers["content-type"] = "image/jpeg"
         elif path.endswith('.gif'):
-            response.headers['content-type'] = 'image/gif'
+            response.headers["content-type"] = "image/gif"
         elif path.endswith('.webp'):
-            response.headers['content-type'] = 'image/webp'
-        
-        return response
+            response.headers["content-type"] = "image/webp"
+        elif path.endswith('.woff'):
+            response.headers["content-type"] = "application/font-woff"
+        elif path.endswith('.woff2'):
+            response.headers["content-type"] = "application/font-woff2"
+        elif path.endswith('.ttf'):
+            response.headers["content-type"] = "application/x-font-ttf"
+        elif path.endswith('.otf'):
+            response.headers["content-type"] = "application/x-font-opentype"
+        elif path.endswith('.eot'):
+            response.headers["content-type"] = "application/vnd.ms-fontobject"
+    
+    return response
 
-# Mount static files with custom handler
+# Mount static files normally
 if os.path.exists("static"):
-    app.mount("/static", CustomStaticFiles(directory="static"), name="static")
+    app.mount("/static", StaticFiles(directory="static", html=True), name="static")
 
-# Explicit static file routes for better control
-@app.get("/static/{file_path:path}")
-async def serve_static_files(file_path: str):
-    """Serve static files with explicit MIME type control"""
-    file_location = f"static/{file_path}"
-    
-    if not os.path.exists(file_location):
-        raise HTTPException(status_code=404, detail="File not found")
-    
-    # Determine MIME type
-    mime_type = None
-    if file_path.endswith('.css'):
-        mime_type = 'text/css'
-    elif file_path.endswith('.js'):
-        mime_type = 'application/javascript'
-    elif file_path.endswith('.html'):
-        mime_type = 'text/html'
-    elif file_path.endswith('.json'):
-        mime_type = 'application/json'
-    elif file_path.endswith('.svg'):
-        mime_type = 'image/svg+xml'
-    elif file_path.endswith('.png'):
-        mime_type = 'image/png'
-    elif file_path.endswith('.jpg') or file_path.endswith('.jpeg'):
-        mime_type = 'image/jpeg'
-    elif file_path.endswith('.gif'):
-        mime_type = 'image/gif'
-    elif file_path.endswith('.webp'):
-        mime_type = 'image/webp'
-    else:
-        mime_type, _ = mimetypes.guess_type(file_location)
-        mime_type = mime_type or 'application/octet-stream'
-    
-    headers = {
-        "Cache-Control": "public, max-age=31536000" if not file_path.endswith('.html') else "no-cache",
-        "Content-Type": mime_type
-    }
-    
-    return FileResponse(file_location, media_type=mime_type, headers=headers)
-
-# API Routes
+# API Routes (keeping all your existing API routes)
 @app.get("/api/projects/", response_model=List[ProjectResponse])
 async def get_projects(
     skip: int = 0,
@@ -409,7 +389,7 @@ async def download_document(slug: str, db: Session = Depends(get_db)):
     
     return StreamingResponse(
         io.BytesIO(project.document_data),
-        media_type=project.document_content_type or "application/octet-stream",
+                media_type=project.document_content_type or "application/octet-stream",
         headers={
             "Content-Disposition": f"attachment; filename=\"{project.document_filename}\""
         }
@@ -487,12 +467,11 @@ async def serve_react_app(full_path: str):
     if os.path.exists(index_file):
         return FileResponse(
             index_file,
-            media_type="text/html",
+            media_type="text/html; charset=utf-8",
             headers={
                 "Cache-Control": "no-cache, no-store, must-revalidate",
                 "Pragma": "no-cache",
-                "Expires": "0",
-                "Content-Type": "text/html"
+                "Expires": "0"
             }
         )
     else:
