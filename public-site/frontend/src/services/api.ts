@@ -27,7 +27,7 @@ export interface Project {
   document_storage?: string;
   created_by_id?: number;
   created_at: string;
-  updated_at?: string;
+  updated_at?: string;  
 }
 
 export interface ProjectSummary {
