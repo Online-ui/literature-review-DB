@@ -1,73 +1,115 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import timedelta
+from fastapi import APIRouter, Depends, HTTPException, status, Form
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from typing import Dict, List, Any
 
 from ..database import get_db
-from ..core.auth import get_current_active_user
-from ..core.config import settings
 from ..models.user import User
+from ..schemas.user import Token, UserResponse, LoginRequest, PasswordChangeRequest
+from ..core.config import settings
+from ..core.security import verify_password, create_access_token, get_password_hash
+from ..core.auth import get_current_active_user
 
 router = APIRouter()
 
-@router.get("/constants")
-async def get_constants(
-    current_user: User = Depends(get_current_active_user)
-) -> Dict[str, List[str]]:
-    """Get all predefined constants for forms"""
-    try:
-        from ..core.constants import RESEARCH_AREAS, DEGREE_TYPES, ACADEMIC_YEARS, INSTITUTIONS
-        return {
-            "research_areas": RESEARCH_AREAS,
-            "degree_types": DEGREE_TYPES,
-            "academic_years": ACADEMIC_YEARS,
-            "institutions": INSTITUTIONS
-        }
-    except ImportError:
-        return {
-            "research_areas": ["Computer Science", "Engineering", "Medicine"],
-            "degree_types": ["Bachelor", "Master", "PhD"],
-            "academic_years": ["2023", "2024", "2025"],
-            "institutions": ["University A", "University B"]
-        }
+def authenticate_user(db: Session, username: str, password: str):
+    """Authenticate user with username and password"""
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        return False
+    if not verify_password(password, user.hashed_password):
+        return False
+    return user
 
-@router.get("/system-info")
-async def get_system_info(
-    current_user: User = Depends(get_current_active_user),
+@router.post("/login", response_model=Token)
+async def login(
+    username: str = Form(...),
+    password: str = Form(...),
     db: Session = Depends(get_db)
-) -> Dict[str, Any]:
-    """Get system information (admin only)"""
-    if current_user.role != "main_coordinator":
+):
+    """Login endpoint that accepts form data"""
+    user = authenticate_user(db, username, password)
+    
+    if not user:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     
-    total_users = db.query(User).count()
-    
-    return {
-        "system": {
-            "version": settings.VERSION,
-            "project_name": settings.PROJECT_NAME,
-            "storage_backend": settings.STORAGE_BACKEND
-        },
-        "database": {
-            "total_users": total_users
-        }
-    }
-
-@router.get("/health-check")
-async def health_check(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-) -> Dict[str, Any]:
-    """Simple health check"""
-    if current_user.role != "main_coordinator":
+    if not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Inactive user"
         )
     
-    return {
-        "status": "healthy",
-        "message": "System is working correctly"
-    }
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    
+    user_response = UserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        institution=user.institution,
+        department=user.department,
+        phone=user.phone,
+        role=user.role,
+        is_active=user.is_active,
+        created_at=user.created_at,
+        project_count=0
+    )
+    
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_response
+    )
+
+@router.post("/logout")
+async def logout():
+    """Logout endpoint"""
+    return {"message": "Successfully logged out"}
+
+@router.get("/me", response_model=UserResponse)
+async def read_users_me(current_user: User = Depends(get_current_active_user)):
+    """Get current user information"""
+    return UserResponse(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        institution=current_user.institution,
+        department=current_user.department,
+        phone=current_user.phone,
+        role=current_user.role,
+        is_active=current_user.is_active,
+        created_at=current_user.created_at,
+        project_count=0
+    )
+
+@router.post("/change-password")
+async def change_password(
+    password_data: PasswordChangeRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Change user password"""
+    if not verify_password(password_data.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect current password"
+        )
+    
+    if len(password_data.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 6 characters long"
+        )
+    
+    current_user.hashed_password = get_password_hash(password_data.new_password)
+    db.commit()
+    
+    return {"message": "Password updated successfully"}
