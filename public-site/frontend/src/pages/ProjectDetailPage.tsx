@@ -392,7 +392,7 @@ const ProjectDetailPage: React.FC = () => {
                     }
                   }}
                 >
-                  {downloading ? 'Downloading...' : 'Download PDF'}
+                                    {downloading ? 'Downloading...' : 'Download PDF'}
                 </Button>
               </>
             )}
@@ -401,7 +401,7 @@ const ProjectDetailPage: React.FC = () => {
           {/* Project Stats */}
           <Box sx={{ 
             display: 'flex', 
-            gap: { xs: 2, sm: 4             }, 
+            gap: { xs: 2, sm: 4 }, 
             p: { xs: 2, sm: 3 },
             bgcolor: 'rgba(27, 94, 32, 0.05)',
             borderRadius: 3,
@@ -688,14 +688,14 @@ const ProjectDetailPage: React.FC = () => {
                         fontSize: { xs: '0.875rem', sm: '1rem' },
                         wordBreak: 'break-word'
                       }}>
-                        {project.document_filename}
+                                                {project.document_filename}
                       </Typography>
                       {project.document_size && (
                         <Chip
                           label={`${(project.document_size / 1024 / 1024).toFixed(2)} MB`}
                           size="small"
                           sx={{
-                                                        bgcolor: '#c8e6c9',
+                            bgcolor: '#c8e6c9',
                             color: '#1b5e20',
                             fontWeight: 'bold',
                             fontSize: { xs: '0.7rem', sm: '0.75rem' }
@@ -762,14 +762,12 @@ const ProjectDetailPage: React.FC = () => {
           </Grid>
         </Grid>
 
-        {/* Document Viewer - Conditionally rendered */}
+        {/* Document Viewer - Fixed with correct props */}
         {project.document_url && viewerOpen && (
           <DocumentViewer
-            onClose={() => setViewerOpen(false)}
-            documentUrl={apiService.getDocumentViewUrl(project.slug)}
-            filename={project.document_filename}
             projectSlug={project.slug}
-            onDownload={handleDownload}
+            documentFilename={project.document_filename || 'document.pdf'}
+            hasDocument={true}
           />
         )}
       </Container>
