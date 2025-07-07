@@ -30,7 +30,7 @@ import {
   Public as PublicIcon
 } from '@mui/icons-material';
 import { apiService, Project } from '../services/api';
-import { DocumentViewerModal } from '../components/DocumentViewer';
+import DocumentViewer, { DocumentViewerModal } from '../components/DocumentViewer';
 import SEOHead from '../components/SEOHead';
 import StructuredData from '../components/StructuredData';
 
@@ -768,7 +768,6 @@ const ProjectDetailPage: React.FC = () => {
           documentFilename={project.document_filename}
           hasDocument={!!project.document_filename} // Pass this to indicate if document exists
         />
-        )}
       </Container>
     </Box>
   );
