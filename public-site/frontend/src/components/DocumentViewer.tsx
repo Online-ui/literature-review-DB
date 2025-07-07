@@ -21,6 +21,7 @@ import {
   ZoomOut as ZoomOutIcon,
   Visibility as VisibilityIcon
 } from '@mui/icons-material';
+import { documentUtils } from '../utils/documentUtils';
 
 // Simple inline document viewer
 interface DocumentViewerProps {
@@ -39,16 +40,12 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Use relative URLs since frontend and backend are on same domain
   const handleView = async () => {
     setLoading(true);
     setError('');
     
     try {
-      // Open in new tab for viewing - use relative URL
-      const viewUrl = `/api/projects/${projectSlug}/view-document`;
-      window.open(viewUrl, '_blank');
-      
+      documentUtils.viewDocument(projectSlug);
     } catch (err: any) {
       setError(err.message || 'Failed to view document');
     } finally {
@@ -61,12 +58,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     setError('');
     
     try {
-      // Create download link - use relative URL
-      const downloadUrl = `/api/projects/${projectSlug}/download`;
-      
-      // Direct navigation for download
-      window.location.href = downloadUrl;
-      
+      documentUtils.downloadDocument(projectSlug);
     } catch (err: any) {
       setError(err.message || 'Failed to download document');
     } finally {
@@ -74,7 +66,6 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     }
   };
 
-  // Always show the component - let the backend handle if document exists
   return (
     <Box sx={{ mt: 3 }}>
       <Typography variant="h6" gutterBottom>
@@ -162,9 +153,8 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const [zoom, setZoom] = useState(100);
   const [fileInfo, setFileInfo] = useState<any>(null);
 
-  // Use relative URLs
+  // Use utility functions for URLs
   const viewUrl = `/api/projects/${projectSlug}/view-document`;
-  const downloadUrl = `/api/projects/${projectSlug}/download`;
 
   // Fetch file info when modal opens
   React.useEffect(() => {
@@ -173,7 +163,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
       setError('');
       setZoom(100);
       
-      fetch(`/api/projects/${projectSlug}/file-info`)
+      fetch(documentUtils.getFileInfoUrl(projectSlug))
         .then(response => {
           if (!response.ok) {
             throw new Error('Document not found');
@@ -213,11 +203,11 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   };
 
   const handleFullscreen = () => {
-    window.open(viewUrl, '_blank');
+    documentUtils.viewDocument(projectSlug);
   };
 
   const handleDownload = () => {
-    window.location.href = downloadUrl;
+    documentUtils.downloadDocument(projectSlug);
   };
 
   const isPDF = (fileInfo?.filename || documentFilename || '').toLowerCase().includes('.pdf');
