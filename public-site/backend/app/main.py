@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Response
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse, FileResponse
@@ -14,24 +14,11 @@ import io
 import mimetypes
 from pathlib import Path
 
-# Initialize mimetypes with proper mappings
-mimetypes.init()
+# Set correct MIME types
 mimetypes.add_type('text/css', '.css')
 mimetypes.add_type('application/javascript', '.js')
-mimetypes.add_type('application/javascript', '.mjs')
 mimetypes.add_type('text/html', '.html')
 mimetypes.add_type('application/json', '.json')
-mimetypes.add_type('image/svg+xml', '.svg')
-mimetypes.add_type('image/png', '.png')
-mimetypes.add_type('image/jpeg', '.jpg')
-mimetypes.add_type('image/jpeg', '.jpeg')
-mimetypes.add_type('image/gif', '.gif')
-mimetypes.add_type('image/webp', '.webp')
-mimetypes.add_type('application/font-woff', '.woff')
-mimetypes.add_type('application/font-woff2', '.woff2')
-mimetypes.add_type('application/vnd.ms-fontobject', '.eot')
-mimetypes.add_type('application/x-font-ttf', '.ttf')
-mimetypes.add_type('application/x-font-opentype', '.otf')
 
 # Add current directory to Python path
 current_dir = Path(__file__).parent
@@ -55,14 +42,15 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "https://uhas-research-hub.onrender.com",
-    
+        "https://your-frontend-domain.com",
+        "*"  # Remove this in production and add specific domains
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Define Project model (keeping your existing model)
+# Define Project model (Database storage only)
 class Project(Base):
     __tablename__ = "projects"
     
@@ -103,9 +91,6 @@ class Project(Base):
     document_content_type = Column(String, nullable=True)
     document_storage = Column(String, default="database")
     
-    # Legacy file storage field
-    document_url = Column(String, nullable=True)
-    
     # Stats
     view_count = Column(Integer, default=0)
     download_count = Column(Integer, default=0)
@@ -128,7 +113,7 @@ def get_db():
     finally:
         db.close()
 
-# Pydantic models (keeping your existing models)
+# Pydantic models
 class ProjectResponse(BaseModel):
     id: int
     title: str
@@ -166,55 +151,55 @@ class ProjectFileInfo(BaseModel):
     view_count: int = 0
     available: bool = False
 
-# Remove the custom static files class and explicit static route
-# Instead, use a middleware to ensure correct MIME types
+# Static file serving with correct MIME types
+@app.get("/static/css/{file_path:path}")
+async def serve_css(file_path: str):
+    """Serve CSS files with correct MIME type"""
+    file_location = f"static/css/{file_path}"
+    if os.path.exists(file_location):
+        return FileResponse(
+            file_location, 
+            media_type="text/css",
+            headers={
+                "Cache-Control": "public, max-age=31536000",
+                "Content-Type": "text/css"
+            }
+        )
+    raise HTTPException(status_code=404, detail="CSS file not found")
 
-@app.middleware("http")
-async def set_mime_types(request, call_next):
-    response = await call_next(request)
-    
-    # Check if this is a static file request
-    if request.url.path.startswith("/static/"):
-        # Get file extension
-        path = request.url.path
-        
-        # Set correct MIME type based on file extension
-        if path.endswith('.css'):
-            response.headers["content-type"] = "text/css; charset=utf-8"
-        elif path.endswith('.js') or path.endswith('.mjs'):
-            response.headers["content-type"] = "application/javascript; charset=utf-8"
-        elif path.endswith('.html'):
-            response.headers["content-type"] = "text/html; charset=utf-8"
-        elif path.endswith('.json'):
-            response.headers["content-type"] = "application/json"
-        elif path.endswith('.svg'):
-            response.headers["content-type"] = "image/svg+xml"
-        elif path.endswith('.png'):
-            response.headers["content-type"] = "image/png"
-        elif path.endswith('.jpg') or path.endswith('.jpeg'):
-            response.headers["content-type"] = "image/jpeg"
-        elif path.endswith('.gif'):
-            response.headers["content-type"] = "image/gif"
-        elif path.endswith('.webp'):
-            response.headers["content-type"] = "image/webp"
-        elif path.endswith('.woff'):
-            response.headers["content-type"] = "application/font-woff"
-        elif path.endswith('.woff2'):
-            response.headers["content-type"] = "application/font-woff2"
-        elif path.endswith('.ttf'):
-            response.headers["content-type"] = "application/x-font-ttf"
-        elif path.endswith('.otf'):
-            response.headers["content-type"] = "application/x-font-opentype"
-        elif path.endswith('.eot'):
-            response.headers["content-type"] = "application/vnd.ms-fontobject"
-    
-    return response
+@app.get("/static/js/{file_path:path}")
+async def serve_js(file_path: str):
+    """Serve JS files with correct MIME type"""
+    file_location = f"static/js/{file_path}"
+    if os.path.exists(file_location):
+        return FileResponse(
+            file_location, 
+            media_type="application/javascript",
+            headers={
+                "Cache-Control": "public, max-age=31536000",
+                "Content-Type": "application/javascript"
+            }
+        )
+    raise HTTPException(status_code=404, detail="JS file not found")
 
-# Mount static files normally
+@app.get("/static/media/{file_path:path}")
+async def serve_media(file_path: str):
+    """Serve media files with correct MIME type"""
+    file_location = f"static/media/{file_path}"
+    if os.path.exists(file_location):
+        mime_type, _ = mimetypes.guess_type(file_location)
+        return FileResponse(
+            file_location, 
+            media_type=mime_type or "application/octet-stream",
+            headers={"Cache-Control": "public, max-age=31536000"}
+        )
+    raise HTTPException(status_code=404, detail="Media file not found")
+
+# Mount static files as fallback
 if os.path.exists("static"):
-    app.mount("/static", StaticFiles(directory="static", html=True), name="static")
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# API Routes (keeping all your existing API routes)
+# API Routes
 @app.get("/api/projects/", response_model=List[ProjectResponse])
 async def get_projects(
     skip: int = 0,
@@ -313,9 +298,9 @@ async def get_project(slug: str, db: Session = Depends(get_db)):
     
     return project
 
-@app.get("/api/projects/{slug}/view-document")
-async def view_document(slug: str, db: Session = Depends(get_db)):
-    """View project document - handles both database and legacy file storage"""
+@app.get("/api/projects/{slug}/file-info")
+async def get_file_info(slug: str, db: Session = Depends(get_db)):
+    """Get file information for a project"""
     project = db.query(Project).filter(
         Project.slug == slug,
         Project.is_published == True
@@ -327,80 +312,49 @@ async def view_document(slug: str, db: Session = Depends(get_db)):
             detail="Project not found"
         )
     
-    # Method 1: Try database storage first (new method)
-    if project.document_data:
-        print(f"📁 Serving document from database for project: {project.slug}")
-        return StreamingResponse(
-            io.BytesIO(project.document_data),
-            media_type=project.document_content_type or "application/pdf",
-            headers={
-                "Content-Disposition": f"inline; filename=\"{project.document_filename}\"",
-                "Content-Type": project.document_content_type or "application/pdf",
-            }
+    return ProjectFileInfo(
+        filename=project.document_filename,
+        size=project.document_size,
+        content_type=project.document_content_type,
+        storage=project.document_storage,
+        download_count=project.download_count or 0,
+        view_count=project.view_count or 0,
+        available=bool(project.document_data)
+    )
+
+@app.get("/api/projects/{slug}/view-document")
+async def view_document(slug: str, db: Session = Depends(get_db)):
+    """View project document from database storage"""
+    project = db.query(Project).filter(
+        Project.slug == slug,
+        Project.is_published == True
+    ).first()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
         )
     
-    # Method 2: Try legacy file storage (old method)
-    if hasattr(project, 'document_url') and project.document_url:
-        print(f"📁 Looking for legacy file for project: {project.slug}")
-        
-        # Legacy file path logic
-        possible_paths = [
-            # Current directory uploads
-            project.document_url.replace("/uploads/", "uploads/"),
-            f"uploads/{os.path.basename(project.document_url)}",
-            
-            # Shared uploads directory
-            project.document_url.replace("/uploads/", "../../shared/uploads/"),
-            f"../../shared/uploads/{os.path.basename(project.document_url)}",
-            
-            # Admin portal uploads directory
-            project.document_url.replace("/uploads/", "../admin-portal/backend/uploads/"),
-            f"../admin-portal/backend/uploads/{os.path.basename(project.document_url)}",
-            
-            # Absolute path from document_url
-            project.document_url.lstrip('/'),
-            
-            # Additional possible paths
-            f"static/uploads/{os.path.basename(project.document_url)}",
-            f"../uploads/{os.path.basename(project.document_url)}",
-        ]
-        
-        file_path = None
-        for path in possible_paths:
-            print(f"🔍 Checking view path: {path}")
-            if os.path.exists(path):
-                file_path = path
-                print(f"✅ Found view file at: {path}")
-                break
-        
-        if file_path:
-            # Determine content type
-            content_type = project.document_content_type or 'application/pdf'
-            if project.document_filename:
-                mime_type, _ = mimetypes.guess_type(project.document_filename)
-                if mime_type:
-                    content_type = mime_type
-            
-            filename = project.document_filename or os.path.basename(file_path)
-            
-            return FileResponse(
-                                path=file_path,
-                media_type=content_type,
-                headers={
-                    "Content-Disposition": f"inline; filename=\"{filename}\"",
-                    "Content-Type": content_type,
-                }
-            )
+    if not project.document_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No document available"
+        )
     
-    # Method 3: No document found
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="No document available for this project"
+    print(f"📁 Serving document from database for project: {project.slug}")
+    return StreamingResponse(
+        io.BytesIO(project.document_data),
+        media_type=project.document_content_type or "application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename=\"{project.document_filename}\"",
+            "Content-Type": project.document_content_type or "application/pdf",
+        }
     )
 
 @app.get("/api/projects/{slug}/download")
 async def download_document(slug: str, db: Session = Depends(get_db)):
-    """Download project document - handles both database and legacy file storage"""
+    """Download project document from database storage"""
     project = db.query(Project).filter(
         Project.slug == slug,
         Project.is_published == True
@@ -410,139 +364,25 @@ async def download_document(slug: str, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found"
+        )
+    
+    if not project.document_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No document available for download"
         )
     
     # Increment download count
     project.download_count = (project.download_count or 0) + 1
     db.commit()
     
-    # Method 1: Try database storage first (new method)
-    if project.document_data:
-        print(f"📁 Serving download from database for project: {project.slug}")
-        return StreamingResponse(
-            io.BytesIO(project.document_data),
-            media_type=project.document_content_type or "application/octet-stream",
-            headers={
-                "Content-Disposition": f"attachment; filename=\"{project.document_filename}\""
-            }
-        )
-    
-    # Method 2: Try legacy file storage (old method)
-    if hasattr(project, 'document_url') and project.document_url:
-        print(f"📁 Looking for legacy file for download: {project.slug}")
-        
-        # Legacy file path logic
-        possible_paths = [
-            # Current directory uploads
-            project.document_url.replace("/uploads/", "uploads/"),
-            f"uploads/{os.path.basename(project.document_url)}",
-            
-            # Shared uploads directory
-            project.document_url.replace("/uploads/", "../../shared/uploads/"),
-            f"../../shared/uploads/{os.path.basename(project.document_url)}",
-            
-            # Admin portal uploads directory
-            project.document_url.replace("/uploads/", "../admin-portal/backend/uploads/"),
-            f"../admin-portal/backend/uploads/{os.path.basename(project.document_url)}",
-            
-            # Absolute path from document_url
-            project.document_url.lstrip('/'),
-            
-            # Additional possible paths
-            f"static/uploads/{os.path.basename(project.document_url)}",
-            f"../uploads/{os.path.basename(project.document_url)}",
-        ]
-        
-        file_path = None
-        for path in possible_paths:
-            print(f"🔍 Checking download path: {path}")
-            if os.path.exists(path):
-                file_path = path
-                print(f"✅ Found download file at: {path}")
-                break
-        
-        if file_path:
-            filename = project.document_filename or os.path.basename(file_path)
-            
-            return FileResponse(
-                path=file_path,
-                media_type='application/octet-stream',
-                headers={
-                    "Content-Disposition": f"attachment; filename=\"{filename}\""
-                }
-            )
-    
-    # Method 3: No document found
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="No document available for download"
-    )
-
-@app.get("/api/projects/{slug}/file-info")
-async def get_file_info(slug: str, db: Session = Depends(get_db)):
-    """Get file information for a project - handles both storage methods"""
-    project = db.query(Project).filter(
-        Project.slug == slug,
-        Project.is_published == True
-    ).first()
-    
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
-    # Check database storage first
-    if project.document_data:
-        return ProjectFileInfo(
-            filename=project.document_filename,
-            size=project.document_size,
-            content_type=project.document_content_type,
-            storage="database",
-            download_count=project.download_count or 0,
-            view_count=project.view_count or 0,
-            available=True
-        )
-    
-    # Check legacy file storage
-    if hasattr(project, 'document_url') and project.document_url:
-        # Try to find the legacy file
-        possible_paths = [
-            project.document_url.replace("/uploads/", "uploads/"),
-            f"uploads/{os.path.basename(project.document_url)}",
-            project.document_url.replace("/uploads/", "../../shared/uploads/"),
-            f"../../shared/uploads/{os.path.basename(project.document_url)}",
-            project.document_url.replace("/uploads/", "../admin-portal/backend/uploads/"),
-            f"../admin-portal/backend/uploads/{os.path.basename(project.document_url)}",
-            project.document_url.lstrip('/'),
-            f"static/uploads/{os.path.basename(project.document_url)}",
-            f"../uploads/{os.path.basename(project.document_url)}",
-        ]
-        
-        for path in possible_paths:
-            if os.path.exists(path):
-                file_size = os.path.getsize(path)
-                mime_type, _ = mimetypes.guess_type(path)
-                
-                return ProjectFileInfo(
-                    filename=project.document_filename or os.path.basename(path),
-                    size=file_size,
-                    content_type=mime_type or "application/octet-stream",
-                    storage="legacy_file",
-                    download_count=project.download_count or 0,
-                    view_count=project.view_count or 0,
-                    available=True
-                )
-    
-    # No file found
-    return ProjectFileInfo(
-        filename=None,
-        size=None,
-        content_type=None,
-        storage=None,
-        download_count=project.download_count or 0,
-        view_count=project.view_count or 0,
-        available=False
+    print(f"📁 Serving download from database for project: {project.slug}")
+    return StreamingResponse(
+        io.BytesIO(project.document_data),
+        media_type=project.document_content_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{project.document_filename}\""
+        }
     )
 
 # Legacy endpoint for backward compatibility
@@ -578,7 +418,7 @@ async def increment_project_view(slug: str, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update view count"
         )
 
@@ -604,12 +444,8 @@ async def health_check():
 @app.get("/{full_path:path}")
 async def serve_react_app(full_path: str):
     """Serve React app for all non-API routes"""
-    # Don't serve React app for API routes, docs, or static files
-    if (full_path.startswith("api/") or 
-        full_path.startswith("docs") or 
-        full_path.startswith("static/") or
-        full_path.startswith("openapi.json") or
-        full_path.startswith("redoc")):
+    # Don't serve React app for API routes
+    if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("static/"):
         raise HTTPException(status_code=404, detail="Not found")
     
     # Serve index.html for all other routes (React Router will handle routing)
@@ -617,7 +453,7 @@ async def serve_react_app(full_path: str):
     if os.path.exists(index_file):
         return FileResponse(
             index_file,
-            media_type="text/html; charset=utf-8",
+            media_type="text/html",
             headers={
                 "Cache-Control": "no-cache, no-store, must-revalidate",
                 "Pragma": "no-cache",
