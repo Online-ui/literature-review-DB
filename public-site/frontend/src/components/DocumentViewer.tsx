@@ -39,35 +39,20 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Use the correct API base URL for your public site
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://uhas-research-hub.onrender.com';
-
+  // Use relative URLs since frontend and backend are on same domain
   const handleView = async () => {
     setLoading(true);
     setError('');
     
     try {
-      // Check if document exists first
-      const checkResponse = await fetch(`${API_BASE_URL}/api/projects/${projectSlug}/file-info`);
-      
-      if (!checkResponse.ok) {
-        throw new Error('Document not found');
-      }
-      
-      const fileInfo = await checkResponse.json();
-      
-      if (!fileInfo.available) {
-        throw new Error('No document available for this project');
-      }
-      
-      // Open in new tab for viewing
-      const viewUrl = `${API_BASE_URL}/api/projects/${projectSlug}/view-document`;
+      // Open in new tab for viewing - use relative URL
+      const viewUrl = `/api/projects/${projectSlug}/view-document`;
       window.open(viewUrl, '_blank');
       
     } catch (err: any) {
       setError(err.message || 'Failed to view document');
     } finally {
-      setLoading(false);
+      setTimeout(() => setLoading(false), 1000);
     }
   };
 
@@ -76,46 +61,20 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     setError('');
     
     try {
-      // Check if document exists first
-      const checkResponse = await fetch(`${API_BASE_URL}/api/projects/${projectSlug}/file-info`);
+      // Create download link - use relative URL
+      const downloadUrl = `/api/projects/${projectSlug}/download`;
       
-      if (!checkResponse.ok) {
-        throw new Error('Document not found');
-      }
-      
-      const fileInfo = await checkResponse.json();
-      
-      if (!fileInfo.available) {
-        throw new Error('No document available for download');
-      }
-      
-      // Create download link
-      const downloadUrl = `${API_BASE_URL}/api/projects/${projectSlug}/download`;
-      
-      // Create a temporary link element for download
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = fileInfo.filename || documentFilename || 'document.pdf';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Direct navigation for download
+      window.location.href = downloadUrl;
       
     } catch (err: any) {
       setError(err.message || 'Failed to download document');
     } finally {
-      setLoading(false);
+      setTimeout(() => setLoading(false), 1500);
     }
   };
 
-  // Check if document is available
-  if (!hasDocument && !documentFilename) {
-    return (
-      <Alert severity="info" sx={{ mt: 2 }}>
-        No document available for this project
-      </Alert>
-    );
-  }
-
+  // Always show the component - let the backend handle if document exists
   return (
     <Box sx={{ mt: 3 }}>
       <Typography variant="h6" gutterBottom>
@@ -174,6 +133,12 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           Filename: {documentFilename}
         </Typography>
       )}
+      
+      {!documentFilename && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+          Click the buttons above to check if a document is available for this project.
+        </Typography>
+      )}
     </Box>
   );
 };
@@ -197,9 +162,9 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const [zoom, setZoom] = useState(100);
   const [fileInfo, setFileInfo] = useState<any>(null);
 
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://uhas-research-hub.onrender.com';
-  const viewUrl = `${API_BASE_URL}/api/projects/${projectSlug}/view-document`;
-  const downloadUrl = `${API_BASE_URL}/api/projects/${projectSlug}/download`;
+  // Use relative URLs
+  const viewUrl = `/api/projects/${projectSlug}/view-document`;
+  const downloadUrl = `/api/projects/${projectSlug}/download`;
 
   // Fetch file info when modal opens
   React.useEffect(() => {
@@ -208,7 +173,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
       setError('');
       setZoom(100);
       
-      fetch(`${API_BASE_URL}/api/projects/${projectSlug}/file-info`)
+      fetch(`/api/projects/${projectSlug}/file-info`)
         .then(response => {
           if (!response.ok) {
             throw new Error('Document not found');
@@ -227,7 +192,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           setLoading(false);
         });
     }
-  }, [open, projectSlug, API_BASE_URL]);
+  }, [open, projectSlug]);
 
   const handleLoad = () => {
     setLoading(false);
@@ -252,12 +217,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   };
 
   const handleDownload = () => {
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = fileInfo?.filename || documentFilename || 'document.pdf';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    window.location.href = downloadUrl;
   };
 
   const isPDF = (fileInfo?.filename || documentFilename || '').toLowerCase().includes('.pdf');
