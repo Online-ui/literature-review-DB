@@ -42,6 +42,5 @@ class Project(BaseModel):
     view_count = Column(Integer, default=0)
     download_count = Column(Integer, default=0)
     
-    # User Relationship
-    created_by_id = Column(Integer, ForeignKey("users.id"))
-    created_by_user = relationship("User", back_populates="created_projects")
+    # User Relationship (if you have users in public site)
+    created_by_id = Column(Integer, nullable=True)  # Remove ForeignKey if no User model
