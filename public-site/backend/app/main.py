@@ -1,10 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import sys
+import os
 
-from .database import engine
-from .models import Base
-from .api import projects
-from .core.config import settings
+# Add current directory to path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Use absolute imports
+from database import engine
+from models.base import Base
+from api import projects
+from core.config import settings
 
 # Create tables
 try:
@@ -26,24 +32,17 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition", "Content-Type"]
 )
+
 # Include routers
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-
-# Add sitemap router if it exists
-try:
-    from .api import sitemap
-    app.include_router(sitemap.router, prefix="/api", tags=["sitemap"])
-except ImportError:
-    print("⚠️  Sitemap module not found, skipping...")
 
 @app.get("/")
 async def root():
     return {
         "message": f"Welcome to {settings.PROJECT_NAME}",
         "version": settings.VERSION,
-        "storage_backend": settings.STORAGE_BACKEND,
+        "storage_backend": getattr(settings, 'STORAGE_BACKEND', 'database'),
         "api_docs": "/docs"
     }
 
@@ -52,7 +51,7 @@ async def health_check():
     return {
         "status": "healthy",
         "version": settings.VERSION,
-        "storage_backend": settings.STORAGE_BACKEND
+        "storage_backend": getattr(settings, 'STORAGE_BACKEND', 'database')
     }
 
 if __name__ == "__main__":
