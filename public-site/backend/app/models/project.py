@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, ForeignKey
+from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, ForeignKey, LargeBinary
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -31,16 +31,17 @@ class Project(BaseModel):
     meta_description = Column(Text)
     meta_keywords = Column(Text)
     
-    # File Info
-    document_url = Column(String)
-    document_public_id = Column(String, nullable=True)  # For Cloudinary
-    document_filename = Column(String)
-    document_size = Column(Integer)
-    document_storage = Column(String, default="local")  # "local" or "cloudinary"
+    # Database File Storage Fields
+    document_filename = Column(String, nullable=True)
+    document_size = Column(Integer, nullable=True)
+    document_data = Column(LargeBinary, nullable=True)  # Stores the actual file bytes
+    document_content_type = Column(String, nullable=True)  # MIME type
+    document_storage = Column(String, default="database")  # Always "database"
     
     # Stats
     view_count = Column(Integer, default=0)
     download_count = Column(Integer, default=0)
     
-    # Timestamps (inherited from BaseModel)
-    # created_at and updated_at are already defined in BaseModel
+    # User Relationship
+    created_by_id = Column(Integer, ForeignKey("users.id"))
+    created_by_user = relationship("User", back_populates="created_projects")
