@@ -116,15 +116,15 @@ const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'articl
     };
 
     // Add document download info if available
-    if (project.document_url) {
+    if (project.document_filename) {
       structuredData.encoding = {
         "@type": "MediaObject",
         "contentUrl": `${baseUrl}/api/projects/${project.slug}/download`,
-        "encodingFormat": "application/pdf",
-        "name": project.document_filename || `${project.title}.pdf`
+        "encodingFormat": project.document_content_type || "application/pdf",
+        "contentSize": project.document_size ? `${project.document_size} bytes` : undefined,
+        "name": project.document_filename
       };
     }
-
     // Add thesis-specific fields
     if (type === 'thesis') {
       structuredData.degreeGrantor = {
