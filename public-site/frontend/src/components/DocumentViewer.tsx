@@ -1,404 +1,283 @@
-import React, { useState } from 'react';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  Typography,
-  Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  IconButton,
-  Divider
-} from '@mui/material';
-import {
-  Download,
-  Visibility,
-  Close as CloseIcon,
-  Download as DownloadIcon,
-  Fullscreen as FullscreenIcon,
-  ZoomIn as ZoomInIcon,
-  ZoomOut as ZoomOutIcon,
-  Visibility as VisibilityIcon
-} from '@mui/icons-material';
+from fastapi import FastAPI, HTTPException, Depends, Response
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from typing import Optional
+import base64
+import logging
 
-// Simple inline document viewer
-interface DocumentViewerProps {
-  projectSlug: string;
-  documentUrl?: string;
-  documentFilename?: string;
-  hasDocument?: boolean;
-}
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-export const DocumentViewer: React.FC<DocumentViewerProps> = ({
-  projectSlug,
-  documentUrl,
-  documentFilename,
-  hasDocument = false
-}) => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+# Assuming you have these imports already
+# from your_database import get_db, Project
+# from your_models import Project
 
-  // Use relative URLs since frontend and backend are on same domain
-  const handleView = async () => {
-    setLoading(true);
-    setError('');
+app = FastAPI()
+
+# You'll update this CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["Content-Disposition", "Content-Type", "Content-Length"]
+)
+
+@app.get("/api/projects/{project_slug}")
+async def get_project(project_slug: str, db: Session = Depends(get_db)):
+    """Get project details"""
+    logger.info(f"Fetching project: {project_slug}")
     
-    try {
-      // Open in new tab for viewing - use relative URL
-      const viewUrl = `/api/projects/${projectSlug}/view-document`;
-      window.open(viewUrl, '_blank');
-      
-    } catch (err: any) {
-      setError(err.message || 'Failed to view document');
-    } finally {
-      setTimeout(() => setLoading(false), 1000);
-    }
-  };
-
-  const handleDownload = async () => {
-    setLoading(true);
-    setError('');
+    project = db.query(Project).filter(Project.slug == project_slug).first()
     
-    try {
-      // Create download link - use relative URL
-      const downloadUrl = `/api/projects/${projectSlug}/download`;
-      
-      // Direct navigation for download
-      window.location.href = downloadUrl;
-      
-    } catch (err: any) {
-      setError(err.message || 'Failed to download document');
-    } finally {
-      setTimeout(() => setLoading(false), 1500);
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Return project data (adjust fields as needed)
+    return {
+        "id": project.id,
+        "slug": project.slug,
+        "title": project.title,
+        "description": project.description,
+        "has_document": bool(project.document_data),
+        "document_filename": project.document_filename if project.document_data else None,
+        # Add other fields as needed
     }
-  };
 
-  // Always show the component - let the backend handle if document exists
-  return (
-    <Box sx={{ mt: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        Project Document
-      </Typography>
-      
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
-      
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-        <Button
-          variant="contained"
-          startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <Visibility />}
-          onClick={handleView}
-          disabled={loading}
-          sx={{
-            bgcolor: '#0a4f3c',
-            '&:hover': { bgcolor: '#063d2f' },
-            '&:disabled': {
-              bgcolor: '#0a4f3c',
-              opacity: 0.7
-            }
-          }}
-        >
-          {loading ? 'Loading...' : 'View Document'}
-        </Button>
-        
-        <Button
-          variant="outlined"
-          startIcon={loading ? <CircularProgress size={20} /> : <Download />}
-          onClick={handleDownload}
-          disabled={loading}
-          sx={{
-            borderColor: '#0a4f3c',
-            color: '#0a4f3c',
-            '&:hover': {
-              borderColor: '#063d2f',
-              bgcolor: 'rgba(10, 79, 60, 0.04)'
-            },
-            '&:disabled': {
-              borderColor: '#0a4f3c',
-              color: '#0a4f3c',
-              opacity: 0.7
-            }
-          }}
-        >
-          {loading ? 'Loading...' : 'Download Document'}
-        </Button>
-      </Box>
-      
-      {documentFilename && (
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-          Filename: {documentFilename}
-        </Typography>
-      )}
-      
-      {!documentFilename && (
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-          Click the buttons above to check if a document is available for this project.
-        </Typography>
-      )}
-    </Box>
-  );
-};
-
-// Modal document viewer with advanced features
-interface DocumentViewerModalProps {
-  open: boolean;
-  onClose: () => void;
-  projectSlug: string;
-  documentFilename?: string;
-}
-
-export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
-  open,
-  onClose,
-  projectSlug,
-  documentFilename
-}) => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [zoom, setZoom] = useState(100);
-  const [fileInfo, setFileInfo] = useState<any>(null);
-
-  // Use relative URLs
-  const viewUrl = `/api/projects/${projectSlug}/view-document`;
-  const downloadUrl = `/api/projects/${projectSlug}/download`;
-
-  // Fetch file info when modal opens
-  React.useEffect(() => {
-    if (open) {
-      setLoading(true);
-      setError('');
-      setZoom(100);
-      
-      fetch(`/api/projects/${projectSlug}/file-info`)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error('Document not found');
-          }
-          return response.json();
-        })
-        .then(data => {
-          setFileInfo(data);
-          if (!data.available) {
-            throw new Error('No document available for this project');
-          }
-          setLoading(false);
-        })
-        .catch(err => {
-          setError(err.message || 'Failed to load document information');
-          setLoading(false);
-        });
-    }
-  }, [open, projectSlug]);
-
-  const handleLoad = () => {
-    setLoading(false);
-    setError('');
-  };
-
-  const handleError = () => {
-    setLoading(false);
-    setError('Failed to load document. The document might be corrupted or in an unsupported format.');
-  };
-
-  const handleZoomIn = () => {
-    setZoom(prev => Math.min(prev + 25, 200));
-  };
-
-  const handleZoomOut = () => {
-    setZoom(prev => Math.max(prev - 25, 50));
-  };
-
-  const handleFullscreen = () => {
-    window.open(viewUrl, '_blank');
-  };
-
-  const handleDownload = () => {
-    window.location.href = downloadUrl;
-  };
-
-  const isPDF = (fileInfo?.filename || documentFilename || '').toLowerCase().includes('.pdf');
-
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="lg"
-      fullWidth
-      PaperProps={{
-        sx: { 
-          height: '90vh',
-          maxHeight: '900px'
+@app.get("/api/projects/{project_slug}/download")
+async def download_project_document(project_slug: str, db: Session = Depends(get_db)):
+    """Download project document"""
+    logger.info(f"📁 Serving download from database for project: {project_slug}")
+    
+    # Fetch project from database
+    project = db.query(Project).filter(Project.slug == project_slug).first()
+    
+    if not project:
+        logger.error(f"Project not found: {project_slug}")
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if not project.document_data:
+        logger.error(f"No document found for project: {project_slug}")
+        raise HTTPException(status_code=404, detail="No document found for this project")
+    
+    # Decode the base64 data
+    try:
+        file_data = base64.b64decode(project.document_data)
+        logger.info(f"Successfully decoded document for project: {project_slug}, size: {len(file_data)} bytes")
+    except Exception as e:
+        logger.error(f"Failed to decode document for project {project_slug}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to decode document")
+    
+    # Determine content type and filename
+    filename = project.document_filename or f"{project_slug}_document"
+    content_type = get_content_type(filename)
+    
+    logger.info(f"Serving file: {filename} with content-type: {content_type}")
+    
+    # Return file with attachment disposition to force download
+    return Response(
+        content=file_data,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Type": content_type,
+            "Content-Length": str(len(file_data)),
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
         }
-      }}
-    >
-      <DialogTitle sx={{ pb: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box>
-            <Typography variant="h6" component="div">
-              Document Viewer
-            </Typography>
-            {(fileInfo?.filename || documentFilename) && (
-              <Typography variant="caption" color="text.secondary">
-                {fileInfo?.filename || documentFilename}
-              </Typography>
-            )}
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {isPDF && !loading && !error && fileInfo?.available && (
-              <>
-                <IconButton 
-                  onClick={handleZoomOut} 
-                  disabled={zoom <= 50}
-                  size="small"
-                  title="Zoom out"
-                >
-                  <ZoomOutIcon />
-                </IconButton>
-                <Typography variant="body2" sx={{ minWidth: 50, textAlign: 'center' }}>
-                  {zoom}%
-                </Typography>
-                <IconButton 
-                  onClick={handleZoomIn} 
-                  disabled={zoom >= 200}
-                  size="small"
-                  title="Zoom in"
-                >
-                  <ZoomInIcon />
-                </IconButton>
-                <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
-              </>
-            )}
-            <IconButton onClick={handleFullscreen} size="small" title="Open in new tab">
-              <FullscreenIcon />
-            </IconButton>
-            <IconButton onClick={handleDownload} size="small" title="Download">
-              <DownloadIcon />
-            </IconButton>
-            <IconButton onClick={onClose} size="small">
-              <CloseIcon />
-            </IconButton>
-          </Box>
-        </Box>
-      </DialogTitle>
-      
-      <DialogContent sx={{ p: 0, position: 'relative', bgcolor: '#f5f5f5' }}>
-        {loading && (
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: 'column',
-            justifyContent: 'center', 
-            alignItems: 'center', 
-            height: '100%',
-            minHeight: '400px'
-          }}>
-            <CircularProgress size={48} sx={{ color: '#0a4f3c' }} />
-            <Typography sx={{ mt: 2 }}>Loading document...</Typography>
-          </Box>
-        )}
-        
-        {error && (
-          <Box sx={{ p: 4, textAlign: 'center' }}>
-            <Alert severity="error" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
-              {error}
-            </Alert>
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <Button 
-                variant="contained" 
-                onClick={handleDownload} 
-                startIcon={<DownloadIcon />}
-                sx={{
-                  bgcolor: '#0a4f3c',
-                  '&:hover': { bgcolor: '#063d2f' }
-                }}
-              >
-                Download Document
-              </Button>
-              <Button 
-                variant="outlined" 
-                onClick={handleFullscreen} 
-                startIcon={<VisibilityIcon />}
-                sx={{
-                  borderColor: '#0a4f3c',
-                  color: '#0a4f3c',
-                  '&:hover': {
-                    borderColor: '#063d2f',
-                    bgcolor: 'rgba(10, 79, 60, 0.04)'
-                  }
-                }}
-              >
-                Open in New Tab
-              </Button>
-            </Box>
-          </Box>
-        )}
-        
-        {!error && !loading && fileInfo?.available && (
-          <Box sx={{ 
-            height: '100%', 
-            display: 'flex',
-            flexDirection: 'column',
-            bgcolor: 'white'
-          }}>
-            {isPDF ? (
-              <iframe
-                src={`${viewUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=${zoom}`}
-                width="100%"
-                height="100%"
-                style={{ 
-                  border: 'none',
-                  flexGrow: 1
-                }}
-                onLoad={handleLoad}
-                onError={handleError}
-                title="PDF Document Viewer"
-              />
-            ) : (
-              <Box sx={{ p: 4, textAlign: 'center', flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <Alert severity="info" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
-                  Preview is only available for PDF files. This document appears to be in a different format.
-                </Alert>
-                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
-                  <Button 
-                    variant="contained" 
-                    onClick={handleDownload} 
-                    startIcon={<DownloadIcon />}
-                    size="large"
-                    sx={{
-                      bgcolor: '#0a4f3c',
-                      '&:hover': { bgcolor: '#063d2f' }
-                    }}
-                  >
-                    Download {fileInfo?.filename || documentFilename || 'Document'}
-                  </Button>
-                  <Button 
-                    variant="outlined" 
-                    onClick={handleFullscreen} 
-                    startIcon={<VisibilityIcon />}
-                    size="large"
-                    sx={{
-                      borderColor: '#0a4f3c',
-                      color: '#0a4f3c',
-                      '&:hover': {
-                        borderColor: '#063d2f',
-                        bgcolor: 'rgba(10, 79, 60, 0.04)'
-                      }
-                    }}
-                  >
-                    Open in Browser
-                  </Button>
-                </Box>
-              </Box>
-            )}
-          </Box>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-};
+    )
 
-// Default export for backward compatibility
-export default DocumentViewer;
+@app.get("/api/projects/{project_slug}/view-document")
+async def view_project_document(project_slug: str, db: Session = Depends(get_db)):
+    """Serve document for inline viewing in browser"""
+    logger.info(f"📄 Serving document for viewing: {project_slug}")
+    
+    # Fetch project from database
+    project = db.query(Project).filter(Project.slug == project_slug).first()
+    
+    if not project:
+        logger.error(f"Project not found: {project_slug}")
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if not project.document_data:
+        logger.error(f"No document found for project: {project_slug}")
+        raise HTTPException(status_code=404, detail="No document found for this project")
+    
+    # Decode the base64 data
+    try:
+        file_data = base64.b64decode(project.document_data)
+        logger.info(f"Successfully decoded document for viewing: {project_slug}, size: {len(file_data)} bytes")
+    except Exception as e:
+        logger.error(f"Failed to decode document for project {project_slug}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to decode document")
+    
+    # Determine content type and filename
+    filename = project.document_filename or f"{project_slug}_document"
+    content_type = get_content_type(filename)
+    
+    logger.info(f"Serving file for viewing: {filename} with content-type: {content_type}")
+    
+    # Return file with inline disposition for viewing in browser
+    return Response(
+        content=file_data,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Type": content_type,
+            "Content-Length": str(len(file_data)),
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "SAMEORIGIN"
+        }
+    )
+
+@app.get("/api/projects/{project_slug}/file-info")
+async def get_project_file_info(project_slug: str, db: Session = Depends(get_db)):
+    """Get information about the project document"""
+    logger.info(f"Getting file info for project: {project_slug}")
+    
+    # Fetch project from database
+    project = db.query(Project).filter(Project.slug == project_slug).first()
+    
+    if not project:
+        logger.error(f"Project not found: {project_slug}")
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    has_document = bool(project.document_data)
+    file_size = 0
+    
+    if has_document:
+        try:
+            file_size = len(base64.b64decode(project.document_data))
+        except Exception as e:
+            logger.error(f"Failed to calculate file size for project {project_slug}: {str(e)}")
+            file_size = 0
+    
+    response_data = {
+        "available": has_document,
+        "filename": project.document_filename if has_document else None,
+        "size": file_size,
+        "size_formatted": format_file_size(file_size) if has_document else None,
+        "content_type": get_content_type(project.document_filename) if has_document and project.document_filename else None
+    }
+    
+    logger.info(f"File info for {project_slug}: {response_data}")
+    return response_data
+
+def get_content_type(filename: str) -> str:
+    """Determine content type based on file extension"""
+    if not filename:
+        return "application/octet-stream"
+    
+    filename_lower = filename.lower()
+    
+    # Common document types
+    if filename_lower.endswith('.pdf'):
+        return "application/pdf"
+    elif filename_lower.endswith('.doc'):
+        return "application/msword"
+    elif filename_lower.endswith('.docx'):
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    elif filename_lower.endswith('.xls'):
+        return "application/vnd.ms-excel"
+    elif filename_lower.endswith('.xlsx'):
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    elif filename_lower.endswith('.ppt'):
+        return "application/vnd.ms-powerpoint"
+    elif filename_lower.endswith('.pptx'):
+        return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    
+    # Image types
+    elif filename_lower.endswith(('.jpg', '.jpeg')):
+        return "image/jpeg"
+    elif filename_lower.endswith('.png'):
+        return "image/png"
+    elif filename_lower.endswith('.gif'):
+        return "image/gif"
+    elif filename_lower.endswith('.bmp'):
+        return "image/bmp"
+    elif filename_lower.endswith('.svg'):
+        return "image/svg+xml"
+    
+    # Text types
+    elif filename_lower.endswith('.txt'):
+        return "text/plain"
+    elif filename_lower.endswith('.csv'):
+        return "text/csv"
+    elif filename_lower.endswith('.html'):
+        return "text/html"
+    elif filename_lower.endswith('.xml'):
+        return "application/xml"
+    elif filename_lower.endswith('.json'):
+        return "application/json"
+    
+    # Archive types
+    elif filename_lower.endswith('.zip'):
+        return "application/zip"
+    elif filename_lower.endswith('.rar'):
+        return "application/x-rar-compressed"
+    elif filename_lower.endswith('.7z'):
+        return "application/x-7z-compressed"
+    elif filename_lower.endswith('.tar'):
+        return "application/x-tar"
+    elif filename_lower.endswith('.gz'):
+        return "application/gzip"
+    
+    # Default
+    else:
+        return "application/octet-stream"
+
+def format_file_size(size_bytes: int) -> str:
+    """Format file size in human-readable format"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024.0:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024.0
+    return f"{size_bytes:.1f} TB"
+
+# Optional: Add a health check endpoint
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "document-viewer"}
+
+# Optional: List all projects with documents
+@app.get("/api/projects")
+async def list_projects(
+    skip: int = 0,
+    limit: int = 100,
+    has_document: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
+    """List all projects with optional filtering"""
+    query = db.query(Project)
+    
+    if has_document is not None:
+        if has_document:
+            query = query.filter(Project.document_data.isnot(None))
+        else:
+            query = query.filter(Project.document_data.is_(None))
+    
+    total = query.count()
+    projects = query.offset(skip).limit(limit).all()
+    
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "projects": [
+            {
+                "id": p.id,
+                "slug": p.slug,
+                "title": p.title,
+                "has_document": bool(p.document_data),
+                "document_filename": p.document_filename if p.document_data else None
+            }
+            for p in projects
+        ]
+    }
