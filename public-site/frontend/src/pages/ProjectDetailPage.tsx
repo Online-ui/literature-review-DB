@@ -401,8 +401,8 @@ const ProjectDetailPage: React.FC = () => {
           {/* Project Stats */}
           <Box sx={{ 
             display: 'flex', 
-            gap: { xs: 2, sm: 4 }, 
-                        p: { xs: 2, sm: 3 },
+            gap: { xs: 2, sm: 4             }, 
+            p: { xs: 2, sm: 3 },
             bgcolor: 'rgba(27, 94, 32, 0.05)',
             borderRadius: 3,
             border: '1px solid #c8e6c9',
@@ -694,8 +694,8 @@ const ProjectDetailPage: React.FC = () => {
                         <Chip
                           label={`${(project.document_size / 1024 / 1024).toFixed(2)} MB`}
                           size="small"
-                                                    sx={{
-                            bgcolor: '#c8e6c9',
+                          sx={{
+                                                        bgcolor: '#c8e6c9',
                             color: '#1b5e20',
                             fontWeight: 'bold',
                             fontSize: { xs: '0.7rem', sm: '0.75rem' }
@@ -762,10 +762,9 @@ const ProjectDetailPage: React.FC = () => {
           </Grid>
         </Grid>
 
-        {/* Document Viewer */}
-        {project.document_url && (
+        {/* Document Viewer - Conditionally rendered */}
+        {project.document_url && viewerOpen && (
           <DocumentViewer
-            open={viewerOpen}
             onClose={() => setViewerOpen(false)}
             documentUrl={apiService.getDocumentViewUrl(project.slug)}
             filename={project.document_filename}
