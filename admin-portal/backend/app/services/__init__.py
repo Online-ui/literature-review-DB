@@ -1,3 +1,3 @@
-from .supabase_storage import supabase_storage
+from .database_storage import database_storage
 
-__all__ = ["supabase_storage"]
+__all__ = ["database_storage"]
