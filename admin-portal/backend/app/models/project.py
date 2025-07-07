@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, ForeignKey
+from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, ForeignKey, LargeBinary
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -31,13 +31,12 @@ class Project(BaseModel):
     meta_description = Column(Text)
     meta_keywords = Column(Text)
     
-    # Supabase Storage Fields
+    # Database File Storage Fields
     document_filename = Column(String, nullable=True)
     document_size = Column(Integer, nullable=True)
-    document_path = Column(String, nullable=True)  # Path in Supabase bucket
-    document_url = Column(String, nullable=True)   # Public URL from Supabase
-    document_content_type = Column(String, nullable=True)
-    document_storage = Column(String, default="supabase")
+    document_data = Column(LargeBinary, nullable=True)  # Stores the actual file bytes
+    document_content_type = Column(String, nullable=True)  # MIME type
+    document_storage = Column(String, default="database")  # Always "database"
     
     # Stats
     view_count = Column(Integer, default=0)
