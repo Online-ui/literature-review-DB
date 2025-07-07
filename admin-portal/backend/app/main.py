@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 import os
@@ -62,26 +61,9 @@ async def startup_event():
     print(f"🚀 Starting {settings.PROJECT_NAME}")
     print(f"📦 Version: {settings.VERSION}")
     print(f"🗄️  Storage Backend: {settings.STORAGE_BACKEND}")
-    
-    # Check storage configuration
-    if settings.STORAGE_BACKEND == "supabase":
-        if settings.has_supabase:
-            print("✅ Supabase Storage configured")
-            try:
-                from .services.supabase_storage import supabase_storage
-                if supabase_storage:
-                    print("✅ Supabase Storage service ready")
-                else:
-                    print("⚠️  Supabase Storage service not available")
-            except Exception as e:
-                print(f"⚠️  Supabase Storage initialization error: {str(e)}")
-        else:
-            print("⚠️  WARNING: Supabase storage selected but credentials not configured")
-
-# Mount static files only if using local storage
-if settings.STORAGE_BACKEND == "local":
-    if os.path.exists(settings.UPLOAD_DIR):
-        app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+    print(f"📁 Max file size: {settings.MAX_FILE_SIZE / 1024 / 1024:.1f}MB")
+    print(f"📄 Allowed file types: {', '.join(settings.ALLOWED_FILE_TYPES)}")
+    print("✅ Database Storage configured")
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
@@ -103,18 +85,13 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    health_status = {
+    return {
         "status": "healthy",
         "version": settings.VERSION,
         "storage_backend": settings.STORAGE_BACKEND,
-        "database": "connected"
+        "database": "connected",
+        "max_file_size_mb": settings.MAX_FILE_SIZE / 1024 / 1024
     }
-    
-    # Check storage backend health
-    if settings.STORAGE_BACKEND == "supabase":
-        health_status["supabase_configured"] = settings.has_supabase
-    
-    return health_status
 
 @app.get("/api/config")
 async def get_config():
