@@ -1,28 +1,22 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import sys
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 import os
 
-# Add current directory to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Database setup
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost/db")
+engine = create_engine(DATABASE_URL)
+Base = declarative_base()
 
-# Use absolute imports
-from database import engine
-from models.base import Base
+# Import models after Base is defined
 from api import projects
-from core.config import settings
-
-# Create tables
-try:
-    Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created successfully")
-except Exception as e:
-    print(f"⚠️  Database table creation warning: {e}")
 
 app = FastAPI(
-    title=settings.PROJECT_NAME,
-    version=settings.VERSION,
-    description=settings.DESCRIPTION
+    title="Literature Review Database",
+    version="1.0.0",
+    description="Discover and explore academic research projects"
 )
 
 # CORS middleware
@@ -34,15 +28,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Create tables
+try:
+    # Import here to avoid circular imports
+    from models.project import Project
+    Base.metadata.create_all(bind=engine)
+    print("✅ Database tables created successfully")
+except Exception as e:
+    print(f"⚠️  Database setup warning: {e}")
+
 # Include routers
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 
 @app.get("/")
 async def root():
     return {
-        "message": f"Welcome to {settings.PROJECT_NAME}",
-        "version": settings.VERSION,
-        "storage_backend": getattr(settings, 'STORAGE_BACKEND', 'database'),
+        "message": "Welcome to Literature Review Database",
+        "version": "1.0.0",
+        "storage_backend": "database",
         "api_docs": "/docs"
     }
 
@@ -50,10 +53,6 @@ async def root():
 async def health_check():
     return {
         "status": "healthy",
-        "version": settings.VERSION,
-        "storage_backend": getattr(settings, 'STORAGE_BACKEND', 'database')
+        "version": "1.0.0",
+        "storage_backend": "database"
     }
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
