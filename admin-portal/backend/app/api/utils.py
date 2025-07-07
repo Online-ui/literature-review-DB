@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import Dict, List, Any
+from datetime import datetime
 
 from ..database import get_db
 from ..core.constants import RESEARCH_AREAS, DEGREE_TYPES, ACADEMIC_YEARS, INSTITUTIONS
@@ -238,9 +239,8 @@ async def health_check(
     if config_issues:
         health_status["overall_status"] = "degraded"
     
-    # Set timestamp
-    from datetime import datetime
-        health_status["timestamp"] = datetime.utcnow().isoformat() + "Z"
+    # Set timestamp - FIXED INDENTATION HERE
+    health_status["timestamp"] = datetime.utcnow().isoformat() + "Z"
     
     return health_status
 
