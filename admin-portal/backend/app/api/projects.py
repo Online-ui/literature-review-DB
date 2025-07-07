@@ -1,10 +1,12 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 import os
 import uuid
 from datetime import datetime
+import io
 
 from ..database import get_db
 from ..models.user import User
@@ -13,7 +15,7 @@ from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
 from ..core.auth import get_current_active_user
 from ..core.config import settings
 from ..core.constants import RESEARCH_AREAS, DEGREE_TYPES, ACADEMIC_YEARS, INSTITUTIONS
-from ..services.supabase_storage import supabase_storage
+from ..services.database_storage import database_storage
 
 router = APIRouter()
 
@@ -121,54 +123,28 @@ async def create_project(
     
     # Handle file upload
     document_filename = None
-    document_url = None
-    document_path = None
     document_size = None
+    document_data = None
     document_content_type = None
-    document_storage = "supabase"
+    document_storage = "database"
     
     if file and file.filename:
-        # Validate file type
-        file_extension = os.path.splitext(file.filename)[1].lower()
-        if file_extension not in settings.ALLOWED_FILE_TYPES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File type {file_extension} not allowed. Allowed types: {', '.join(settings.ALLOWED_FILE_TYPES)}"
-            )
-        
-        # Validate file size
-        file.file.seek(0, 2)  # Seek to end
-        file_size = file.file.tell()
-        file.file.seek(0)  # Reset to beginning
-        
-        if file_size > settings.MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File size too large. Maximum size: {settings.MAX_FILE_SIZE / 1024 / 1024:.1f}MB"
-            )
-        
         try:
-            # Generate unique filename to avoid conflicts
-            unique_filename = f"{uuid.uuid4()}_{file.filename}"
+            # Process file for database storage
+            file_result = await database_storage.upload_file(file)
             
-            # Upload file using Supabase storage
-            upload_result = await supabase_storage.upload_file(
-                file=file, 
-                folder="projects",
-                filename=unique_filename
-            )
+            document_filename = file_result["filename"]
+            document_size = file_result["size"]
+            document_data = file_result["data"]
+            document_content_type = file_result["content_type"]
+            document_storage = file_result["storage"]
             
-            document_filename = file.filename
-            document_url = upload_result["url"]
-            document_path = upload_result["path"]
-            document_size = upload_result["size"]
-            document_content_type = upload_result["content_type"]
-            document_storage = upload_result["storage"]
+            print(f"✅ File processed for database storage: {document_filename}")
             
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to save uploaded file: {str(e)}"
+                detail=f"Failed to process uploaded file: {str(e)}"
             )
     
     # Create project
@@ -189,9 +165,8 @@ async def create_project(
         meta_keywords=meta_keywords,
         is_published=is_published,
         document_filename=document_filename,
-        document_url=document_url,
-        document_path=document_path,
         document_size=document_size,
+        document_data=document_data,
         document_content_type=document_content_type,
         document_storage=document_storage,
         created_by_id=current_user.id
@@ -201,23 +176,22 @@ async def create_project(
         db.add(db_project)
         db.commit()
         db.refresh(db_project)
+        print(f"✅ Project created successfully: {db_project.title}")
         return db_project
     except Exception as e:
         db.rollback()
-        # Clean up uploaded file if project creation failed
-        if document_path:
-            await supabase_storage.delete_file(document_path)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create project"
         )
 
-@router.get("/{project_id}", response_model=ProjectResponse)
-async def get_project(
+@router.get("/{project_id}/download")
+async def download_project_file(
     project_id: int,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
+    """Download project file from database"""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(
@@ -229,10 +203,70 @@ async def get_project(
     if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to view this project"
+            detail="Not enough permissions to download this file"
         )
     
-    return project
+    if not project.document_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No file available for download"
+        )
+    
+    # Increment download counter
+    project.download_count = (project.download_count or 0) + 1
+    db.commit()
+    
+    # Create file stream
+    file_stream = io.BytesIO(project.document_data)
+    
+    # Return file as streaming response
+    return StreamingResponse(
+        io.BytesIO(project.document_data),
+        media_type=project.document_content_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{project.document_filename}\""
+        }
+    )
+
+@router.get("/{project_id}/view")
+async def view_project_file(
+    project_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """View project file in browser"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Project not found"
+        )
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to view this file"
+        )
+    
+    if not project.document_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No file available for viewing"
+        )
+    
+    # Increment view counter
+    project.view_count = (project.view_count or 0) + 1
+    db.commit()
+    
+    # Return file for inline viewing
+    return StreamingResponse(
+        io.BytesIO(project.document_data),
+        media_type=project.document_content_type or "application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename=\"{project.document_filename}\""
+        }
+    )
 
 @router.put("/{project_id}", response_model=ProjectResponse)
 async def update_project(
@@ -335,65 +369,32 @@ async def update_project(
         project.is_published = is_published
     
     # Handle file removal
-    if remove_file and project.document_path:
-        # Delete old file from Supabase
-        await supabase_storage.delete_file(project.document_path)
-        
-        # Clear file fields
+    if remove_file:
         project.document_filename = None
-        project.document_url = None
-        project.document_path = None
         project.document_size = None
+        project.document_data = None
         project.document_content_type = None
-        project.document_storage = "supabase"
+        project.document_storage = "database"
+        print(f"🗑️  File removed from project: {project.title}")
     
     # Handle new file upload
     if file and file.filename:
-        # Delete old file if exists
-        if project.document_path and not remove_file:
-            await supabase_storage.delete_file(project.document_path)
-        
-        # Validate file type
-        file_extension = os.path.splitext(file.filename)[1].lower()
-        if file_extension not in settings.ALLOWED_FILE_TYPES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File type {file_extension} not allowed. Allowed types: {', '.join(settings.ALLOWED_FILE_TYPES)}"
-            )
-        
-        # Validate file size
-        file.file.seek(0, 2)
-        file_size = file.file.tell()
-        file.file.seek(0)
-        
-        if file_size > settings.MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File size too large. Maximum size: {settings.MAX_FILE_SIZE / 1024 / 1024:.1f}MB"
-            )
-        
         try:
-            # Generate unique filename to avoid conflicts
-            unique_filename = f"{uuid.uuid4()}_{file.filename}"
+            # Process new file for database storage
+            file_result = await database_storage.upload_file(file)
             
-            # Upload file using Supabase storage
-            upload_result = await supabase_storage.upload_file(
-                file=file, 
-                folder="projects",
-                filename=unique_filename
-            )
+            project.document_filename = file_result["filename"]
+            project.document_size = file_result["size"]
+            project.document_data = file_result["data"]
+            project.document_content_type = file_result["content_type"]
+            project.document_storage = file_result["storage"]
             
-            project.document_filename = file.filename
-            project.document_url = upload_result["url"]
-            project.document_path = upload_result["path"]
-            project.document_size = upload_result["size"]
-            project.document_content_type = upload_result["content_type"]
-            project.document_storage = upload_result["storage"]
+            print(f"✅ File updated for project: {project.title}")
             
         except Exception as e:
             raise HTTPException(
-                                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to save uploaded file: {str(e)}"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to process uploaded file: {str(e)}"
             )
     
     try:
@@ -427,22 +428,18 @@ async def delete_project_file(
             detail="Not enough permissions to delete file"
         )
     
-    if not project.document_path:
+    if not project.document_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No file to delete"
         )
     
-    # Delete file from Supabase
-    await supabase_storage.delete_file(project.document_path)
-    
     # Clear file fields in database
     project.document_filename = None
-    project.document_url = None
-    project.document_path = None
     project.document_size = None
+    project.document_data = None
     project.document_content_type = None
-    project.document_storage = "supabase"
+    project.document_storage = "database"
     
     try:
         db.commit()
@@ -451,7 +448,7 @@ async def delete_project_file(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update project after file deletion"
+            detail="Failed to delete file"
         )
 
 @router.delete("/{project_id}")
@@ -474,10 +471,6 @@ async def delete_project(
             detail="Not enough permissions to delete this project"
         )
     
-    # Delete associated file from Supabase
-    if project.document_path:
-        await supabase_storage.delete_file(project.document_path)
-    
     try:
         db.delete(project)
         db.commit()
@@ -489,6 +482,7 @@ async def delete_project(
             detail="Failed to delete project"
         )
 
+# Keep existing endpoints
 @router.get("/research-areas/list")
 async def get_research_areas(
     current_user: User = Depends(get_current_active_user),
@@ -544,78 +538,4 @@ async def toggle_project_publish_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update project status"
-        )
-
-@router.get("/{project_id}/download")
-async def download_project_file(
-    project_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    """Download project file and increment download counter"""
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
-    # Check if project is published or user has permission
-    if not project.is_published and current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Project is not published"
-        )
-    
-    if not project.document_url:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No file available for download"
-        )
-    
-    # Increment download counter
-    project.download_count = (project.download_count or 0) + 1
-    
-    try:
-        db.commit()
-        # Return redirect to Supabase file URL
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=project.document_url)
-    except Exception as e:
-        db.rollback()
-        # Still allow download even if counter update fails
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=project.document_url)
-
-@router.patch("/{project_id}/increment-view")
-async def increment_project_view(
-    project_id: int,
-    db: Session = Depends(get_db)
-):
-    """Increment project view counter (public endpoint)"""
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
-    # Only increment for published projects
-    if not project.is_published:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
-    # Increment view counter
-    project.view_count = (project.view_count or 0) + 1
-    
-    try:
-        db.commit()
-        return {"message": "View count incremented", "view_count": project.view_count}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update view count"
         )
