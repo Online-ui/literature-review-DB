@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import Dict, List, Any
+from datetime import datetime
 
 from ..database import get_db
 from ..core.constants import RESEARCH_AREAS, DEGREE_TYPES, ACADEMIC_YEARS, INSTITUTIONS
@@ -69,13 +70,16 @@ async def get_system_info(
     active_users = db.query(User).filter(User.is_active == True).count()
     total_projects = db.query(Project).count()
     published_projects = db.query(Project).filter(Project.is_published == True).count()
-    projects_with_files = db.query(Project).filter(Project.document_data.isnot(None)).count()
     
-    # Calculate total file storage used
-    from sqlalchemy import func
-    total_file_size = db.query(func.sum(Project.document_size)).filter(
-        Project.document_size.isnot(None)
-    ).scalar() or 0
+    try:
+        projects_with_files = db.query(Project).filter(Project.document_data.isnot(None)).count()
+        from sqlalchemy import func
+        total_file_size = db.query(func.sum(Project.document_size)).filter(
+            Project.document_size.isnot(None)
+        ).scalar() or 0
+    except Exception:
+        projects_with_files = 0
+        total_file_size = 0
     
     return {
         "system": {
@@ -121,16 +125,13 @@ async def test_storage(
         )
     
     try:
-        # Test database storage service
         health_check = database_storage.health_check()
-        
         return {
             "status": "success",
             "backend": "database",
             "health_check": health_check,
             "message": "Database storage is working correctly"
         }
-        
     except Exception as e:
         return {
             "status": "error",
@@ -151,9 +152,7 @@ async def test_file_upload(
         )
     
     try:
-        # Test file processing
         result = await database_storage.upload_file(file)
-        
         return {
             "success": True,
             "message": "File processed successfully",
@@ -165,7 +164,6 @@ async def test_file_upload(
                 "storage": result["storage"]
             }
         }
-        
     except HTTPException as he:
         raise he
     except Exception as e:
@@ -188,7 +186,7 @@ async def health_check(
     
     health_status = {
         "overall_status": "healthy",
-        "timestamp": "",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
         "checks": {}
     }
     
@@ -226,7 +224,7 @@ async def health_check(
     if not settings.SECRET_KEY or settings.SECRET_KEY == "your-secret-key":
         config_issues.append("SECRET_KEY not properly configured")
     
-    if settings.MAX_FILE_SIZE > 50 * 1024 * 1024:  # Warn if over 50MB
+    if settings.MAX_FILE_SIZE > 50 * 1024 * 1024:
         config_issues.append("MAX_FILE_SIZE is very large for database storage")
     
     health_status["checks"]["configuration"] = {
@@ -237,10 +235,6 @@ async def health_check(
     
     if config_issues:
         health_status["overall_status"] = "degraded"
-    
-    # Set timestamp
-    from datetime import datetime
-    health_status["timestamp"] = datetime.utcnow().isoformat() + "Z"
     
     return health_status
 
@@ -256,47 +250,56 @@ async def get_file_stats(
             detail="Not enough permissions"
         )
     
-    # Get file statistics from database
-    from sqlalchemy import func
-    
-    total_files = db.query(Project).filter(Project.document_data.isnot(None)).count()
-    total_size = db.query(func.sum(Project.document_size)).filter(Project.document_size.isnot(None)).scalar() or 0
-    
-    # Get file type distribution
-    file_types = db.query(
-        func.lower(func.right(Project.document_filename, 4)).label('extension'),
-        func.count().label('count')
-    ).filter(
-        Project.document_filename.isnot(None)
-    ).group_by(
-        func.lower(func.right(Project.document_filename, 4))
-    ).all()
-    
-    # Get largest files
-    largest_files = db.query(
-        Project.document_filename,
-        Project.document_size,
-        Project.title
-    ).filter(
-        Project.document_size.isnot(None)
-    ).order_by(
-        Project.document_size.desc()
-    ).limit(5).all()
-    
-    return {
-        "total_files": total_files,
-        "total_size_bytes": total_size,
-        "total_size_mb": round(total_size / 1024 / 1024, 2) if total_size else 0,
-        "total_size_gb": round(total_size / 1024 / 1024 / 1024, 3) if total_size else 0,
-        "file_types": [{"extension": ext, "count": count} for ext, count in file_types],
-        "largest_files": [
-            {
-                "filename": filename,
-                "size_mb": round(size / 1024 / 1024, 2) if size else 0,
-                "project_title": title
-            }
-            for filename, size, title in largest_files
-        ],
-        "average_file_size_mb": round((total_size / total_files) / 1024 / 1024, 2) if total_files > 0 else 0,
-        "storage_backend": "database"
-    }
+    try:
+        from sqlalchemy import func
+        
+        total_files = db.query(Project).filter(Project.document_data.isnot(None)).count()
+        total_size = db.query(func.sum(Project.document_size)).filter(
+            Project.document_size.isnot(None)
+        ).scalar() or 0
+        
+        # Get file type distribution
+        file_types = db.query(
+            func.lower(func.right(Project.document_filename, 4)).label('extension'),
+            func.count().label('count')
+        ).filter(
+            Project.document_filename.isnot(None)
+        ).group_by(
+            func.lower(func.right(Project.document_filename, 4))
+        ).all()
+        
+        # Get largest files
+        largest_files = db.query(
+            Project.document_filename,
+            Project.document_size,
+            Project.title
+        ).filter(
+            Project.document_size.isnot(None)
+        ).order_by(
+            Project.document_size.desc()
+        ).limit(5).all()
+        
+        return {
+            "total_files": total_files,
+            "total_size_bytes": total_size,
+            "total_size_mb": round(total_size / 1024 / 1024, 2) if total_size else 0,
+            "total_size_gb": round(total_size / 1024 / 1024 / 1024, 3) if total_size else 0,
+            "file_types": [{"extension": ext, "count": count} for ext, count in file_types],
+            "largest_files": [
+                {
+                    "filename": filename,
+                    "size_mb": round(size / 1024 / 1024, 2) if size else 0,
+                    "project_title": title
+                }
+                for filename, size, title in largest_files
+            ],
+            "average_file_size_mb": round((total_size / total_files) / 1024 / 1024, 2) if total_files > 0 else 0,
+            "storage_backend": "database"
+        }
+    except Exception as e:
+        return {
+            "error": f"Failed to get file stats: {str(e)}",
+            "total_files": 0,
+            "total_size_bytes": 0,
+            "storage_backend": "database"
+        }
