@@ -763,13 +763,11 @@ const ProjectDetailPage: React.FC = () => {
         </Grid>
 
         {/* Document Viewer Modal */}
-        {project.document_url && (
-          <DocumentViewerModal
-            open={viewerOpen}
-            onClose={() => setViewerOpen(false)}
-            projectSlug={project.slug}
-            documentFilename={project.document_filename}
-          />
+        <DocumentViewer
+          projectSlug={project.slug}
+          documentFilename={project.document_filename}
+          hasDocument={!!project.document_filename} // Pass this to indicate if document exists
+        />
         )}
       </Container>
     </Box>
