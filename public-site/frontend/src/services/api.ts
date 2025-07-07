@@ -1,6 +1,6 @@
-import axios from 'axios'; // Add this import
+import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 export interface Project {
   id: number;
@@ -20,9 +20,12 @@ export interface Project {
   publication_date: string;
   view_count: number;
   download_count: number;
-  document_url?: string;
+  // Updated for database storage
   document_filename?: string;
   document_size?: number;
+  document_content_type?: string;
+  document_storage?: string;
+  created_by_id?: number;
   created_at: string;
   updated_at?: string;
 }
@@ -64,17 +67,18 @@ export interface SiteStats {
   total_institutions: number;
   total_research_areas: number;
   total_downloads: number;
+  total_views?: number;
 }
 
 class ApiService {
   private api = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 10000,
+    timeout: 30000, // Increased timeout for file operations
   });
 
   async getFeaturedProjects(limit: number = 6): Promise<ProjectSummary[]> {
     try {
-      const response = await this.api.get(`/projects/featured?limit=${limit}`);
+      const response = await this.api.get(`/api/projects/featured?limit=${limit}`);
       return response.data;
     } catch (error) {
       console.error('Failed to fetch featured projects:', error);
@@ -84,7 +88,7 @@ class ApiService {
 
   async getSiteStats(): Promise<SiteStats> {
     try {
-      const response = await this.api.get('/projects/stats');
+      const response = await this.api.get('/api/projects/stats');
       return response.data;
     } catch (error) {
       console.error('Failed to fetch site stats:', error);
@@ -108,7 +112,7 @@ class ApiService {
       params.append('skip', ((page - 1) * perPage).toString());
       params.append('limit', perPage.toString());
 
-      const response = await this.api.get(`/projects/?${params.toString()}`);
+      const response = await this.api.get(`/api/projects/?${params.toString()}`);
       
       // Transform response to match expected format
       const projects = response.data;
@@ -137,7 +141,7 @@ class ApiService {
 
   async getProjectBySlug(slug: string): Promise<Project | null> {
     try {
-      const response = await this.api.get(`/projects/${slug}`);
+      const response = await this.api.get(`/api/projects/${slug}`);
       return response.data;
     } catch (error) {
       console.error('Failed to fetch project:', error);
@@ -147,7 +151,7 @@ class ApiService {
 
   async getResearchAreas(): Promise<string[]> {
     try {
-      const response = await this.api.get('/projects/research-areas/list');
+      const response = await this.api.get('/api/projects/research-areas/list');
       return response.data;
     } catch (error) {
       console.error('Failed to fetch research areas:', error);
@@ -157,7 +161,7 @@ class ApiService {
 
   async getInstitutions(): Promise<string[]> {
     try {
-      const response = await this.api.get('/projects/institutions/list');
+      const response = await this.api.get('/api/projects/institutions/list');
       return response.data;
     } catch (error) {
       console.error('Failed to fetch institutions:', error);
@@ -165,40 +169,46 @@ class ApiService {
     }
   }
 
+  // Fixed download method
   async downloadProject(slug: string): Promise<void> {
     try {
-      const response = await this.api.post(`/projects/${slug}/download`, {}, {
-        responseType: 'blob'
-      });
+      // Use GET method instead of POST for download
+      const downloadUrl = `${API_BASE_URL}/api/projects/${slug}/download`;
       
-      // Create blob link to download
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      // Create a temporary link and click it
       const link = document.createElement('a');
-      link.href = url;
-      
-      // Get filename from response headers or use default
-      const contentDisposition = response.headers['content-disposition'];
-      let filename = `${slug}.pdf`;
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-        if (filenameMatch) {
-          filename = filenameMatch[1];
-        }
-      }
-      
-      link.setAttribute('download', filename);
+      link.href = downloadUrl;
+      link.target = '_blank';
+      link.download = ''; // This will use the filename from Content-Disposition header
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
     } catch (error) {
       console.error('Failed to download project:', error);
       throw error;
     }
   }
 
+  // Fixed view method
   getDocumentViewUrl(slug: string): string {
-    return `${API_BASE_URL}/projects/${slug}/view-document`;
+    return `${API_BASE_URL}/api/projects/${slug}/view-document`;
+  }
+
+  // New method to check file availability
+  async getFileInfo(slug: string): Promise<any> {
+    try {
+      const response = await this.api.get(`/api/projects/${slug}/file-info`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get file info:', error);
+      return { available: false };
+    }
+  }
+
+  // Method to view document
+  viewDocument(slug: string): void {
+    const viewUrl = this.getDocumentViewUrl(slug);
+    window.open(viewUrl, '_blank');
   }
 }
 
