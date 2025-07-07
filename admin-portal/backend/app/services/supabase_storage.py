@@ -4,7 +4,7 @@ import os
 import uuid
 import io
 import asyncio
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional
 from ..core.config import settings
 
 class SupabaseStorageService:
@@ -14,7 +14,6 @@ class SupabaseStorageService:
             raise ValueError("Supabase credentials not configured")
         
         try:
-            # Initialize Supabase client
             self.supabase: Client = create_client(
                 settings.SUPABASE_URL,
                 settings.SUPABASE_ANON_KEY
@@ -32,13 +31,11 @@ class SupabaseStorageService:
     def _verify_connection(self) -> bool:
         """Verify bucket exists and is accessible"""
         try:
-            # Simple bucket access test
             self.supabase.storage.from_(self.bucket_name).list()
             print(f"✅ Bucket '{self.bucket_name}' is accessible")
             return True
         except Exception as e:
             print(f"⚠️  Bucket verification failed: {str(e)}")
-            # Don't raise error - bucket might exist but be empty
             return False
     
     async def upload_file(
@@ -47,17 +44,7 @@ class SupabaseStorageService:
         folder: str = "projects", 
         filename: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        Upload file to Supabase Storage
-        
-        Args:
-            file: FastAPI UploadFile object
-            folder: Folder path in bucket (default: "projects")
-            filename: Custom filename (optional, will generate UUID if not provided)
-            
-        Returns:
-            Dict with upload result information
-        """
+        """Upload file to Supabase Storage"""
         try:
             # Validate file
             await self._validate_file(file)
@@ -76,17 +63,12 @@ class SupabaseStorageService:
             # Create full storage path
             storage_path = f"{folder}/{filename}" if folder else filename
             
-            # Upload file with retry logic
-            upload_result = await self._upload_with_retry(
-                file_content, 
-                storage_path, 
-                file.content_type
-            )
+            # Upload with retry logic
+            await self._upload_with_retry(file_content, storage_path, file.content_type)
             
             # Generate public URL
             public_url = self._get_public_url(storage_path)
             
-            # Return upload information
             result = {
                 "path": storage_path,
                 "url": public_url,
@@ -119,11 +101,11 @@ class SupabaseStorageService:
                 detail=f"File type {file_extension} not allowed. Allowed: {', '.join(settings.ALLOWED_FILE_TYPES)}"
             )
         
-        # Check file size (read a bit to check)
+        # Check file size
         current_pos = file.file.tell()
-        file.file.seek(0, 2)  # Seek to end
+        file.file.seek(0, 2)
         file_size = file.file.tell()
-        file.file.seek(current_pos)  # Reset position
+        file.file.seek(current_pos)
         
         if file_size > settings.MAX_FILE_SIZE:
             raise HTTPException(
@@ -144,27 +126,17 @@ class SupabaseStorageService:
         storage_path: str, 
         content_type: str,
         max_retries: int = 3
-    ) -> Any:
-        """Upload file with retry logic and timeout"""
+    ) -> None:
+        """Upload file with retry logic"""
         
         for attempt in range(max_retries):
             try:
                 print(f"🔄 Upload attempt {attempt + 1}/{max_retries}")
                 
-                # Try upload with timeout
-                upload_task = self._perform_upload(file_content, storage_path, content_type)
-                result = await asyncio.wait_for(upload_task, timeout=45.0)
-                
+                # Try the upload
+                await self._perform_upload(file_content, storage_path, content_type)
                 print(f"✅ Upload attempt {attempt + 1} successful")
-                return result
-                
-            except asyncio.TimeoutError:
-                print(f"⏰ Upload attempt {attempt + 1} timed out")
-                if attempt == max_retries - 1:
-                    raise HTTPException(
-                        status_code=408,
-                        detail="Upload timed out. Please try with a smaller file."
-                    )
+                return
                 
             except Exception as e:
                 print(f"❌ Upload attempt {attempt + 1} failed: {str(e)}")
@@ -173,46 +145,64 @@ class SupabaseStorageService:
                         status_code=500,
                         detail=f"Upload failed after {max_retries} attempts: {str(e)}"
                     )
-            
-            # Wait before retry (exponential backoff)
-            if attempt < max_retries - 1:
-                wait_time = 2 ** attempt
-                print(f"⏳ Waiting {wait_time}s before retry...")
-                await asyncio.sleep(wait_time)
+                
+                # Wait before retry
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    print(f"⏳ Waiting {wait_time}s before retry...")
+                    await asyncio.sleep(wait_time)
     
-    async def _perform_upload(self, file_content: bytes, storage_path: str, content_type: str) -> Any:
-        """Perform the actual upload to Supabase"""
+    async def _perform_upload(self, file_content: bytes, storage_path: str, content_type: str) -> None:
+        """Perform the actual upload to Supabase with correct API usage"""
         try:
-            # Primary upload method
+            # Method 1: Upload with correct parameter order and types
+            print("🔄 Trying standard upload...")
             result = self.supabase.storage.from_(self.bucket_name).upload(
-                path=storage_path,
-                file=file_content,
+                file=file_content,  # Pass bytes directly
+                path=storage_path,  # Path as string
                 file_options={
                     "content-type": content_type or "application/octet-stream",
                     "upsert": True
                 }
             )
+            
+            # Check for errors in result
+            if hasattr(result, 'error') and result.error:
+                raise Exception(f"Supabase upload error: {result.error}")
+            
             return result
             
-        except Exception as e:
-            print(f"⚠️  Primary upload method failed: {str(e)}")
+        except Exception as e1:
+            print(f"⚠️  Standard upload failed: {str(e1)}")
             
-            # Fallback: Try with BytesIO
+            # Method 2: Try with different parameter structure
             try:
-                print("🔄 Trying BytesIO fallback...")
-                file_obj = io.BytesIO(file_content)
+                print("🔄 Trying alternative upload method...")
                 result = self.supabase.storage.from_(self.bucket_name).upload(
                     path=storage_path,
-                    file=file_obj,
+                    file=file_content,
                     file_options={
-                        "content-type": content_type or "application/octet-stream",
+                        "contentType": content_type or "application/octet-stream",
                         "upsert": True
                     }
                 )
                 return result
+                
             except Exception as e2:
-                print(f"❌ BytesIO fallback also failed: {str(e2)}")
-                raise e2
+                print(f"❌ Alternative upload failed: {str(e2)}")
+                
+                # Method 3: Try with minimal options
+                try:
+                    print("🔄 Trying minimal upload...")
+                    result = self.supabase.storage.from_(self.bucket_name).upload(
+                        storage_path,
+                        file_content
+                    )
+                    return result
+                    
+                except Exception as e3:
+                    print(f"❌ Minimal upload failed: {str(e3)}")
+                    raise e3
     
     def _get_public_url(self, storage_path: str) -> str:
         """Get public URL for uploaded file"""
@@ -220,25 +210,14 @@ class SupabaseStorageService:
             return self.supabase.storage.from_(self.bucket_name).get_public_url(storage_path)
         except Exception as e:
             print(f"⚠️  Could not generate public URL: {str(e)}")
-            # Return a fallback URL format
             return f"{settings.SUPABASE_URL}/storage/v1/object/public/{self.bucket_name}/{storage_path}"
     
     async def delete_file(self, file_path: str) -> bool:
-        """
-        Delete file from Supabase Storage
-        
-        Args:
-            file_path: Path to file in storage
-            
-        Returns:
-            True if deletion successful, False otherwise
-        """
+        """Delete file from Supabase Storage"""
         try:
             print(f"🗑️  Deleting file: {file_path}")
-            
             result = self.supabase.storage.from_(self.bucket_name).remove([file_path])
             
-            # Check if deletion was successful
             if isinstance(result, list) and len(result) > 0:
                 print(f"✅ File deleted successfully: {file_path}")
                 return True
@@ -251,29 +230,12 @@ class SupabaseStorageService:
             return False
     
     def get_file_url(self, file_path: str) -> str:
-        """
-        Get public URL for a file
-        
-        Args:
-            file_path: Path to file in storage
-            
-        Returns:
-            Public URL string
-        """
+        """Get public URL for a file"""
         return self._get_public_url(file_path)
     
     def list_files(self, folder: str = "") -> list:
-        """
-        List files in a folder
-        
-        Args:
-            folder: Folder path (empty string for root)
-            
-        Returns:
-            List of file objects
-        """
+        """List files in a folder"""
         try:
-            # Use simple list without limit parameter
             if folder:
                 result = self.supabase.storage.from_(self.bucket_name).list(folder)
             else:
@@ -287,52 +249,10 @@ class SupabaseStorageService:
             print(f"❌ Error listing files in {folder or 'root'}: {str(e)}")
             return []
     
-    def get_file_info(self, file_path: str) -> Optional[Dict[str, Any]]:
-        """
-        Get information about a specific file
-        
-        Args:
-            file_path: Path to file in storage
-            
-        Returns:
-            File information dict or None if not found
-        """
-        try:
-            # Extract folder and filename
-            folder = os.path.dirname(file_path)
-            filename = os.path.basename(file_path)
-            
-            # List files in folder
-            files = self.list_files(folder)
-            
-            # Find specific file
-            for file_obj in files:
-                if file_obj.get('name') == filename:
-                    return {
-                        'name': file_obj.get('name'),
-                        'size': file_obj.get('metadata', {}).get('size'),
-                        'last_modified': file_obj.get('updated_at'),
-                        'content_type': file_obj.get('metadata', {}).get('mimetype'),
-                        'url': self.get_file_url(file_path)
-                    }
-            
-            return None
-            
-        except Exception as e:
-            print(f"❌ Error getting file info for {file_path}: {str(e)}")
-            return None
-    
     def health_check(self) -> Dict[str, Any]:
-        """
-        Check health of Supabase Storage connection
-        
-        Returns:
-            Health status information
-        """
+        """Check health of Supabase Storage connection"""
         try:
-            # Try to list files as a health check
             files = self.list_files()
-            
             return {
                 "status": "healthy",
                 "bucket": self.bucket_name,
@@ -340,7 +260,6 @@ class SupabaseStorageService:
                 "file_count": len(files),
                 "url": settings.SUPABASE_URL
             }
-            
         except Exception as e:
             return {
                 "status": "unhealthy",
@@ -350,7 +269,7 @@ class SupabaseStorageService:
                 "url": settings.SUPABASE_URL
             }
 
-# Initialize service with proper error handling
+# Initialize service
 try:
     if settings.has_supabase:
         supabase_storage = SupabaseStorageService()
@@ -360,6 +279,3 @@ try:
 except Exception as e:
     print(f"⚠️  Supabase Storage initialization failed: {str(e)}")
     supabase_storage = None
-
-# Export for easy importing
-__all__ = ["supabase_storage", "SupabaseStorageService"]
