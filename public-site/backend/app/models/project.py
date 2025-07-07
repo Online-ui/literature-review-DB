@@ -1,9 +1,15 @@
-from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, ForeignKey, LargeBinary
-from sqlalchemy.orm import relationship
-from .base import BaseModel
+from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, LargeBinary
+from . import Base  # Import Base from __init__.py
 
-class Project(BaseModel):
+class Project(Base):
     __tablename__ = "projects"
+    
+    # Primary key
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Basic Info
     title = Column(String, nullable=False, index=True)
@@ -34,13 +40,13 @@ class Project(BaseModel):
     # Database File Storage Fields
     document_filename = Column(String, nullable=True)
     document_size = Column(Integer, nullable=True)
-    document_data = Column(LargeBinary, nullable=True)  # Stores the actual file bytes
-    document_content_type = Column(String, nullable=True)  # MIME type
-    document_storage = Column(String, default="database")  # Always "database"
+    document_data = Column(LargeBinary, nullable=True)
+    document_content_type = Column(String, nullable=True)
+    document_storage = Column(String, default="database")
     
     # Stats
     view_count = Column(Integer, default=0)
     download_count = Column(Integer, default=0)
     
-    # User Relationship (if you have users in public site)
-    created_by_id = Column(Integer, nullable=True)  # Remove ForeignKey if no User model
+    # User Relationship (simplified for public site)
+    created_by_id = Column(Integer, nullable=True)
