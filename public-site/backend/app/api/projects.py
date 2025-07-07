@@ -1,15 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from typing import List, Optional
 import io
+import base64
+import logging
 
 from ..database import get_db
 from ..models.project import Project
 from ..schemas.project import ProjectResponse, ProjectStats, ProjectFileInfo
 from ..core.config import settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/", response_model=List[ProjectResponse])
@@ -110,35 +113,77 @@ async def get_project(slug: str, db: Session = Depends(get_db)):
     
     return project
 
-@router.get("/{slug}/view-document")
-async def view_document(slug: str, db: Session = Depends(get_db)):
-    """View project document in browser"""
-    project = db.query(Project).filter(
-        Project.slug == slug,
-        Project.is_published == True
-    ).first()
+@router.get("/{project_slug}/view-document")
+async def view_project_document(project_slug: str, db: Session = Depends(get_db)):
+    """Serve document for inline viewing in browser"""
+    logger.info(f"📄 Serving document for viewing: {project_slug}")
+    
+    # Fetch project from database
+    project = db.query(Project).filter(Project.slug == project_slug).first()
     
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
+        raise HTTPException(status_code=404, detail="Project not found")
     
     if not project.document_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No document available"
-        )
+        raise HTTPException(status_code=404, detail="No document found for this project")
     
-    # Return file for inline viewing
-    return StreamingResponse(
-        io.BytesIO(project.document_data),
-        media_type=project.document_content_type or "application/pdf",
+    # Decode the base64 data
+    try:
+        file_data = base64.b64decode(project.document_data)
+    except Exception as e:
+        logger.error(f"Failed to decode document for project {project_slug}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to decode document")
+    
+    # Determine content type
+    filename = project.document_filename or f"{project_slug}_document"
+    content_type = "application/octet-stream"
+    
+    if filename.lower().endswith('.pdf'):
+        content_type = "application/pdf"
+    elif filename.lower().endswith(('.jpg', '.jpeg')):
+        content_type = "image/jpeg"
+    elif filename.lower().endswith('.png'):
+        content_type = "image/png"
+    elif filename.lower().endswith('.doc'):
+        content_type = "application/msword"
+    elif filename.lower().endswith('.docx'):
+        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    
+    # Return file with inline disposition for viewing in browser
+    return Response(
+        content=file_data,
+        media_type=content_type,
         headers={
-            "Content-Disposition": f"inline; filename=\"{project.document_filename}\"",
-            "Content-Type": project.document_content_type or "application/pdf",
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Type": content_type,
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
         }
     )
+
+@router.get("/{project_slug}/file-info")
+async def get_project_file_info(project_slug: str, db: Session = Depends(get_db)):
+    """Get information about the project document"""
+    project = db.query(Project).filter(Project.slug == project_slug).first()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    has_document = bool(project.document_data)
+    file_size = 0
+    
+    if has_document:
+        try:
+            file_size = len(base64.b64decode(project.document_data))
+        except:
+            file_size = 0
+    
+    return {
+        "available": has_document,
+        "filename": project.document_filename if has_document else None,
+        "size": file_size
+    }
 
 @router.get("/{slug}/download")
 async def download_document(slug: str, db: Session = Depends(get_db)):
@@ -164,37 +209,25 @@ async def download_document(slug: str, db: Session = Depends(get_db)):
     project.download_count = (project.download_count or 0) + 1
     db.commit()
     
-    # Return file as streaming response
-    return StreamingResponse(
-        io.BytesIO(project.document_data),
-        media_type=project.document_content_type or "application/octet-stream",
+    # Decode the base64 data
+    try:
+        file_data = base64.b64decode(project.document_data)
+    except Exception as e:
+        logger.error(f"Failed to decode document for project {slug}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to decode document")
+    
+    # Determine content type
+    filename = project.document_filename or f"{slug}_document"
+    content_type = project.document_content_type or "application/octet-stream"
+    
+    # Return file as streaming response with attachment disposition
+    return Response(
+        content=file_data,
+        media_type=content_type,
         headers={
-            "Content-Disposition": f"attachment; filename=\"{project.document_filename}\""
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Type": content_type
         }
-    )
-
-@router.get("/{slug}/file-info")
-async def get_file_info(slug: str, db: Session = Depends(get_db)):
-    """Get file information for a project"""
-    project = db.query(Project).filter(
-        Project.slug == slug,
-        Project.is_published == True
-    ).first()
-    
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
-    return ProjectFileInfo(
-        filename=project.document_filename,
-        size=project.document_size,
-        content_type=project.document_content_type,
-        storage=project.document_storage,
-        download_count=project.download_count or 0,
-        view_count=project.view_count or 0,
-        available=bool(project.document_data)
     )
 
 # Legacy endpoint for backward compatibility
