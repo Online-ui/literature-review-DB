@@ -3,11 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .database import engine
 from .models import Base
-from .api import projects, sitemap
+from .api import projects
 from .core.config import settings
 
 # Create tables
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+    print("✅ Database tables created successfully")
+except Exception as e:
+    print(f"⚠️  Database table creation warning: {e}")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -26,7 +30,13 @@ app.add_middleware(
 )
 # Include routers
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-app.include_router(sitemap.router, prefix="/api", tags=["sitemap"])
+
+# Add sitemap router if it exists
+try:
+    from .api import sitemap
+    app.include_router(sitemap.router, prefix="/api", tags=["sitemap"])
+except ImportError:
+    print("⚠️  Sitemap module not found, skipping...")
 
 @app.get("/")
 async def root():
@@ -44,3 +54,7 @@ async def health_check():
         "version": settings.VERSION,
         "storage_backend": settings.STORAGE_BACKEND
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
