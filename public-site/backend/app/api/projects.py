@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from typing import List, Optional
-import os
-import mimetypes
+import io
 
 from ..database import get_db
 from ..models.project import Project
-from ..schemas.project import ProjectResponse
+from ..schemas.project import ProjectResponse, ProjectStats, ProjectFileInfo
 from ..core.config import settings
 
 router = APIRouter()
@@ -64,12 +63,16 @@ async def get_site_stats(db: Session = Depends(get_db)):
     total_downloads = db.query(func.sum(Project.download_count)).filter(
         Project.is_published == True
     ).scalar() or 0
+    total_views = db.query(func.sum(Project.view_count)).filter(
+        Project.is_published == True
+    ).scalar() or 0
     
     return {
         "total_projects": total_projects,
         "total_institutions": total_institutions,
         "total_research_areas": total_research_areas,
-        "total_downloads": total_downloads
+        "total_downloads": total_downloads,
+        "total_views": total_views
     }
 
 @router.get("/research-areas/list")
@@ -121,68 +124,25 @@ async def view_document(slug: str, db: Session = Depends(get_db)):
             detail="Project not found"
         )
     
-    if not project.document_url:
+    if not project.document_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No document available"
         )
     
-    # For Supabase Storage, redirect directly to the URL
-    # Supabase URLs are already public and can be viewed directly
-    if project.document_storage == "supabase" or project.document_url.startswith('http'):
-        # Add inline parameter for viewing in browser
-        view_url = project.document_url
-        if '?' in view_url:
-            view_url += "&response-content-disposition=inline"
-        else:
-            view_url += "?response-content-disposition=inline"
-        return RedirectResponse(url=view_url)
-    
-    # Legacy support for local files (if any exist)
-    # This section can be removed once all files are migrated to Supabase
-    possible_paths = [
-        project.document_url.replace("/uploads/", "uploads/"),
-        f"uploads/{os.path.basename(project.document_url)}",
-        project.document_url.replace("/uploads/", "../../shared/uploads/"),
-        f"../../shared/uploads/{os.path.basename(project.document_url)}",
-        project.document_url.replace("/uploads/", "../admin-portal/backend/uploads/"),
-        f"../admin-portal/backend/uploads/{os.path.basename(project.document_url)}",
-        project.document_url.lstrip('/'),
-    ]
-    
-    file_path = None
-    for path in possible_paths:
-        if os.path.exists(path):
-            file_path = path
-            break
-    
-    if not file_path:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document file not found"
-        )
-    
-    # Determine content type
-    content_type = project.document_content_type or 'application/pdf'
-    
-    if not content_type and project.document_filename:
-        mime_type, _ = mimetypes.guess_type(project.document_filename)
-        content_type = mime_type or 'application/pdf'
-    
-    filename = project.document_filename or f"{project.slug}.pdf"
-    
-    return FileResponse(
-        path=file_path,
-        media_type=content_type,
+    # Return file for inline viewing
+    return StreamingResponse(
+        io.BytesIO(project.document_data),
+        media_type=project.document_content_type or "application/pdf",
         headers={
-            "Content-Disposition": f"inline; filename=\"{filename}\"",
-            "Content-Type": content_type,
+            "Content-Disposition": f"inline; filename=\"{project.document_filename}\"",
+            "Content-Type": project.document_content_type or "application/pdf",
         }
     )
 
 @router.get("/{slug}/download")
 async def download_document(slug: str, db: Session = Depends(get_db)):
-    """Download project document"""
+    """Download project document from database"""
     project = db.query(Project).filter(
         Project.slug == slug,
         Project.is_published == True
@@ -194,7 +154,7 @@ async def download_document(slug: str, db: Session = Depends(get_db)):
             detail="Project not found"
         )
     
-    if not project.document_url:
+    if not project.document_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No document available for download"
@@ -204,50 +164,12 @@ async def download_document(slug: str, db: Session = Depends(get_db)):
     project.download_count = (project.download_count or 0) + 1
     db.commit()
     
-    # For Supabase Storage, redirect to download URL
-    if project.document_storage == "supabase" or project.document_url.startswith('http'):
-        # Add download parameter to force download instead of viewing
-        download_url = project.document_url
-        filename = project.document_filename or f"{project.slug}.pdf"
-        
-        if '?' in download_url:
-            download_url += f"&response-content-disposition=attachment; filename=\"{filename}\""
-        else:
-            download_url += f"?response-content-disposition=attachment; filename=\"{filename}\""
-        
-        return RedirectResponse(url=download_url)
-    
-    # Legacy support for local files (if any exist)
-    # This section can be removed once all files are migrated to Supabase
-    possible_paths = [
-        project.document_url.replace("/uploads/", "uploads/"),
-        f"uploads/{os.path.basename(project.document_url)}",
-        project.document_url.replace("/uploads/", "../../shared/uploads/"),
-        f"../../shared/uploads/{os.path.basename(project.document_url)}",
-        project.document_url.replace("/uploads/", "../admin-portal/backend/uploads/"),
-        f"../admin-portal/backend/uploads/{os.path.basename(project.document_url)}",
-        project.document_url.lstrip('/'),
-    ]
-    
-    file_path = None
-    for path in possible_paths:
-        if os.path.exists(path):
-            file_path = path
-            break
-    
-    if not file_path:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document file not found"
-        )
-    
-    filename = project.document_filename or f"{project.slug}.pdf"
-    
-    return FileResponse(
-        path=file_path,
-        media_type='application/octet-stream',
+    # Return file as streaming response
+    return StreamingResponse(
+        io.BytesIO(project.document_data),
+        media_type=project.document_content_type or "application/octet-stream",
         headers={
-            "Content-Disposition": f"attachment; filename=\"{filename}\""
+            "Content-Disposition": f"attachment; filename=\"{project.document_filename}\""
         }
     )
 
@@ -265,20 +187,15 @@ async def get_file_info(slug: str, db: Session = Depends(get_db)):
             detail="Project not found"
         )
     
-    if not project.document_url:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No document available"
-        )
-    
-    return {
-        "filename": project.document_filename,
-        "size": project.document_size,
-        "content_type": project.document_content_type,
-        "storage": project.document_storage,
-        "download_count": project.download_count or 0,
-        "view_count": project.view_count or 0
-    }
+    return ProjectFileInfo(
+        filename=project.document_filename,
+        size=project.document_size,
+        content_type=project.document_content_type,
+        storage=project.document_storage,
+        download_count=project.download_count or 0,
+        view_count=project.view_count or 0,
+        available=bool(project.document_data)
+    )
 
 # Legacy endpoint for backward compatibility
 @router.post("/{slug}/download")
