@@ -9,7 +9,7 @@ router = APIRouter()
 
 @router.get("/sitemap.xml")
 async def generate_sitemap(db: Session = Depends(get_db)):
-    base_url = "https://uhas-research-hub.onrender.com/"  # Replace with your actual domain
+    base_url = "https://uhas-research-hub.onrender.com" 
     
     # Get all published projects
     projects = db.query(Project).filter(Project.is_published == True).all()
@@ -17,7 +17,7 @@ async def generate_sitemap(db: Session = Depends(get_db)):
     sitemap_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-        <loc>{base_url}</loc>
+        <loc>{base_url}/</loc>
         <lastmod>{datetime.now().strftime('%Y-%m-%d')}</lastmod>
         <changefreq>daily</changefreq>
         <priority>1.0</priority>
@@ -40,6 +40,18 @@ async def generate_sitemap(db: Session = Depends(get_db)):
         <priority>0.8</priority>
     </url>'''
     
+    # Add document view URLs for SEO
+    for project in projects:
+        if project.document_filename:  # Only add if document exists
+            last_modified = project.updated_at if hasattr(project, 'updated_at') and project.updated_at else project.created_at
+            sitemap_xml += f'''
+    <url>
+        <loc>{base_url}/api/projects/{project.slug}/view-document</loc>
+        <lastmod>{last_modified.strftime('%Y-%m-%d')}</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.6</priority>
+    </url>'''
+    
     sitemap_xml += '''
 </urlset>'''
     
@@ -51,10 +63,13 @@ async def robots_txt():
 Allow: /
 Allow: /projects/
 Allow: /projects/*
+Allow: /api/projects/*/view-document
+Allow: /api/projects/*/download
 
 Disallow: /admin/
-Disallow: /api/
+Disallow: /api/admin/
+Disallow: /api/auth/
 
-Sitemap: https://uhas-research-hub.onrender.com//sitemap.xml
+Sitemap: https://uhas-research-hub.onrender.com/sitemap.xml
 """
     return Response(content=robots_content, media_type="text/plain")
