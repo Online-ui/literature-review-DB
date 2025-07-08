@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     ADMIN_SITE_URL: str = "https://admin.literature-db.com"
     
     # Frontend URL for password reset links
-    FRONTEND_URL: str = "http://localhost:3001"
+    FRONTEND_URL: str = "https://research-hub-admin-portal.onrender.com"
     
     # CORS
     CORS_ORIGINS: Union[List[str], str] = [
