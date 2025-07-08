@@ -30,7 +30,7 @@ import {
   Timeline as TimelineIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { adminApi } from '../services/api';
+import { adminApi } from '../services/adminApi';
 import { DashboardStats } from '../types';
 
 interface StatCardProps {
