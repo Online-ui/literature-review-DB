@@ -1,5 +1,3 @@
-// services/adminApi.ts
-
 import axios, { AxiosResponse } from 'axios';
 import { User, Project, DashboardStats, LoginRequest, AuthResponse, FormConstants } from '../types';
 
@@ -63,7 +61,7 @@ class AdminApiService {
       formData.append('username', credentials.username);
       formData.append('password', credentials.password);
       
-      console.log('Attempting login with:', credentials.username); // Debug log
+      console.log('Attempting login with:', credentials.username);
       
       const response = await this.api.post('/auth/login', formData, {
         headers: {
@@ -71,7 +69,7 @@ class AdminApiService {
         },
       });
       
-      console.log('Login response:', response.data); // Debug log
+      console.log('Login response:', response.data);
       return response.data;
     } catch (error: any) {
       console.error('Login error:', error.response?.data || error.message);
@@ -95,6 +93,27 @@ class AdminApiService {
       current_password: currentPassword,
       new_password: newPassword
     });
+  }
+
+  // Password Reset Functions
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const response = await this.api.post('/auth/forgot-password', { email });
+    return response.data;
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    const response = await this.api.post('/auth/reset-password', { 
+      token, 
+      new_password: newPassword 
+    });
+    return response.data;
+  }
+
+  async verifyResetToken(token: string): Promise<any> {
+    const response = await this.api.post('/auth/verify-reset-token', null, {
+      params: { token }
+    });
+    return response.data;
   }
 
   // Dashboard
