@@ -11,6 +11,21 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     
+    # Password Reset
+    RESET_TOKEN_EXPIRE_MINUTES: int = 15
+    
+    # Email Configuration (Gmail SMTP)
+    MAIL_USERNAME: str
+    MAIL_PASSWORD: str  # App-specific password
+    MAIL_FROM: str
+    MAIL_FROM_NAME: str = "UHAS Research Hub Admin"
+    MAIL_PORT: int = 587
+    MAIL_SERVER: str = "smtp.gmail.com"
+    MAIL_STARTTLS: bool = True
+    MAIL_SSL_TLS: bool = False
+    USE_CREDENTIALS: bool = True
+    VALIDATE_CERTS: bool = True
+    
     # File Upload - Database Storage
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB for database storage
     ALLOWED_FILE_TYPES: List[str] = [".pdf", ".doc", ".docx", ".txt", ".rtf"]
@@ -23,6 +38,9 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     DESCRIPTION: str = "Admin portal for managing literature review database"
     ADMIN_SITE_URL: str = "https://admin.literature-db.com"
+    
+    # Frontend URL for password reset links
+    FRONTEND_URL: str = "http://localhost:3001"
     
     # CORS
     CORS_ORIGINS: Union[List[str], str] = [
