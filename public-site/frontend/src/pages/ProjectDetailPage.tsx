@@ -88,9 +88,14 @@ const ProjectDetailPage: React.FC = () => {
   };
 
   const handleViewDocument = () => {
-    setViewerOpen(true);
-  };
-
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+  const cleanBaseUrl = API_BASE_URL.endsWith('/api') 
+    ? API_BASE_URL.slice(0, -4) 
+    : API_BASE_URL.replace(/\/$/, '');
+  
+  const viewUrl = `${cleanBaseUrl}/api/projects/${project.slug}/view-document`;
+  window.open(viewUrl, '_blank');
+};
   // Also log when buttons are rendered
   console.log('Rendering buttons', project?.document_filename);
 
@@ -774,13 +779,13 @@ const ProjectDetailPage: React.FC = () => {
         </Grid>
 
         {/* Temporarily comment this out to test */}
-        {/ {project.document_filename && viewerOpen && (
+        {/* {project.document_filename && viewerOpen && (
           <DocumentViewer
             projectSlug={project.slug}
             documentFilename={project.document_filename || 'document.pdf'}
             hasDocument={true}
           />
-        )} /}
+        )} */}
       </Container>
     </Box>
   );
