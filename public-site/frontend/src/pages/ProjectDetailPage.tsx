@@ -35,6 +35,9 @@ import SEOHead from '../components/SEOHead';
 import StructuredData from '../components/StructuredData';
 
 const ProjectDetailPage: React.FC = () => {
+  // Add this at the very top
+  console.log('ProjectDetailPage render', new Date().toISOString());
+  
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const theme = useTheme();
@@ -46,6 +49,9 @@ const ProjectDetailPage: React.FC = () => {
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
+
+  // Add this near the top of your component
+  const buttonId = React.useRef(`btn-${Date.now()}-${Math.random()}`);
 
   useEffect(() => {
     if (slug) {
@@ -84,6 +90,9 @@ const ProjectDetailPage: React.FC = () => {
   const handleViewDocument = () => {
     setViewerOpen(true);
   };
+
+  // Also log when buttons are rendered
+  console.log('Rendering buttons', project?.document_filename);
 
   if (loading) {
     return (
@@ -340,6 +349,7 @@ const ProjectDetailPage: React.FC = () => {
                   variant="contained"
                   startIcon={<ViewIcon />}
                   onClick={handleViewDocument}
+                  data-button-id={`view-${buttonId.current}`}
                   size={isMobile ? "medium" : "large"}
                   fullWidth={isMobile}
                   sx={{
@@ -365,6 +375,7 @@ const ProjectDetailPage: React.FC = () => {
                   variant="outlined"
                   startIcon={<DownloadIcon />}
                   onClick={handleDownload}
+                  data-button-id={`download-${buttonId.current}`}
                   disabled={downloading}
                   size={isMobile ? "medium" : "large"}
                   fullWidth={isMobile}
@@ -386,7 +397,7 @@ const ProjectDetailPage: React.FC = () => {
                       transform: 'translateY(-2px)',
                       boxShadow: '0 8px 24px rgba(46, 125, 50, 0.3)'
                     },
-                    '&:disabled': {
+                                        '&:disabled': {
                       borderColor: '#c8e6c9',
                       color: '#81c784'
                     }
@@ -403,7 +414,7 @@ const ProjectDetailPage: React.FC = () => {
             display: 'flex', 
             gap: { xs: 2, sm: 4 }, 
             p: { xs: 2, sm: 3 },
-                        bgcolor: 'rgba(27, 94, 32, 0.05)',
+            bgcolor: 'rgba(27, 94, 32, 0.05)',
             borderRadius: 3,
             border: '1px solid #c8e6c9',
             flexDirection: { xs: 'row', sm: 'row' },
@@ -684,7 +695,7 @@ const ProjectDetailPage: React.FC = () => {
                       <Typography variant={isMobile ? "body2" : "body1"} sx={{ 
                         color: '#2e7d32', 
                         fontWeight: 600, 
-                        mb: 1,
+                                                mb: 1,
                         fontSize: { xs: '0.875rem', sm: '1rem' },
                         wordBreak: 'break-word'
                       }}>
@@ -696,7 +707,7 @@ const ProjectDetailPage: React.FC = () => {
                           size="small"
                           sx={{
                             bgcolor: '#c8e6c9',
-                                                        color: '#1b5e20',
+                            color: '#1b5e20',
                             fontWeight: 'bold',
                             fontSize: { xs: '0.7rem', sm: '0.75rem' }
                           }}
@@ -762,14 +773,14 @@ const ProjectDetailPage: React.FC = () => {
           </Grid>
         </Grid>
 
-        {/* Document Viewer - Fixed with correct props */}
-        {project.document_filename && viewerOpen && (
+        {/* Temporarily comment this out to test */}
+        {/* {project.document_filename && viewerOpen && (
           <DocumentViewer
             projectSlug={project.slug}
             documentFilename={project.document_filename || 'document.pdf'}
             hasDocument={true}
           />
-        )}
+        )} */}
       </Container>
     </Box>
   );
