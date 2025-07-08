@@ -36,7 +36,7 @@ import {
   Warning as WarningIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { adminApi } from '../services/api';
+import { adminApi } from '../services/adminApi';
 import { useAuth } from '../contexts/AuthContext';
 
 const SettingsPage: React.FC = () => {
