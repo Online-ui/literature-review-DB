@@ -774,13 +774,13 @@ const ProjectDetailPage: React.FC = () => {
         </Grid>
 
         {/* Temporarily comment this out to test */}
-        {/* {project.document_filename && viewerOpen && (
+        {/ {project.document_filename && viewerOpen && (
           <DocumentViewer
             projectSlug={project.slug}
             documentFilename={project.document_filename || 'document.pdf'}
             hasDocument={true}
           />
-        )} */}
+        )} /}
       </Container>
     </Box>
   );
