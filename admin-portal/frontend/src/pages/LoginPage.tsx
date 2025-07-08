@@ -14,7 +14,8 @@ import {
   InputAdornment,
   IconButton,
   alpha,
-  useTheme
+  useTheme,
+  Link
 } from '@mui/material';
 import {
   LockOutlined as LockIcon,
@@ -26,6 +27,7 @@ import {
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import ForgotPasswordModal from '../components/ForgotPasswordModal';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -33,6 +35,7 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const theme = useTheme();
@@ -54,6 +57,10 @@ const LoginPage: React.FC = () => {
 
   const handleTogglePasswordVisibility = () => {
     setShowPassword(!showPassword);
+  };
+
+  const handleForgotPassword = () => {
+    setForgotPasswordOpen(true);
   };
 
   return (
@@ -296,7 +303,7 @@ const LoginPage: React.FC = () => {
                           ),
                         }}
                         sx={{
-                          mb: 3,
+                          mb: 2,
                           '& .MuiOutlinedInput-root': {
                             borderRadius: 3,
                             '&:hover fieldset': {
@@ -311,6 +318,34 @@ const LoginPage: React.FC = () => {
                           },
                         }}
                       />
+                    </motion.div>
+
+                    {/* Forgot Password Link */}
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.5, delay: 0.75 }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+                        <Link
+                          component="button"
+                          type="button"
+                          onClick={handleForgotPassword}
+                          sx={{
+                            color: '#0a4f3c',
+                            textDecoration: 'none',
+                            fontSize: '0.875rem',
+                            fontWeight: 500,
+                            '&:hover': {
+                              textDecoration: 'underline',
+                              color: '#063d2f'
+                            },
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Forgot your password?
+                        </Link>
+                      </Box>
                     </motion.div>
 
                     <motion.div
@@ -365,11 +400,15 @@ const LoginPage: React.FC = () => {
                 </CardContent>
               </Card>
             </motion.div>
-
-            
           </Box>
         </motion.div>
       </Container>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        open={forgotPasswordOpen}
+        onClose={() => setForgotPasswordOpen(false)}
+      />
     </Box>
   );
 };
