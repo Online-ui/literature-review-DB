@@ -5,11 +5,12 @@ from datetime import datetime, timedelta
 from typing import Optional
 from pydantic import BaseModel, EmailStr
 from jose import JWTError, jwt
+import secrets
+import string
 
 from ..database import get_db
 from ..models.user import User
 from ..core.security import verify_password, get_password_hash, create_access_token, verify_token
-from ..core.email import send_reset_password_email, send_password_reset_confirmation, generate_reset_token
 from ..core.config import settings
 
 router = APIRouter()
@@ -33,6 +34,16 @@ class PasswordResetConfirm(BaseModel):
 
 class PasswordResetResponse(BaseModel):
     message: str
+
+class TokenVerificationResponse(BaseModel):
+    valid: bool
+    email: str
+    username: str
+
+def generate_reset_token() -> str:
+    """Generate a secure random token for password reset"""
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(32))
 
 # Authentication dependency functions
 def get_current_user(
@@ -68,7 +79,7 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
     return current_user
 
 def require_main_coordinator(current_user: User = Depends(get_current_active_user)) -> User:
-    if current_user.role != "main_coordinator":
+    if not current_user.is_main_coordinator:  # Use the new property
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions. Main coordinator access required."
@@ -81,6 +92,7 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
+    """Login endpoint that accepts form data"""
     # Check if user exists by username or email
     user = db.query(User).filter(
         (User.username == form_data.username) | (User.email == form_data.username)
@@ -121,11 +133,14 @@ async def forgot_password(
     db: Session = Depends(get_db)
 ):
     """Request password reset token"""
+    print(f"🔐 Password reset requested for email: {request.email}")
+    
     # Find user by email
     user = db.query(User).filter(User.email == request.email).first()
     
     # Always return success message to prevent email enumeration
     if not user:
+        print(f"❌ No user found with email: {request.email}")
         return {"message": "If the email exists in our system, you will receive a password reset email shortly."}
     
     # Generate reset token
@@ -133,20 +148,22 @@ async def forgot_password(
     
     # Save token and expiration to database
     user.reset_token = reset_token
-    user.reset_token_expires = datetime.utcnow() + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES)
+    user.reset_token_expires = datetime.utcnow() + timedelta(minutes=30)  # 30 minutes expiry
     db.commit()
 
-    # Send reset email
-    try:
-        await send_reset_password_email(
-            email=user.email,
-            token=reset_token,
-            username=user.username
-        )
-    except Exception as e:
-        # Log the error but don't expose it to the user
-        print(f"Error sending email: {str(e)}")
-        # Still return success to prevent enumeration
+    print(f"✅ Reset token generated for user: {user.username}")
+    print(f"🔗 Reset token: {reset_token}")  # Remove this in production
+    print(f"📧 Reset URL would be: {settings.FRONTEND_URL}/reset-password?token={reset_token}")
+
+    # TODO: Send reset email here
+    # try:
+    #     await send_reset_password_email(
+    #         email=user.email,
+    #         token=reset_token,
+    #         username=user.username
+    #     )
+    # except Exception as e:
+    #     print(f"Error sending email: {str(e)}")
     
     return {"message": "If the email exists in our system, you will receive a password reset email shortly."}
 
@@ -156,28 +173,29 @@ async def reset_password(
     db: Session = Depends(get_db)
 ):
     """Reset password using token"""
+    print(f"🔐 Password reset attempt with token: {request.token}")
+    
     # Find user by reset token
     user = db.query(User).filter(User.reset_token == request.token).first()
     
     if not user:
+        print(f"❌ Invalid reset token: {request.token}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid reset token"
         )
     
-    # Check if token has expired
-    if user.reset_token_expires < datetime.utcnow():
-        # Clear expired token
-        user.reset_token = None
-        user.reset_token_expires = None
+    # Check if token has expired using the helper method
+    if user.has_reset_token_expired():
+        print(f"⏰ Expired reset token for user: {user.username}")
+        user.clear_reset_token()
         db.commit()
-        
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Reset token has expired. Please request a new one."
         )
     
-    # Validate password strength (optional)
+    # Validate password strength
     if len(request.new_password) < 8:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -186,47 +204,54 @@ async def reset_password(
     
     # Update password
     user.hashed_password = get_password_hash(request.new_password)
-    user.reset_token = None
-    user.reset_token_expires = None
+    user.clear_reset_token()  # Use helper method
     db.commit()
     
-    # Send confirmation email
-    try:
-        await send_password_reset_confirmation(
-            email=user.email,
-            username=user.username
-        )
-    except Exception as e:
-        # Log error but don't fail the password reset
-        print(f"Error sending confirmation email: {str(e)}")
+    print(f"✅ Password reset successful for user: {user.username}")
+    
+    # TODO: Send confirmation email
+    # try:
+    #     await send_password_reset_confirmation(
+    #         email=user.email,
+    #         username=user.username
+    #     )
+    # except Exception as e:
+    #     print(f"Error sending confirmation email: {str(e)}")
     
     return {"message": "Password has been successfully reset. You can now login with your new password."}
 
-@router.post("/verify-reset-token")
+@router.get("/verify-reset-token", response_model=TokenVerificationResponse)
 async def verify_reset_token(
     token: str,
     db: Session = Depends(get_db)
 ):
-    """Verify if a reset token is valid"""
+    """Verify if a reset token is valid - GET endpoint for easy browser testing"""
+    print(f"🔍 Verifying reset token: {token}")
+    
     user = db.query(User).filter(User.reset_token == token).first()
     
     if not user:
+        print(f"❌ Invalid token: {token}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid reset token"
         )
     
-    if user.reset_token_expires < datetime.utcnow():
+    # Check if token has expired using the helper method
+    if user.has_reset_token_expired():
+        print(f"⏰ Expired token for user: {user.username}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Reset token has expired"
         )
     
-    return {
-        "valid": True,
-        "email": user.email,
-        "username": user.username
-    }
+    print(f"✅ Valid token for user: {user.username}")
+    
+    return TokenVerificationResponse(
+        valid=True,
+        email=user.email,
+        username=user.username
+    )
 
 @router.get("/me")
 async def get_current_user_info(
@@ -251,6 +276,31 @@ async def logout(
 ):
     """Logout endpoint (client should remove token)"""
     return {"message": "Successfully logged out"}
+
+@router.post("/change-password")
+async def change_password(
+    current_password: str,
+    new_password: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Change user password"""
+    if not verify_password(current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect current password"
+        )
+    
+    if len(new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters long"
+        )
+    
+    current_user.hashed_password = get_password_hash(new_password)
+    db.commit()
+    
+    return {"message": "Password updated successfully"}
 
 @router.get("/protected")
 async def protected_route(
