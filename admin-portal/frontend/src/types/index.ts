@@ -1,5 +1,3 @@
-// types/index.ts
-
 export interface FormConstants {
   research_areas: string[];
   degree_types: string[];
@@ -99,8 +97,85 @@ export interface LoginRequest {
 export interface AuthResponse {
   access_token: string;
   token_type: string;
+  user: {
+    id: number;
+    username: string;
+    email: string;
+    full_name: string;
+    role: string;
+    institution?: string;
+    department?: string;
+  };
+}
+
+// Password Reset Types
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetConfirm {
+  token: string;
+  new_password: string;
+}
+
+export interface PasswordResetResponse {
+  message: string;
+}
+
+export interface TokenVerificationResponse {
+  valid: boolean;
+  email: string;
+  username: string;
+}
+
+// Change Password Types
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+// File Info Types
+export interface ProjectFileInfo {
+  filename?: string;
+  size?: number;
+  content_type?: string;
+  storage?: string;
+  download_count: number;
+  view_count: number;
+  available: boolean;
 }
 
 export interface ApiError {
-  detail: string;
+  detail: string | Array<{
+    loc: string[];
+    msg: string;
+    type: string;
+  }>;
+  message?: string;
+}
+
+// Form Validation Types
+export interface ValidationError {
+  field: string;
+  message: string;
+}
+
+// Pagination Types
+export interface PaginationParams {
+  skip?: number;
+  limit?: number;
+}
+
+// Search and Filter Types
+export interface ProjectFilters extends PaginationParams {
+  search?: string;
+  research_area?: string;
+  degree_type?: string;
+  is_published?: boolean;
+}
+
+export interface UserFilters extends PaginationParams {
+  search?: string;
+  role?: string;
+  is_active?: boolean;
 }
