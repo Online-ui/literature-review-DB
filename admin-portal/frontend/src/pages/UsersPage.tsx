@@ -55,7 +55,7 @@ import {
   VisibilityOff as VisibilityOffIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { adminApi } from '../services/api';
+import { adminApi } from '../services/adminApi';
 import { User } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
