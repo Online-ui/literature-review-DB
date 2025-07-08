@@ -64,6 +64,14 @@ async def startup_event():
     print(f"📁 Max file size: {settings.MAX_FILE_SIZE / 1024 / 1024:.1f}MB")
     print(f"📄 Allowed file types: {', '.join(settings.ALLOWED_FILE_TYPES)}")
     print("✅ Database Storage configured")
+    
+    # Debug: Print registered routes
+    print("\n📍 Registered API Routes:")
+    for route in app.routes:
+        if hasattr(route, 'methods') and hasattr(route, 'path'):
+            methods = ', '.join(route.methods)
+            print(f"  {methods} {route.path}")
+    print()
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
