@@ -6,6 +6,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import UsersPage from './pages/UsersPage';
 import ProjectsPage from './pages/ProjectsPage';
@@ -15,10 +16,36 @@ import ProfilePage from './pages/ProfilePage';
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#1976d2',
+      main: '#0a4f3c', // Updated to match your admin portal theme
     },
     secondary: {
-      main: '#dc004e',
+      main: '#2a9d7f',
+    },
+    background: {
+      default: '#f5f5f5',
+    },
+  },
+  typography: {
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+  },
+  shape: {
+    borderRadius: 12,
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+          fontWeight: 600,
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+        },
+      },
     },
   },
 });
@@ -30,7 +57,11 @@ function App() {
       <AuthProvider>
         <Router>
           <Routes>
+            {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            
+            {/* Protected Routes */}
             <Route
               path="/"
               element={
@@ -46,6 +77,9 @@ function App() {
               <Route path="settings" element={<SettingsPage />} />
               <Route path="profile" element={<ProfilePage />} />
             </Route>
+            
+            {/* Catch all route - redirect to dashboard if authenticated, login if not */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Router>
       </AuthProvider>
