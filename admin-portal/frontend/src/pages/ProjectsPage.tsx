@@ -57,7 +57,7 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { adminApi } from '../services/api';
+import { adminApi } from '../services/adminApi';
 import { Project, FormConstants } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { ResearchAreaSelect } from '../components/ResearchAreaSelect';
