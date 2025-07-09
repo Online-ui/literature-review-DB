@@ -50,7 +50,7 @@ class Settings(BaseSettings):
         "http://localhost:3001", 
         "http://127.0.0.1:3001",
         "https://uhas-research-hub.onrender.com",
-        "https://admin.literature-db.com"
+        "https://research-hub-admin-portal.onrender.com"
     ]
     
     class Config:
