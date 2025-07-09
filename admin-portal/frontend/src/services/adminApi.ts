@@ -21,12 +21,21 @@ class AdminApiService {
   });
 
   constructor() {
+    // Add default headers for JSON
+    this.api.defaults.headers.common['Content-Type'] = 'application/json';
+    
     // Add auth token to requests
     this.api.interceptors.request.use((config) => {
       const token = localStorage.getItem('admin_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+      
+      // Ensure Content-Type is set for POST requests
+      if (config.method === 'post' && !config.headers['Content-Type']) {
+        config.headers['Content-Type'] = 'application/json';
+      }
+      
       return config;
     });
 
@@ -108,9 +117,18 @@ class AdminApiService {
   }
 
   async forgotPassword(email: string): Promise<{ message: string }> {
-    const response = await this.api.post('/auth/forgot-password', { email });
-    return response.data;
+    try {
+      console.log('Sending email:', email); // Debug log
+      const response = await this.api.post('/auth/forgot-password', { 
+        email: email 
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      throw error;
+    }
   }
+
   async resetPassword(token: string, newPassword: string): Promise<PasswordResetResponse> {
     const response = await this.api.post('/auth/reset-password', { 
       token, 
