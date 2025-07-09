@@ -39,9 +39,17 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ open, onClose
     setLoading(true);
 
     try {
-      await adminApi.forgotPassword(email);
+      console.log('Submitting email:', email); // Debug log
+      
+      // Make sure email is a valid string
+      if (!email || typeof email !== 'string') {
+        throw new Error('Invalid email format');
+      }
+      
+      await adminApi.forgotPassword(email.trim()); // Trim whitespace
       setSuccess(true);
     } catch (err: any) {
+      console.error('Submit error:', err);
       setError(err.message || 'Failed to send reset email');
     } finally {
       setLoading(false);
@@ -185,7 +193,7 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ open, onClose
                 color: '#0a4f3c',
                 '&:hover': {
                   borderColor: '#063d2f',
-                  bgcolor: 'rgba(10, 79, 60, 0.04)'
+                                    bgcolor: 'rgba(10, 79, 60, 0.04)'
                 },
                 borderRadius: 2,
                 flex: 1
