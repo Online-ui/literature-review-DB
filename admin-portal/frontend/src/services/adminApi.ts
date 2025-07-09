@@ -3,6 +3,17 @@ import { User, Project, DashboardStats, LoginRequest, AuthResponse, FormConstant
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001/api';
 
+// Password Reset Types
+interface PasswordResetResponse {
+  message: string;
+}
+
+interface TokenVerificationResponse {
+  valid: boolean;
+  email: string;
+  username: string;
+}
+
 class AdminApiService {
   private api = axios.create({
     baseURL: API_BASE_URL,
@@ -88,20 +99,21 @@ class AdminApiService {
     return response.data;
   }
 
-  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await this.api.post('/auth/change-password', {
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+    const response = await this.api.post('/auth/change-password', {
       current_password: currentPassword,
       new_password: newPassword
     });
+    return response.data;
   }
 
-  // Password Reset Functions
-  async forgotPassword(email: string): Promise<{ message: string }> {
+  // Password Reset Functions - CORRECTED AXIOS USAGE
+  async forgotPassword(email: string): Promise<PasswordResetResponse> {
     const response = await this.api.post('/auth/forgot-password', { email });
     return response.data;
   }
 
-  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+  async resetPassword(token: string, newPassword: string): Promise<PasswordResetResponse> {
     const response = await this.api.post('/auth/reset-password', { 
       token, 
       new_password: newPassword 
@@ -109,12 +121,14 @@ class AdminApiService {
     return response.data;
   }
 
-  async verifyResetToken(token: string): Promise<any> {
-  const response = await this.api.get('/auth/verify-reset-token', {
-    params: { token }
-  });
-  return response.data;
-}
+  // CORRECTED: Using proper axios.get() signature
+  async verifyResetToken(token: string): Promise<TokenVerificationResponse> {
+    const response = await this.api.get('/auth/verify-reset-token', {
+      params: { token }
+    });
+    return response.data;
+  }
+
   // Dashboard
   async getDashboardStats(): Promise<DashboardStats> {
     const response = await this.api.get('/dashboard/stats');
@@ -154,15 +168,17 @@ class AdminApiService {
     skip?: number;
     limit?: number;
   }): Promise<Project[]> {
-    const searchParams = new URLSearchParams();
-    if (params?.search) searchParams.append('search', params.search);
-    if (params?.research_area) searchParams.append('research_area', params.research_area);
-    if (params?.degree_type) searchParams.append('degree_type', params.degree_type);
-    if (params?.is_published !== undefined) searchParams.append('is_published', params.is_published.toString());
-    if (params?.skip) searchParams.append('skip', params.skip.toString());
-    if (params?.limit) searchParams.append('limit', params.limit.toString());
-
-    const response = await this.api.get(`/projects/?${searchParams}`);
+    // IMPROVED: Using axios params instead of manual URLSearchParams
+    const response = await this.api.get('/projects/', {
+      params: {
+        ...(params?.search && { search: params.search }),
+        ...(params?.research_area && { research_area: params.research_area }),
+        ...(params?.degree_type && { degree_type: params.degree_type }),
+        ...(params?.is_published !== undefined && { is_published: params.is_published }),
+        ...(params?.skip && { skip: params.skip }),
+        ...(params?.limit && { limit: params.limit }),
+      }
+    });
     return response.data;
   }
 
@@ -231,6 +247,21 @@ class AdminApiService {
     const response = await this.api.get('/utils/institutions');
     return response.data.institutions;
   }
+
+  // Additional helper methods for better error handling
+  private handleApiError(error: any): never {
+    console.error('API Error:', error.response?.data || error.message);
+    throw error;
+  }
+
+  // Health check method
+  async healthCheck(): Promise<{ status: string; version: string }> {
+    const response = await this.api.get('/health');
+    return response.data;
+  }
 }
 
 export const adminApi = new AdminApiService();
+
+// Export types for use in components
+export type { PasswordResetResponse, TokenVerificationResponse };
