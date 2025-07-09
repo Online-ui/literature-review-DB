@@ -21,9 +21,6 @@ class AdminApiService {
   });
 
   constructor() {
-    // Add default headers for JSON
-    this.api.defaults.headers.common['Content-Type'] = 'application/json';
-    
     // Add auth token to requests
     this.api.interceptors.request.use((config) => {
       const token = localStorage.getItem('admin_token');
@@ -31,8 +28,8 @@ class AdminApiService {
         config.headers.Authorization = `Bearer ${token}`;
       }
       
-      // Ensure Content-Type is set for POST requests
-      if (config.method === 'post' && !config.headers['Content-Type']) {
+      // Don't override Content-Type if it's already set (like for multipart/form-data)
+      if (config.method === 'post' && !config.headers['Content-Type'] && !(config.data instanceof FormData)) {
         config.headers['Content-Type'] = 'application/json';
       }
       
@@ -119,8 +116,14 @@ class AdminApiService {
   async forgotPassword(email: string): Promise<{ message: string }> {
     try {
       console.log('Sending email:', email); // Debug log
-      const response = await this.api.post('/auth/forgot-password', { 
-        email: email 
+      
+      const formData = new FormData();
+      formData.append('email', email);
+      
+      const response = await this.api.post('/auth/forgot-password', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
       return response.data;
     } catch (error) {
@@ -137,7 +140,6 @@ class AdminApiService {
     return response.data;
   }
 
-  // CORRECTED: Using proper axios.get() signature
   async verifyResetToken(token: string): Promise<TokenVerificationResponse> {
     const response = await this.api.get('/auth/verify-reset-token', {
       params: { token }
@@ -184,7 +186,6 @@ class AdminApiService {
     skip?: number;
     limit?: number;
   }): Promise<Project[]> {
-    // IMPROVED: Using axios params instead of manual URLSearchParams
     const response = await this.api.get('/projects/', {
       params: {
         ...(params?.search && { search: params.search }),
