@@ -215,7 +215,7 @@ async def reset_password(
     
     return {"message": "Password has been successfully reset. You can now login with your new password."}
 
-@router.post("/verify-reset-token")
+@router.get("/verify-reset-token")
 async def verify_reset_token(
     token: str,
     db: Session = Depends(get_db)
