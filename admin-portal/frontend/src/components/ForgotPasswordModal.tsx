@@ -202,7 +202,7 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ open, onClose
               Cancel
             </Button>
             <Button
-              onClick={handleSubmit}
+              type="submit"
               variant="contained"
               disabled={loading || !email}
               sx={{
