@@ -41,6 +41,7 @@ const ResetPasswordPage: React.FC = () => {
   const [tokenValid, setTokenValid] = useState(false);
   const [userInfo, setUserInfo] = useState<any>(null);
 
+  
   useEffect(() => {
     const verifyToken = async () => {
       if (!token) {
@@ -48,8 +49,9 @@ const ResetPasswordPage: React.FC = () => {
         setVerifying(false);
         return;
       }
-
+  
       try {
+        
         const response = await adminApi.verifyResetToken(token);
         setTokenValid(true);
         setUserInfo(response);
@@ -60,10 +62,10 @@ const ResetPasswordPage: React.FC = () => {
         setVerifying(false);
       }
     };
-
+  
     verifyToken();
   }, [token]);
-
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
