@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     
     # Frontend URL for password reset links
     FRONTEND_URL: str = "https://research-hub-admin-portal.onrender.com"
+
+     # Backend URL (for API calls)
+    BACKEND_URL: str = "https://literature-admin-backend.onrender.com"
     
     # CORS
     CORS_ORIGINS: Union[List[str], str] = [
