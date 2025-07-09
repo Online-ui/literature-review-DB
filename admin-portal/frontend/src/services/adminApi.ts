@@ -107,12 +107,10 @@ class AdminApiService {
     return response.data;
   }
 
-  // Password Reset Functions - CORRECTED AXIOS USAGE
-  async forgotPassword(email: string): Promise<PasswordResetResponse> {
+  async forgotPassword(email: string): Promise<{ message: string }> {
     const response = await this.api.post('/auth/forgot-password', { email });
     return response.data;
   }
-
   async resetPassword(token: string, newPassword: string): Promise<PasswordResetResponse> {
     const response = await this.api.post('/auth/reset-password', { 
       token, 
