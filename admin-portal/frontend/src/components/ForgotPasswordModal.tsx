@@ -193,7 +193,7 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ open, onClose
                 color: '#0a4f3c',
                 '&:hover': {
                   borderColor: '#063d2f',
-                                    bgcolor: 'rgba(10, 79, 60, 0.04)'
+                  bgcolor: 'rgba(10, 79, 60, 0.04)'
                 },
                 borderRadius: 2,
                 flex: 1
@@ -202,7 +202,7 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ open, onClose
               Cancel
             </Button>
             <Button
-              type="submit"
+              onClick={handleSubmit}
               variant="contained"
               disabled={loading || !email}
               sx={{
