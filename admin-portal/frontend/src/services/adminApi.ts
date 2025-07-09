@@ -110,7 +110,7 @@ class AdminApiService {
   }
 
   async verifyResetToken(token: string): Promise<any> {
-    const response = await this.api.post('/auth/verify-reset-token', null, {
+    const response = await this.api.get('/auth/verify-reset-token', null, {
       params: { token }
     });
     return response.data;
