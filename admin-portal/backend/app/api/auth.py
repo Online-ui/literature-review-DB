@@ -153,8 +153,7 @@ async def forgot_password(
 
     print(f"✅ Reset token generated for user: {user.username}")
     print(f"🔗 Reset token: {reset_token}")  # Remove this in production
-    print(f"📧 Reset URL would be: {settings.FRONTEND_URL}/reset-password?token={reset_token}")
-
+    print(f"📧 Reset URL would be: {settings.FRONTEND_URL}/#/reset-password?token={reset_token}")
     return {"message": "If the email exists in our system, you will receive a password reset email shortly."}
 
 @router.post("/reset-password", response_model=PasswordResetResponse)
