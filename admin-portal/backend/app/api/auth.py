@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Form 
+from fastapi import APIRouter, Depends, HTTPException, status, Form, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -12,6 +12,7 @@ from ..database import get_db
 from ..models.user import User
 from ..core.security import verify_password, get_password_hash, create_access_token, verify_token
 from ..core.config import settings
+from ..core.email import send_password_reset_email
 
 router = APIRouter()
 security = HTTPBearer()
@@ -126,13 +127,13 @@ async def login(
         }
     }
 
-# UPDATED: Changed to accept FormData like login
 @router.post("/forgot-password", response_model=PasswordResetResponse)
 async def forgot_password(
-    email: str = Form(...),  # Changed from PasswordResetRequest to Form
+    background_tasks: BackgroundTasks,
+    email: str = Form(...),
     db: Session = Depends(get_db)
 ):
-    """Request password reset token - accepts FormData"""
+    """Request password reset token - accepts FormData and sends email"""
     print(f"🔐 Password reset requested for email: {email}")
     
     # Find user by email
@@ -151,9 +152,25 @@ async def forgot_password(
     user.reset_token_expires = datetime.utcnow() + timedelta(minutes=30)
     db.commit()
 
+    # Generate the reset URL with hash routing
+    reset_url = f"{settings.FRONTEND_URL}/#/reset-password?token={reset_token}"
+    
     print(f"✅ Reset token generated for user: {user.username}")
-    print(f"🔗 Reset token: {reset_token}")  # Remove this in production
-    print(f"📧 Reset URL would be: {settings.FRONTEND_URL}/#/reset-password?token={reset_token}")
+    print(f"📧 Reset URL: {reset_url}")
+    
+    # Send email in background
+    try:
+        background_tasks.add_task(
+            send_password_reset_email,
+            email=user.email,
+            username=user.username,
+            reset_url=reset_url
+        )
+        print(f"📨 Password reset email queued for: {user.email}")
+    except Exception as e:
+        print(f"❌ Failed to queue email: {str(e)}")
+        # Don't reveal email sending errors to the user
+
     return {"message": "If the email exists in our system, you will receive a password reset email shortly."}
 
 @router.post("/reset-password", response_model=PasswordResetResponse)
