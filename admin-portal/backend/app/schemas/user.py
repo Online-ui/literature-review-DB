@@ -10,6 +10,7 @@ class UserBase(BaseModel):
     department: Optional[str] = None
     phone: Optional[str] = None
     role: str = "faculty"
+    profile_image: Optional[str] = None
     
     @validator('username')
     def username_must_be_valid(cls, v):
@@ -42,6 +43,7 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = None
     is_active: Optional[bool] = None
     role: Optional[str] = None
+    profile_image: Optional[str] = None
     
     @validator('role')
     def role_must_be_valid(cls, v):
