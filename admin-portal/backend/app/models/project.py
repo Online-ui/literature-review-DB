@@ -1,5 +1,6 @@
 from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, ForeignKey, LargeBinary
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import JSON
 from .base import BaseModel
 
 class Project(BaseModel):
@@ -37,6 +38,10 @@ class Project(BaseModel):
     document_data = Column(LargeBinary, nullable=True)  # Stores the actual file bytes
     document_content_type = Column(String, nullable=True)  # MIME type
     document_storage = Column(String, default="database")  # Always "database"
+    
+    # Image Gallery Fields (NEW)
+    images = Column(JSON, default=list, nullable=True)  # Array of image URLs
+    featured_image_index = Column(Integer, default=0, nullable=True)  # Index of featured image
     
     # Stats
     view_count = Column(Integer, default=0)
