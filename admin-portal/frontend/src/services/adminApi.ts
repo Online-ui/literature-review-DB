@@ -239,6 +239,61 @@ class AdminApiService {
     await this.api.delete(`/projects/${projectId}/file`);
   }
 
+  // Project Image Methods
+  async uploadImages(projectId: number, files: File[]): Promise<any> {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    
+    const response = await this.api.post(`/projects/${projectId}/images`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
+    return response.data;
+  }
+
+  async deleteImage(projectId: number, index: number): Promise<any> {
+    const response = await this.api.delete(`/projects/${projectId}/images/${index}`);
+    return response.data;
+  }
+
+  async setFeaturedImage(projectId: number, index: number): Promise<any> {
+    const response = await this.api.put(`/projects/${projectId}/featured-image`, { index });
+    return response.data;
+  }
+
+  async reorderImages(projectId: number, newOrder: number[]): Promise<any> {
+    const response = await this.api.put(`/projects/${projectId}/images/reorder`, { 
+      new_order: newOrder 
+    });
+    return response.data;
+  }
+
+  // Profile Methods
+  async uploadProfileImage(file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await this.api.post('/profile/image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
+    return response.data;
+  }
+
+  async deleteProfileImage(): Promise<any> {
+    const response = await this.api.delete('/profile/image');
+    return response.data;
+  }
+
+  async updateProfile(data: any): Promise<any> {
+    const response = await this.api.put('/profile', data);
+    return response.data;
+  }
+
   // Utilities
   async getFormConstants(): Promise<FormConstants> {
     const response = await this.api.get('/utils/constants');
