@@ -11,13 +11,20 @@ import io
 from ..database import get_db
 from ..models.user import User
 from ..models.project import Project
-from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
+from ..schemas.project import (
+    ProjectCreate, ProjectUpdate, ProjectResponse,
+    ImageUploadResponse, SetFeaturedImageRequest, ReorderImagesRequest
+)
 from ..core.auth import get_current_active_user
 from ..core.config import settings
 from ..core.constants import RESEARCH_AREAS, DEGREE_TYPES, ACADEMIC_YEARS, INSTITUTIONS
 from ..services.database_storage import database_storage
+from ..services.image_upload import ImageUploadService
 
 router = APIRouter()
+
+# Initialize image service
+image_service = ImageUploadService(upload_dir="uploads/projects")
 
 def create_slug(title: str) -> str:
     """Create a URL-friendly slug from title"""
@@ -169,7 +176,9 @@ async def create_project(
         document_data=document_data,
         document_content_type=document_content_type,
         document_storage=document_storage,
-        created_by_id=current_user.id
+        created_by_id=current_user.id,
+        images=[],
+        featured_image_index=0
     )
     
     try:
@@ -239,7 +248,7 @@ async def view_project_file(
     if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Project not found"
+            detail="Project not found"
         )
     
     # Check permissions
@@ -394,7 +403,7 @@ async def update_project(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to process uploaded file: {str(e)}"
+                                detail=f"Failed to process uploaded file: {str(e)}"
             )
     
     try:
@@ -481,6 +490,146 @@ async def delete_project(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete project"
         )
+
+# Image management endpoints
+@router.post("/{project_id}/images", response_model=ImageUploadResponse)
+async def upload_project_images(
+    project_id: int,
+    files: List[UploadFile] = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    # Check if project exists and user has permission
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to upload images"
+        )
+    
+    # Check image limit (20 max as per ProjectImagesTab)
+    current_images = project.images or []
+    if len(current_images) + len(files) > 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 images allowed")
+    
+    # Upload each file
+    new_images = []
+    for file in files:
+        image_path = await image_service.save_image(file, f"project_{project_id}")
+        new_images.append(f"/uploads/projects/{image_path}")
+    
+    # Update project
+    project.images = current_images + new_images
+    db.commit()
+    
+    return ImageUploadResponse(
+        images=project.images,
+        message="Images uploaded successfully"
+    )
+
+@router.delete("/{project_id}/images/{index}")
+async def delete_project_image(
+    project_id: int,
+    index: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to delete images"
+        )
+    
+    images = project.images or []
+    if index < 0 or index >= len(images):
+        raise HTTPException(status_code=400, detail="Invalid image index")
+    
+    # Delete file
+    image_path = images[index].replace("/uploads/projects/", "")
+    await image_service.delete_image(image_path)
+    
+    # Update array
+    images.pop(index)
+    project.images = images
+    
+    # Adjust featured index if needed
+    if project.featured_image_index >= len(images):
+        project.featured_image_index = 0
+    
+    db.commit()
+    return {"message": "Image deleted successfully"}
+
+@router.put("/{project_id}/featured-image")
+async def set_featured_image(
+    project_id: int,
+    request: SetFeaturedImageRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to set featured image"
+        )
+    
+    if request.index < 0 or request.index >= len(project.images or []):
+        raise HTTPException(status_code=400, detail="Invalid image index")
+    
+    project.featured_image_index = request.index
+    db.commit()
+    
+    return {"message": "Featured image updated"}
+
+@router.put("/{project_id}/images/reorder")
+async def reorder_images(
+    project_id: int,
+    request: ReorderImagesRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to reorder images"
+        )
+    
+    images = project.images or []
+    if len(request.new_order) != len(images):
+        raise HTTPException(status_code=400, detail="Invalid reorder request")
+    
+    # Validate indices
+    if sorted(request.new_order) != list(range(len(images))):
+        raise HTTPException(status_code=400, detail="Invalid indices in reorder request")
+    
+    # Reorder images based on new_order indices
+    new_images = [images[i] for i in request.new_order]
+    project.images = new_images
+    
+    # Update featured index
+    old_featured = project.featured_image_index
+    project.featured_image_index = request.new_order.index(old_featured)
+    
+    db.commit()
+    return {"message": "Images reordered successfully"}
 
 # Keep existing endpoints
 @router.get("/research-areas/list")
