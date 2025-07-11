@@ -36,7 +36,9 @@ import {
   Fade,
   Skeleton,
   InputAdornment,
-  Divider
+  Divider,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -61,6 +63,7 @@ import { adminApi } from '../services/adminApi';
 import { Project, FormConstants } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { ResearchAreaSelect } from '../components/ResearchAreaSelect';
+import { ProjectImagesTab } from '../components/ProjectImagesTab';
 
 interface ProjectFormData {
   title: string;
@@ -86,6 +89,7 @@ const ProjectsPage: React.FC = () => {
   const [error, setError] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [activeTab, setActiveTab] = useState('basic');
   const [formData, setFormData] = useState<ProjectFormData>({
     title: '',
     abstract: '',
@@ -207,6 +211,7 @@ const ProjectsPage: React.FC = () => {
       });
     }
     setFormError('');
+    setActiveTab('basic'); // Reset to first tab
     setOpenDialog(true);
   };
 
@@ -214,6 +219,7 @@ const ProjectsPage: React.FC = () => {
     setOpenDialog(false);
     setEditingProject(null);
     setFormError('');
+    setActiveTab('basic');
     setCustomFields({
       custom_research_area: '',
       custom_degree_type: '',
@@ -459,13 +465,13 @@ const ProjectsPage: React.FC = () => {
               <Grid item xs={6} md={3} key={index}>
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
+                                    animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                 >
                   <Card
                     elevation={0}
                     sx={{
-                                            background: 'white',
+                      background: 'white',
                       borderRadius: 3,
                       border: '1px solid',
                       borderColor: alpha(stat.color, 0.1),
@@ -861,13 +867,13 @@ const ProjectsPage: React.FC = () => {
           </TableContainer>
 
           {projects.length === 0 && !loading && (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
+                        <Box sx={{ textAlign: 'center', py: 8 }}>
               <Avatar
                 sx={{
                   width: 80,
                   height: 80,
                   bgcolor: alpha('#0a4f3c', 0.1),
-                                    mx: 'auto',
+                  mx: 'auto',
                   mb: 3
                 }}
               >
@@ -898,7 +904,7 @@ const ProjectsPage: React.FC = () => {
         </Card>
       </motion.div>
 
-      {/* Enhanced Project Form Dialog */}
+      {/* Enhanced Project Form Dialog with Tabs */}
       <Dialog 
         open={openDialog} 
         onClose={handleCloseDialog} 
@@ -939,6 +945,36 @@ const ProjectsPage: React.FC = () => {
         </DialogTitle>
 
         <DialogContent sx={{ px: 3 }}>
+          {/* Tab Navigation */}
+          <Tabs 
+            value={activeTab} 
+            onChange={(_, newValue) => setActiveTab(newValue)}
+            sx={{
+              borderBottom: 1,
+              borderColor: 'divider',
+              mb: 3,
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '1rem',
+                minHeight: 48,
+                '&.Mui-selected': {
+                  color: '#0a4f3c',
+                },
+              },
+              '& .MuiTabs-indicator': {
+                backgroundColor: '#0a4f3c',
+                height: 3,
+              },
+            }}
+          >
+            <Tab label="Basic Info" value="basic" />
+            <Tab label="Details" value="details" />
+            {editingProject && <Tab label="Images" value="images" />}
+            <Tab label="Settings" value="settings" />
+          </Tabs>
+
+          {/* Error Alert */}
           <AnimatePresence>
             {formError && (
               <motion.div
@@ -961,508 +997,538 @@ const ProjectsPage: React.FC = () => {
             )}
           </AnimatePresence>
           
+          {/* Tab Content */}
           <Box sx={{ mt: 2 }}>
-            {/* Basic Information Section */}
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                mb: 3,
-                borderRadius: 3,
-                border: '1px solid rgba(0,0,0,0.08)',
-                bgcolor: '#f8f9fa'
-              }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
-                Basic Information
-              </Typography>
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <TextField
-                    autoFocus
-                    label="Project Title"
-                    fullWidth
-                    variant="outlined"
-                    value={formData.title}
-                    onChange={handleInputChange('title')}
-                    required
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#0a4f3c',
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#0a4f3c',
-                      },
-                    }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12}>
-                  <TextField
-                    label="Abstract"
-                    fullWidth
-                    multiline
-                    rows={4}
-                    variant="outlined"
-                    value={formData.abstract}
-                    onChange={handleInputChange('abstract')}
-                    placeholder="Provide a detailed abstract of the research project..."
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#0a4f3c',
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#0a4f3c',
-                      },
-                    }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12}>
-                  <TextField
-                    label="Keywords"
-                    fullWidth
-                    variant="outlined"
-                    value={formData.keywords}
-                    onChange={handleInputChange('keywords')}
-                    placeholder="research, public health, epidemiology, data analysis"
-                    helperText="Separate keywords with commas"
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#0a4f3c',
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#0a4f3c',
-                      },
-                    }}
-                  />
-                </Grid>
-              </Grid>
-            </Paper>
-
-            {/* Author Information Section */}
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                mb: 3,
-                borderRadius: 3,
-                border: '1px solid rgba(0,0,0,0.08)',
-                bgcolor: '#f8f9fa'
-              }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
-                Author Information
-              </Typography>
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    label="Author Name"
-                    fullWidth
-                    variant="outlined"
-                    value={formData.author_name}
-                    onChange={handleInputChange('author_name')}
-                    required
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#0a4f3c',
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#0a4f3c',
-                      },
-                    }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    label="Author Email"
-                    type="email"
-                    fullWidth
-                    variant="outlined"
-                    value={formData.author_email}
-                    onChange={handleInputChange('author_email')}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#0a4f3c',
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#0a4f3c',
-                      },
-                    }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <ResearchAreaSelect
-                    value={formData.institution || ''}
-                    onChange={(value) => {
-                      setFormData(prev => ({ ...prev, institution: value }));
-                      if (value !== 'Others' || !value) {
-                        setCustomFields(prev => ({ ...prev, custom_institution: '' }));
-                      } else {
-                        setCustomFields(prev => ({ ...prev, custom_institution: value }));
-                      }
-                    }}
-                    options={formConstants.institutions}
-                    error={false}
-                    helperText=""
-                    required
-                    label="Institution"
-                    customLabel="Specify Institution"
-                    customPlaceholder="e.g., University of Cape Coast"
-                  />
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    label="Department"
-                    fullWidth
-                    variant="outlined"
-                    value={formData.department}
-                    onChange={handleInputChange('department')}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#0a4f3c',
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#0a4f3c',
-                      },
-                    }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12}>
-                  <TextField
-                    label="Supervisor"
-                    fullWidth
-                    variant="outlined"
-                    value={formData.supervisor}
-                    onChange={handleInputChange('supervisor')}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#0a4f3c',
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#0a4f3c',
-                      },
-                    }}
-                  />
-                </Grid>
-              </Grid>
-            </Paper>
-
-            {/* Academic Information Section */}
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                mb: 3,
-                borderRadius: 3,
-                border: '1px solid rgba(0,0,0,0.08)',
-                bgcolor: '#f8f9fa'
-              }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
-                Academic Information
-              </Typography>
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <ResearchAreaSelect
-                    value={formData.research_area || ''}
-                    onChange={(value) => {
-                      setFormData(prev => ({ ...prev, research_area: value }));
-                      if (value !== 'Others' || !value) {
-                        setCustomFields(prev => ({ ...prev, custom_research_area: '' }));
-                      } else {
-                        setCustomFields(prev => ({ ...prev, custom_research_area: value }));
-                      }
-                    }}
-                    options={formConstants.research_areas}
-                    error={false}
-                    helperText=""
-                    required
-                    label="Research Area"
-                    customLabel="Specify Research Area"
-                    customPlaceholder="e.g., Tropical Medicine, Health Informatics"
-                  />
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <ResearchAreaSelect
-                    value={formData.degree_type || ''}
-                    onChange={(value) => {
-                      setFormData(prev => ({ ...prev, degree_type: value }));
-                      if (value !== 'Others' || !value) {
-                        setCustomFields(prev => ({ ...prev, custom_degree_type: '' }));
-                      } else {
-                        setCustomFields(prev => ({ ...prev, custom_degree_type: value }));
-                      }
-                    }}
-                    options={formConstants.degree_types}
-                    error={false}
-                    helperText=""
-                    required
-                    label="Degree Type"
-                    customLabel="Specify Degree Type"
-                    customPlaceholder="e.g., PGDip, DNP"
-                  />
-                </Grid>
-                
-                <Grid item xs={12}>
-                  <TextField
-                    select
-                    fullWidth
-                    label="Academic Year"
-                    name="academic_year"
-                    value={formData.academic_year || ''}
-                    onChange={handleInputChange('academic_year')}
-                    error={false}
-                    helperText=""
-                    required
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#0a4f3c',
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#0a4f3c',
-                      },
-                    }}
-                  >
-                    {formConstants.academic_years.map((year) => (
-                      <MenuItem key={year} value={year}>
-                        {year}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-              </Grid>
-            </Paper>
-
-            {/* SEO Information Section */}
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                mb: 3,
-                borderRadius: 3,
-                border: '1px solid rgba(0,0,0,0.08)',
-                bgcolor: '#f8f9fa'
-              }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
-                SEO & Metadata
-              </Typography>
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <TextField
-                    label="Meta Description"
-                    fullWidth
-                    multiline
-                    rows={2}
-                    variant="outlined"
-                    value={formData.meta_description}
-                    onChange={handleInputChange('meta_description')}
-                    placeholder="Brief description for search engines (150-160 characters)"
-                    helperText={`${formData.meta_description.length}/160 characters`}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#0a4f3c',
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#0a4f3c',
-                      },
-                    }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12}>
-                  <TextField
-                    label="Meta Keywords"
-                    fullWidth
-                    variant="outlined"
-                    value={formData.meta_keywords}
-                    onChange={handleInputChange('meta_keywords')}
-                    placeholder="SEO keywords separated by commas"
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#0a4f3c',
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#0a4f3c',
-                      },
-                    }}
-                  />
-                </Grid>
-              </Grid>
-            </Paper>
-
-            {/* File Management Section */}
-                        <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                mb: 3,
-                borderRadius: 3,
-                border: '1px solid rgba(0,0,0,0.08)',
-                bgcolor: '#f8f9fa'
-              }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
-                Document Management
-              </Typography>
-              
-              {editingProject?.document_filename && (
-                <Box sx={{ mb: 3, p: 3, bgcolor: 'white', borderRadius: 2, border: '1px solid rgba(0,0,0,0.08)' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                    <AttachFileIcon sx={{ color: '#0a4f3c' }} />
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                      Current Document: {editingProject.document_filename}
-                    </Typography>
-                  </Box>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    size="small"
-                    startIcon={<DeleteIcon />}
-                    onClick={async () => {
-                      if (window.confirm('Are you sure you want to delete this file?')) {
-                        try {
-                          await adminApi.deleteProjectFile(editingProject.id);
-                          setFormError('');
-                          await loadProjects();
-                          handleCloseDialog();
-                        } catch (err: any) {
-                          setFormError(err.response?.data?.detail || 'Failed to delete file');
-                        }
-                      }
-                    }}
-                    sx={{ borderRadius: 2 }}
-                  >
-                    Delete Current File
-                  </Button>
-                </Box>
-              )}
-              
-              <Box
-                sx={{
-                  border: '2px dashed #ccc',
-                  borderRadius: 3,
-                  p: 4,
-                  textAlign: 'center',
-                  bgcolor: 'white',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    borderColor: '#0a4f3c',
-                    bgcolor: alpha('#0a4f3c', 0.02)
-                  }
-                }}
-              >
-                <UploadIcon sx={{ fontSize: 48, color: '#0a4f3c', mb: 2 }} />
-                <Typography variant="h6" sx={{ fontWeight: 600, color: '#0a4f3c', mb: 1 }}>
-                  Upload Document
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  Supported formats: PDF, DOC, DOCX, TXT, RTF (Max 10MB)
-                </Typography>
-                <Input
-                  type="file"
-                  onChange={handleInputChange('file')}
-                  inputProps={{
-                    accept: '.pdf,.doc,.docx,.txt,.rtf'
-                  }}
+            {/* Basic Info Tab */}
+            {activeTab === 'basic' && (
+              <>
+                {/* Basic Information Section */}
+                <Paper
+                  elevation={0}
                   sx={{
-                    '& input': {
-                      padding: '12px 16px',
-                      borderRadius: 2,
-                      border: '1px solid #ccc',
-                      '&:focus': {
-                        borderColor: '#0a4f3c',
-                        outline: 'none'
-                      }
-                    }
+                    p: 3,
+                    mb: 3,
+                    borderRadius: 3,
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    bgcolor: '#f8f9fa'
                   }}
-                />
-                {formData.file && (
-                  <Box sx={{ mt: 2, p: 2, bgcolor: alpha('#0a4f3c', 0.1), borderRadius: 2 }}>
-                    <Typography variant="body2" sx={{ color: '#0a4f3c', fontWeight: 600 }}>
-                      Selected: {formData.file.name}
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-            </Paper>
+                >
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
+                    Basic Information
+                  </Typography>
+                  <Grid container spacing={3}>
+                    <Grid item xs={12}>
+                      <TextField
+                        autoFocus
+                        label="Project Title"
+                        fullWidth
+                        variant="outlined"
+                        value={formData.title}
+                        onChange={handleInputChange('title')}
+                        required
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 3,
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#0a4f3c',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#0a4f3c',
+                          },
+                        }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <TextField
+                        label="Abstract"
+                        fullWidth
+                        multiline
+                        rows={4}
+                        variant="outlined"
+                        value={formData.abstract}
+                        onChange={handleInputChange('abstract')}
+                        placeholder="Provide a detailed abstract of the research project..."
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 3,
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#0a4f3c',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#0a4f3c',
+                          },
+                        }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <TextField
+                        label="Keywords"
+                        fullWidth
+                        variant="outlined"
+                        value={formData.keywords}
+                        onChange={handleInputChange('keywords')}
+                        placeholder="research, public health, epidemiology, data analysis"
+                        helperText="Separate keywords with commas"
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 3,
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#0a4f3c',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#0a4f3c',
+                          },
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
 
-            {/* Publication Settings */}
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                borderRadius: 3,
-                border: '1px solid rgba(0,0,0,0.08)',
-                bgcolor: '#f8f9fa'
-              }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
-                Publication Settings
-              </Typography>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.is_published}
-                    onChange={handleInputChange('is_published')}
-                    sx={{
-                      '& .MuiSwitch-switchBase.Mui-checked': {
-                        color: '#0a4f3c',
-                      },
-                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                        backgroundColor: '#0a4f3c',
-                      },
-                    }}
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                      Publish immediately
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Make this project visible to the public
-                    </Typography>
-                  </Box>
-                }
+                {/* Author Information Section */}
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 3,
+                    mb: 3,
+                    borderRadius: 3,
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    bgcolor: '#f8f9fa'
+                  }}
+                >
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
+                    Author Information
+                  </Typography>
+                  <Grid container spacing={3}>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        label="Author Name"
+                        fullWidth
+                        variant="outlined"
+                        value={formData.author_name}
+                        onChange={handleInputChange('author_name')}
+                        required
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 3,
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#0a4f3c',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#0a4f3c',
+                          },
+                        }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        label="Author Email"
+                        type="email"
+                        fullWidth
+                        variant="outlined"
+                        value={formData.author_email}
+                        onChange={handleInputChange('author_email')}
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 3,
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#0a4f3c',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#0a4f3c',
+                          },
+                        }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <ResearchAreaSelect
+                        value={formData.institution || ''}
+                        onChange={(value) => {
+                          setFormData(prev => ({ ...prev, institution: value }));
+                          if (value !== 'Others' || !value) {
+                            setCustomFields(prev => ({ ...prev, custom_institution: '' }));
+                          } else {
+                            setCustomFields(prev => ({ ...prev, custom_institution: value }));
+                          }
+                        }}
+                        options={formConstants.institutions}
+                        error={false}
+                        helperText=""
+                        required
+                        label="Institution"
+                        customLabel="Specify Institution"
+                        customPlaceholder="e.g., University of Cape Coast"
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        label="Department"
+                        fullWidth
+                        variant="outlined"
+                        value={formData.department}
+                        onChange={handleInputChange('department')}
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 3,
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#0a4f3c',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#0a4f3c',
+                          },
+                        }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <TextField
+                        label="Supervisor"
+                        fullWidth
+                        variant="outlined"
+                        value={formData.supervisor}
+                        onChange={handleInputChange('supervisor')}
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 3,
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#0a4f3c',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#0a4f3c',
+                          },
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </>
+            )}
+
+            {/* Details Tab */}
+            {activeTab === 'details' && (
+              <>
+                {/* Academic Information Section */}
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 3,
+                    mb: 3,
+                    borderRadius: 3,
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    bgcolor: '#f8f9fa'
+                  }}
+                >
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
+                    Academic Information
+                  </Typography>
+                  <Grid container spacing={3}>
+                    <Grid item xs={12} md={6}>
+                      <ResearchAreaSelect
+                        value={formData.research_area || ''}
+                        onChange={(value) => {
+                          setFormData(prev => ({ ...prev, research_area: value }));
+                          if (value !== 'Others' || !value) {
+                            setCustomFields(prev => ({ ...prev, custom_research_area: '' }));
+                          } else {
+                            setCustomFields(prev => ({ ...prev, custom_research_area: value }));
+                          }
+                        }}
+                        options={formConstants.research_areas}
+                        error={false}
+                        helperText=""
+                        required
+                        label="Research Area"
+                        customLabel="Specify Research Area"
+                        customPlaceholder="e.g., Tropical Medicine, Health Informatics"
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <ResearchAreaSelect
+                        value={formData.degree_type || ''}
+                        onChange={(value) => {
+                          setFormData(prev => ({ ...prev, degree_type: value }));
+                          if (value !== 'Others' || !value) {
+                            setCustomFields(prev => ({ ...prev, custom_degree_type: '' }));
+                          } else {
+                            setCustomFields(prev => ({ ...prev, custom_degree_type: value }));
+                          }
+                        }}
+                        options={formConstants.degree_types}
+                        error={false}
+                        helperText=""
+                        required
+                        label="Degree Type"
+                        customLabel="Specify Degree Type"
+                        customPlaceholder="e.g., PGDip, DNP"
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <TextField
+                        select
+                        fullWidth
+                        label="Academic Year"
+                        name="academic_year"
+                        value={formData.academic_year || ''}
+                        onChange={handleInputChange('academic_year')}
+                        error={false}
+                        helperText=""
+                        required
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 3,
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#0a4f3c',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#0a4f3c',
+                          },
+                        }}
+                      >
+                        {formConstants.academic_years.map((year) => (
+                          <MenuItem key={year} value={year}>
+                            {year}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+                  </Grid>
+                </Paper>
+
+                {/* SEO Information Section */}
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 3,
+                    mb: 3,
+                    borderRadius: 3,
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    bgcolor: '#f8f9fa'
+                  }}
+                >
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
+                                        SEO & Metadata
+                  </Typography>
+                  <Grid container spacing={3}>
+                    <Grid item xs={12}>
+                      <TextField
+                        label="Meta Description"
+                        fullWidth
+                        multiline
+                        rows={2}
+                        variant="outlined"
+                        value={formData.meta_description}
+                        onChange={handleInputChange('meta_description')}
+                        placeholder="Brief description for search engines (150-160 characters)"
+                        helperText={`${formData.meta_description.length}/160 characters`}
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 3,
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#0a4f3c',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#0a4f3c',
+                          },
+                        }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <TextField
+                        label="Meta Keywords"
+                        fullWidth
+                        variant="outlined"
+                        value={formData.meta_keywords}
+                        onChange={handleInputChange('meta_keywords')}
+                        placeholder="SEO keywords separated by commas"
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 3,
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#0a4f3c',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#0a4f3c',
+                          },
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </>
+            )}
+
+            {/* Images Tab */}
+            {activeTab === 'images' && editingProject && (
+              <ProjectImagesTab
+                projectId={editingProject.id}
+                images={editingProject.images || []}
+                featuredImageIndex={editingProject.featured_image_index || 0}
+                onImagesUpdate={() => {
+                  // Refresh project data
+                  loadProjects();
+                }}
+                disabled={false}
               />
-            </Paper>
+            )}
+
+            {/* Settings Tab */}
+            {activeTab === 'settings' && (
+              <>
+                {/* File Management Section */}
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 3,
+                    mb: 3,
+                    borderRadius: 3,
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    bgcolor: '#f8f9fa'
+                  }}
+                >
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
+                    Document Management
+                  </Typography>
+                  
+                  {editingProject?.document_filename && (
+                    <Box sx={{ mb: 3, p: 3, bgcolor: 'white', borderRadius: 2, border: '1px solid rgba(0,0,0,0.08)' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                        <AttachFileIcon sx={{ color: '#0a4f3c' }} />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                          Current Document: {editingProject.document_filename}
+                        </Typography>
+                      </Box>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        size="small"
+                        startIcon={<DeleteIcon />}
+                        onClick={async () => {
+                          if (window.confirm('Are you sure you want to delete this file?')) {
+                            try {
+                              await adminApi.deleteProjectFile(editingProject.id);
+                              setFormError('');
+                              await loadProjects();
+                              handleCloseDialog();
+                            } catch (err: any) {
+                              setFormError(err.response?.data?.detail || 'Failed to delete file');
+                            }
+                          }
+                        }}
+                        sx={{ borderRadius: 2 }}
+                      >
+                        Delete Current File
+                      </Button>
+                    </Box>
+                  )}
+                  
+                  <Box
+                    sx={{
+                      border: '2px dashed #ccc',
+                      borderRadius: 3,
+                      p: 4,
+                      textAlign: 'center',
+                      bgcolor: 'white',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        borderColor: '#0a4f3c',
+                        bgcolor: alpha('#0a4f3c', 0.02)
+                      }
+                    }}
+                  >
+                    <UploadIcon sx={{ fontSize: 48, color: '#0a4f3c', mb: 2 }} />
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#0a4f3c', mb: 1 }}>
+                      Upload Document
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                      Supported formats: PDF, DOC, DOCX, TXT, RTF (Max 10MB)
+                    </Typography>
+                    <Input
+                      type="file"
+                      onChange={handleInputChange('file')}
+                      inputProps={{
+                        accept: '.pdf,.doc,.docx,.txt,.rtf'
+                      }}
+                      sx={{
+                        '& input': {
+                          padding: '12px 16px',
+                          borderRadius: 2,
+                          border: '1px solid #ccc',
+                          '&:focus': {
+                            borderColor: '#0a4f3c',
+                            outline: 'none'
+                          }
+                        }
+                      }}
+                    />
+                    {formData.file && (
+                      <Box sx={{ mt: 2, p: 2, bgcolor: alpha('#0a4f3c', 0.1), borderRadius: 2 }}>
+                        <Typography variant="body2" sx={{ color: '#0a4f3c', fontWeight: 600 }}>
+                          Selected: {formData.file.name}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Paper>
+
+                {/* Publication Settings */}
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 3,
+                    borderRadius: 3,
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    bgcolor: '#f8f9fa'
+                  }}
+                >
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
+                    Publication Settings
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={formData.is_published}
+                        onChange={handleInputChange('is_published')}
+                        sx={{
+                          '& .MuiSwitch-switchBase.Mui-checked': {
+                            color: '#0a4f3c',
+                          },
+                          '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                            backgroundColor: '#0a4f3c',
+                          },
+                        }}
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                          Publish immediately
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Make this project visible to the public
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </Paper>
+              </>
+            )}
           </Box>
         </DialogContent>
 
