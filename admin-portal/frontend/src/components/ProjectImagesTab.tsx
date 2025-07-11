@@ -30,7 +30,7 @@ import {
 } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { motion, AnimatePresence } from 'framer-motion';
-import { projectApi } from '../services/adminApi';
+import { adminApi } from '../services/adminApi';
 
 interface ProjectImagesTabProps {
   projectId: number;
@@ -71,7 +71,7 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
         setUploadProgress(prev => Math.min(prev + 10, 90));
       }, 200);
 
-      await projectApi.uploadImages(projectId, files);
+      await adminApi.uploadImages(projectId, files);
       
       clearInterval(progressInterval);
       setUploadProgress(100);
@@ -92,7 +92,7 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
     if (deleteIndex === null) return;
 
     try {
-      await projectApi.deleteImage(projectId, deleteIndex);
+      await adminApi.deleteImage(projectId, deleteIndex);
       setDeleteIndex(null);
       onImagesUpdate();
     } catch (err: any) {
@@ -102,7 +102,7 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
 
   const handleSetFeatured = async (index: number) => {
     try {
-      await projectApi.setFeaturedImage(projectId, index);
+      await adminApi.setFeaturedImage(projectId, index);
       onImagesUpdate();
     } catch (err: any) {
       setError(err.message || 'Failed to set featured image');
@@ -119,7 +119,7 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
     const newOrder = items.map(item => images.indexOf(item));
     
     try {
-      await projectApi.reorderImages(projectId, newOrder);
+      await adminApi.reorderImages(projectId, newOrder);
       onImagesUpdate();
     } catch (err: any) {
       setError(err.message || 'Failed to reorder images');
@@ -168,124 +168,124 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
                     index={index}
                     isDragDisabled={disabled}
                   >
-                      {(provided, snapshot) => (
-                        <Grid
-                          item
-                          xs={6}
-                          sm={4}
-                          md={3}
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
+                    {(provided, snapshot) => (
+                      <Grid
+                        item
+                        xs={6}
+                        sm={4}
+                        md={3}
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                      >
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          transition={{ duration: 0.3 }}
                         >
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.8 }}
-                            transition={{ duration: 0.3 }}
-                          >
-                            <Card
-                              elevation={snapshot.isDragging ? 8 : 1}
-                              sx={{
-                                position: 'relative',
-                                borderRadius: 3,
-                                overflow: 'hidden',
-                                transform: snapshot.isDragging ? 'scale(1.05)' : 'scale(1)',
-                                transition: 'transform 0.2s ease',
-                                '&:hover': {
-                                  boxShadow: 4,
-                                  '& .image-actions': {
-                                    opacity: 1
-                                  }
+                          <Card
+                            elevation={snapshot.isDragging ? 8 : 1}
+                            sx={{
+                              position: 'relative',
+                              borderRadius: 3,
+                              overflow: 'hidden',
+                              transform: snapshot.isDragging ? 'scale(1.05)' : 'scale(1)',
+                              transition: 'transform 0.2s ease',
+                              '&:hover': {
+                                boxShadow: 4,
+                                '& .image-actions': {
+                                  opacity: 1
                                 }
-                              }}
-                            >
-                              {index === featuredImageIndex && (
-                                <Chip
-                                  label="Featured"
-                                  size="small"
-                                  icon={<StarIcon />}
-                                  sx={{
-                                    position: 'absolute',
-                                    top: 8,
-                                    left: 8,
-                                    zIndex: 1,
-                                    bgcolor: 'rgba(10, 79, 60, 0.9)',
-                                    color: 'white',
-                                    fontWeight: 600
-                                  }}
-                                />
-                              )}
-                              
-                              <Box
-                                {...provided.dragHandleProps}
+                              }
+                            }}
+                          >
+                            {index === featuredImageIndex && (
+                              <Chip
+                                label="Featured"
+                                size="small"
+                                icon={<StarIcon />}
                                 sx={{
                                   position: 'absolute',
                                   top: 8,
-                                  right: 8,
+                                  left: 8,
                                   zIndex: 1,
-                                  bgcolor: 'rgba(255, 255, 255, 0.9)',
-                                  borderRadius: 1,
-                                  p: 0.5,
-                                  cursor: 'grab',
-                                  '&:active': { cursor: 'grabbing' }
+                                  bgcolor: 'rgba(10, 79, 60, 0.9)',
+                                  color: 'white',
+                                  fontWeight: 600
                                 }}
-                              >
-                                <DragIcon />
-                              </Box>
-  
-                              <CardMedia
-                                component="img"
-                                height="200"
-                                image={image}
-                                alt={`Project image ${index + 1}`}
-                                sx={{
-                                  cursor: 'pointer',
-                                  objectFit: 'cover'
-                                }}
-                                onClick={() => setSelectedImage(image)}
                               />
+                            )}
+                            
+                            <Box
+                              {...provided.dragHandleProps}
+                              sx={{
+                                position: 'absolute',
+                                top: 8,
+                                right: 8,
+                                zIndex: 1,
+                                bgcolor: 'rgba(255, 255, 255, 0.9)',
+                                borderRadius: 1,
+                                p: 0.5,
+                                cursor: 'grab',
+                                '&:active': { cursor: 'grabbing' }
+                              }}
+                            >
+                              <DragIcon />
+                            </Box>
+
+                            <CardMedia
+                              component="img"
+                              height="200"
+                              image={image}
+                              alt={`Project image ${index + 1}`}
+                              sx={{
+                                cursor: 'pointer',
+                                objectFit: 'cover'
+                              }}
+                              onClick={() => setSelectedImage(image)}
+                            />
+                            
+                            <CardActions
+                              className="image-actions"
+                              sx={{
+                                position: 'absolute',
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                bgcolor: 'rgba(0, 0, 0, 0.7)',
+                                opacity: 0,
+                                transition: 'opacity 0.3s ease',
+                                justifyContent: 'space-between',
+                                py: 1
+                              }}
+                            >
+                              <Tooltip title={index === featuredImageIndex ? "Featured image" : "Set as featured"}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleSetFeatured(index)}
+                                  disabled={disabled || index === featuredImageIndex}
+                                  sx={{ color: 'white' }}
+                                >
+                                  {index === featuredImageIndex ? <StarIcon /> : <StarBorderIcon />}
+                                </IconButton>
+                              </Tooltip>
                               
-                              <CardActions
-                                className="image-actions"
-                                sx={{
-                                  position: 'absolute',
-                                  bottom: 0,
-                                  left: 0,
-                                  right: 0,
-                                  bgcolor: 'rgba(0, 0, 0, 0.7)',
-                                  opacity: 0,
-                                  transition: 'opacity 0.3s ease',
-                                  justifyContent: 'space-between',
-                                  py: 1
-                                }}
-                              >
-                                <Tooltip title={index === featuredImageIndex ? "Featured image" : "Set as featured"}>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleSetFeatured(index)}
-                                    disabled={disabled || index === featuredImageIndex}
-                                    sx={{ color: 'white' }}
-                                  >
-                                    {index === featuredImageIndex ? <StarIcon /> : <StarBorderIcon />}
-                                  </IconButton>
-                                </Tooltip>
-                                
-                                <Tooltip title="Delete image">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => setDeleteIndex(index)}
-                                    disabled={disabled}
-                                    sx={{ color: 'white' }}
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
-                                </Tooltip>
-                              </CardActions>
-                            </Card>
-                          </motion.div>
-                        </Grid>
-                      )}
-                    </Draggable>
+                              <Tooltip title="Delete image">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => setDeleteIndex(index)}
+                                  disabled={disabled}
+                                  sx={{ color: 'white' }}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Tooltip>
+                            </CardActions>
+                          </Card>
+                        </motion.div>
+                      </Grid>
+                    )}
+                  </Draggable>
                 ))}
               </AnimatePresence>
               {provided.placeholder}
