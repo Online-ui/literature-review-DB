@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import Dict
+from typing import Dict, Any  # Add Any import
 
 from app.database import get_db
 from app.models.user import User
@@ -60,7 +60,7 @@ async def update_profile(
     profile_data: dict,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-) -> Dict[str, any]:
+) -> Dict[str, Any]:  # Changed from 'any' to 'Any'
     """Update user profile information"""
     allowed_fields = ['full_name', 'institution', 'department', 'phone']
     
