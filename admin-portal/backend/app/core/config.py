@@ -52,6 +52,11 @@ class Settings(BaseSettings):
         "https://uhas-research-hub.onrender.com",
         "https://research-hub-admin-portal.onrender.com"
     ]
+
+    # Add these settings to your Settings class
+    UPLOAD_DIR: str = "uploads"
+    MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
+    ALLOWED_IMAGE_EXTENSIONS: set = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
     
     class Config:
         env_file = ".env"
