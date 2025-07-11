@@ -15,7 +15,7 @@ class User(BaseModel):
     institution = Column(String(255))
     department = Column(String(255))
     phone = Column(String(20))
-    
+    profile_image = Column(String, nullable=True)
     # Role & Status
     role = Column(String(50), default="faculty")  # "main_coordinator", "faculty"
     is_active = Column(Boolean, default=True)
