@@ -16,7 +16,8 @@ import {
   useTheme,
   IconButton,
   Tooltip,
-  LinearProgress
+  LinearProgress,
+  CircularProgress
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -31,10 +32,13 @@ import {
   Security as SecurityIcon,
   Verified as VerifiedIcon,
   Settings as SettingsIcon,
-  PhotoCamera as PhotoCameraIcon
+  PhotoCamera as PhotoCameraIcon,
+  CloudUpload as UploadIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import { adminApi } from '../services/adminApi';
 
 const ProfilePage: React.FC = () => {
   const { user } = useAuth();
@@ -47,6 +51,37 @@ const ProfilePage: React.FC = () => {
     department: user?.department || '',
     phone: user?.phone || ''
   });
+
+  // Add state for image handling
+  const [profileImage, setProfileImage] = useState<string | null>(user?.profileImage || null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Add image upload handler
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setUploadingImage(true);
+    try {
+      const response = await adminApi.uploadProfileImage(file);
+      setProfileImage(response.image_url);
+      // Update user context if you have one
+    } catch (error) {
+      console.error('Failed to upload image:', error);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // Add image delete handler
+  const handleImageDelete = async () => {
+    try {
+      await adminApi.deleteProfileImage();
+      setProfileImage(null);
+    } catch (error) {
+      console.error('Failed to delete image:', error);
+    }
+  };
 
   const handleEdit = () => {
     setEditing(true);
@@ -136,36 +171,74 @@ const ProfilePage: React.FC = () => {
             >
               <CardContent sx={{ p: 4 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
-                  {/* Profile Avatar */}
+                  {/* Profile Avatar with Upload */}
                   <Box sx={{ position: 'relative' }}>
                     <Avatar
+                      src={profileImage || undefined}
                       sx={{
                         width: 120,
                         height: 120,
-                        background: 'linear-gradient(135deg, #0a4f3c 0%, #2a9d7f 100%)',
+                        background: !profileImage ? 'linear-gradient(135deg, #0a4f3c 0%, #2a9d7f 100%)' : 'none',
                         fontSize: '3rem',
                         fontWeight: 700,
                         boxShadow: '0 8px 32px rgba(10,79,60,0.3)',
                         border: '4px solid white'
                       }}
                     >
-                      {user?.full_name?.charAt(0) || 'U'}
+                      {!profileImage && (user?.full_name?.charAt(0) || 'U')}
                     </Avatar>
-                    <IconButton
+                    <Box
                       sx={{
                         position: 'absolute',
-                        bottom: 0,
-                        right: 0,
-                        bgcolor: 'white',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                        '&:hover': {
-                          bgcolor: '#f5f5f5'
-                        }
+                        bottom: -10,
+                        right: -10,
+                        display: 'flex',
+                        gap: 0.5
                       }}
-                      size="small"
                     >
-                      <PhotoCameraIcon sx={{ fontSize: 20, color: '#0a4f3c' }} />
-                    </IconButton>
+                      <IconButton
+                        component="label"
+                        sx={{
+                          bgcolor: 'white',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                          '&:hover': {
+                            bgcolor: '#f5f5f5'
+                          }
+                        }}
+                        size="small"
+                        disabled={uploadingImage}
+                      >
+                        {uploadingImage ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20 }}>
+                            <CircularProgress size={16} sx={{ color: '#0a4f3c' }} />
+                          </Box>
+                        ) : (
+                          <PhotoCameraIcon sx={{ fontSize: 20, color: '#0a4f3c' }} />
+                        )}
+                        <input
+                          type="file"
+                          hidden
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          disabled={uploadingImage}
+                        />
+                      </IconButton>
+                      {profileImage && (
+                        <IconButton
+                          onClick={handleImageDelete}
+                          sx={{
+                            bgcolor: 'white',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                            '&:hover': {
+                              bgcolor: '#ffebee'
+                            }
+                          }}
+                          size="small"
+                        >
+                          <DeleteIcon sx={{ fontSize: 20, color: '#f44336' }} />
+                        </IconButton>
+                      )}
+                    </Box>
                   </Box>
 
                   {/* Profile Info */}
@@ -351,7 +424,7 @@ const ProfilePage: React.FC = () => {
               sx={{
                 borderRadius: 4,
                 border: '1px solid rgba(0,0,0,0.08)',
-                overflow: 'hidden'
+                                overflow: 'hidden'
               }}
             >
               <Box
@@ -383,6 +456,68 @@ const ProfilePage: React.FC = () => {
               </Box>
 
               <CardContent sx={{ p: 4 }}>
+                {/* Profile Picture Section */}
+                <Box sx={{ mb: 4 }}>
+                  <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: '#0a4f3c' }}>
+                    Profile Picture
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <Avatar
+                      src={profileImage || undefined}
+                      sx={{ 
+                        width: 100, 
+                        height: 100,
+                        bgcolor: !profileImage ? '#0a4f3c' : 'transparent',
+                        fontSize: '2.5rem',
+                        fontWeight: 600,
+                        border: '3px solid',
+                        borderColor: alpha('#0a4f3c', 0.1)
+                      }}
+                    >
+                      {!profileImage && user?.full_name?.[0]}
+                    </Avatar>
+                    <Box>
+                      <Button
+                        variant="contained"
+                        component="label"
+                        startIcon={<UploadIcon />}
+                        disabled={uploadingImage}
+                        sx={{
+                          borderRadius: 2,
+                          textTransform: 'none',
+                          bgcolor: '#0a4f3c',
+                          '&:hover': {
+                            bgcolor: '#063d2f'
+                          }
+                        }}
+                      >
+                        {uploadingImage ? 'Uploading...' : 'Upload Photo'}
+                        <input
+                          type="file"
+                          hidden
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          disabled={uploadingImage}
+                        />
+                      </Button>
+                      {profileImage && (
+                        <IconButton
+                          onClick={handleImageDelete}
+                          color="error"
+                          sx={{ ml: 1 }}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      )}
+                      <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+                        Recommended: Square image, at least 400x400px
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+
+                <Divider sx={{ mb: 4 }} />
+
                 <Grid container spacing={3}>
                   <Grid item xs={12} md={6}>
                     <TextField
@@ -425,7 +560,7 @@ const ProfilePage: React.FC = () => {
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           borderRadius: 3,
-                                                    '&.Mui-focused fieldset': {
+                          '&.Mui-focused fieldset': {
                             borderColor: '#0a4f3c',
                           },
                         },
@@ -705,7 +840,7 @@ const ProfilePage: React.FC = () => {
                   </Box>
                 </CardContent>
               </Card>
-            </motion.div>
+                        </motion.div>
 
             {/* Quick Actions */}
             <motion.div
