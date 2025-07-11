@@ -2,12 +2,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 import os
 
 from .core.config import settings
 from .database import engine
 from .models import Base
-from .api import auth, users, dashboard, projects, utils
+from .api import auth, users, dashboard, projects, utils, profile
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -19,6 +20,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Mount static files for uploads
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Fixed validation error handler
 @app.exception_handler(RequestValidationError)
@@ -65,6 +69,12 @@ async def startup_event():
     print(f"📄 Allowed file types: {', '.join(settings.ALLOWED_FILE_TYPES)}")
     print("✅ Database Storage configured")
     
+    # Create uploads directory if it doesn't exist
+    os.makedirs("uploads", exist_ok=True)
+    os.makedirs("uploads/projects", exist_ok=True)
+    os.makedirs("uploads/profiles", exist_ok=True)
+    print("📁 Upload directories created")
+    
     # Debug: Print registered routes
     print("\n📍 Registered API Routes:")
     for route in app.routes:
@@ -79,6 +89,7 @@ app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(utils.router, prefix="/api/utils", tags=["utilities"])
+app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
 
 @app.get("/")
 async def root():
