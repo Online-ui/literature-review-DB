@@ -1,5 +1,5 @@
 from pydantic import BaseModel, validator
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class ProjectBase(BaseModel):
@@ -19,6 +19,10 @@ class ProjectBase(BaseModel):
     author_email: Optional[str] = None
     meta_description: Optional[str] = None
     meta_keywords: Optional[str] = None
+    
+    # Image fields
+    images: List[str] = []
+    featured_image_index: int = 0
 
 class ProjectCreate(ProjectBase):
     @validator('research_area')
@@ -57,6 +61,10 @@ class ProjectUpdate(BaseModel):
     is_published: Optional[bool] = None
     meta_description: Optional[str] = None
     meta_keywords: Optional[str] = None
+    
+    # Image fields
+    images: Optional[List[str]] = None
+    featured_image_index: Optional[int] = None
 
 class ProjectResponse(ProjectBase):
     id: int
@@ -111,3 +119,14 @@ class ProjectSearchResponse(BaseModel):
     per_page: int
     has_next: bool
     has_prev: bool
+
+# Image operation schemas
+class ImageUploadResponse(BaseModel):
+    images: List[str]
+    message: str
+
+class SetFeaturedImageRequest(BaseModel):
+    index: int
+
+class ReorderImagesRequest(BaseModel):
+    new_order: List[int]
