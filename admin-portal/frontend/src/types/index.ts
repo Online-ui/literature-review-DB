@@ -66,6 +66,8 @@ export interface Project {
   created_at: string;
   meta_description?: string;
   meta_keywords?: string;
+  images: string[]; 
+  featured_image_index: number;
 }
 
 export interface DashboardStats {
