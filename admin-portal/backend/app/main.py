@@ -21,6 +21,11 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# Create upload directories if they don't exist
+os.makedirs("uploads", exist_ok=True)
+os.makedirs("uploads/projects", exist_ok=True)
+os.makedirs("uploads/profile_images", exist_ok=True)
+
 # Mount static files for uploads
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
@@ -69,11 +74,11 @@ async def startup_event():
     print(f"📄 Allowed file types: {', '.join(settings.ALLOWED_FILE_TYPES)}")
     print("✅ Database Storage configured")
     
-    # Create uploads directory if it doesn't exist
-    os.makedirs("uploads", exist_ok=True)
-    os.makedirs("uploads/projects", exist_ok=True)
-    os.makedirs("uploads/profiles", exist_ok=True)
-    print("📁 Upload directories created")
+    # Verify upload directories
+    print("📁 Upload directories:")
+    print(f"   - uploads/ {'✓' if os.path.exists('uploads') else '✗'}")
+    print(f"   - uploads/projects/ {'✓' if os.path.exists('uploads/projects') else '✗'}")
+    print(f"   - uploads/profile_images/ {'✓' if os.path.exists('uploads/profile_images') else '✗'}")
     
     # Debug: Print registered routes
     print("\n📍 Registered API Routes:")
@@ -83,7 +88,7 @@ async def startup_event():
             print(f"  {methods} {route.path}")
     print()
 
-# Include routers
+# Include routers - ORDER MATTERS!
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
@@ -109,7 +114,12 @@ async def health_check():
         "version": settings.VERSION,
         "storage_backend": settings.STORAGE_BACKEND,
         "database": "connected",
-        "max_file_size_mb": settings.MAX_FILE_SIZE / 1024 / 1024
+        "max_file_size_mb": settings.MAX_FILE_SIZE / 1024 / 1024,
+        "upload_dirs": {
+            "uploads": os.path.exists("uploads"),
+            "projects": os.path.exists("uploads/projects"),
+            "profile_images": os.path.exists("uploads/profile_images")
+        }
     }
 
 @app.get("/api/config")
