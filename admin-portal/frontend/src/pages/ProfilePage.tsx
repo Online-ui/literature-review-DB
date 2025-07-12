@@ -53,7 +53,7 @@ const ProfilePage: React.FC = () => {
   });
 
   // Add state for image handling
-  const [profileImage, setProfileImage] = useState<string | null>(user?.profileImage || null);
+  const [profileImage, setProfileImage] = useState<string | null>(user?.profile_image || null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
   // Add image upload handler
