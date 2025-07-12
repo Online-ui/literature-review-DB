@@ -36,6 +36,7 @@ export interface User {
   role: string;
   is_active: boolean;
   created_at: string;
+  profile_image?: string;
 }
 
 export interface Project {
