@@ -26,7 +26,8 @@ import {
   StarBorder as StarBorderIcon,
   Image as ImageIcon,
   Close as CloseIcon,
-  DragIndicator as DragIcon
+  DragIndicator as DragIcon,
+  AutoAwesome as ExtractIcon
 } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -48,6 +49,7 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
   disabled = false
 }) => {
   const [uploading, setUploading] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
@@ -126,6 +128,37 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
     }
   };
 
+  const handleExtractImages = async () => {
+    setExtracting(true);
+    setError(null);
+    
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/api/projects/${projectId}/extract-images`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Extracted ${data.message}`);
+        // Reload images
+        onImagesUpdate();
+      } else {
+        throw new Error('Failed to extract images');
+      }
+    } catch (error) {
+      console.error('Failed to extract images:', error);
+      setError('Failed to extract images from project content');
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
@@ -149,6 +182,35 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
           <LinearProgress variant="determinate" value={uploadProgress} />
         </Box>
       )}
+
+      {/* Action Buttons */}
+      <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
+        <Button
+          variant="outlined"
+          startIcon={<ExtractIcon />}
+          onClick={handleExtractImages}
+          disabled={disabled || extracting}
+          sx={{
+            color: '#0a4f3c',
+            borderColor: '#0a4f3c',
+            textTransform: 'none',
+            fontWeight: 600,
+            '&:hover': {
+              borderColor: '#0a4f3c',
+              bgcolor: alpha('#0a4f3c', 0.05)
+            }
+          }}
+        >
+          {extracting ? (
+            <>
+              <CircularProgress size={16} sx={{ mr: 1 }} />
+              Extracting...
+            </>
+          ) : (
+            'Extract Images'
+          )}
+        </Button>
+      </Box>
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="project-images" direction="horizontal">
