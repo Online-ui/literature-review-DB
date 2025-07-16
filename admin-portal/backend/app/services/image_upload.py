@@ -69,7 +69,7 @@ class ImageUploadService:
         filepath = self.upload_dir / path
         print(f"Attempting to delete: {filepath}")
         
-                if filepath.exists() and filepath.is_file():
+            if filepath.exists() and filepath.is_file():
             filepath.unlink()
             print(f"Deleted successfully")
         else:
