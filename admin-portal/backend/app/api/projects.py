@@ -401,7 +401,7 @@ async def update_project(
     # Handle file removal
     if remove_file:
         project.document_filename = None
-                project.document_size = None
+        project.document_size = None
         project.document_data = None
         project.document_content_type = None
         project.document_storage = "database"
