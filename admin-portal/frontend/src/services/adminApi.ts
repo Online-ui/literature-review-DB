@@ -270,6 +270,12 @@ class AdminApiService {
     return response.data;
   }
 
+  // Extract images from project PDF
+  async extractProjectImages(projectId: number): Promise<any> {
+    const response = await this.api.post(`/projects/${projectId}/extract-images`);
+    return response.data;
+  }
+
   // Profile Methods
   async uploadProfileImage(file: File): Promise<any> {
     const formData = new FormData();
