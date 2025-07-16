@@ -1747,7 +1747,7 @@ const ProjectsPage: React.FC = () => {
               }}
             />
           )}
-                  </DialogContent>
+          </DialogContent>
       </Dialog>
 
       {/* Snackbar for notifications */}
