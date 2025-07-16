@@ -422,6 +422,7 @@ async def update_project(
             print(f"✅ File updated for project: {project.title}")
             
             # Extract images from the new document
+            # IMPORTANT: Don't append to existing images when updating document
             try:
                 extracted_images = await document_extractor.extract_images_from_document(
                     file_result["data"],
@@ -430,10 +431,10 @@ async def update_project(
                 )
                 
                 if extracted_images:
-                    # Append to existing images or replace
-                    current_images = project.images or []
-                    project.images = current_images + extracted_images
+                    # Ask user if they want to replace existing images or keep them
+                    # For now, we'll just add the new images without duplicating
                     print(f"✅ Extracted {len(extracted_images)} images from updated document")
+                    # Note: Don't automatically add these images - let the user decide
             except Exception as e:
                 print(f"⚠️ Failed to extract images from updated document: {e}")
                 
@@ -452,6 +453,60 @@ async def update_project(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update project"
+        )
+
+@router.put("/{project_id}/document")
+async def update_project_document(
+    project_id: int,
+    file: UploadFile = File(...),
+    extract_images: bool = Form(False),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Update only the document of a project"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    try:
+        # Process new file
+        file_result = await database_storage.upload_file(file)
+        
+        project.document_filename = file_result["filename"]
+        project.document_size = file_result["size"]
+        project.document_data = file_result["data"]
+        project.document_content_type = file_result["content_type"]
+        project.document_storage = file_result["storage"]
+        
+        extracted_count = 0
+        if extract_images:
+            # Extract images only if requested
+            extracted_images = await document_extractor.extract_images_from_document(
+                file_result["data"],
+                file_result["filename"],
+                project.id
+            )
+            if extracted_images:
+                current_images = project.images or []
+                project.images = current_images + extracted_images
+                extracted_count = len(extracted_images)
+        
+        db.commit()
+        db.refresh(project)
+        
+        return {
+            "message": "Document updated successfully",
+            "extracted_images": extracted_count
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update document: {str(e)}"
         )
 
 @router.delete("/{project_id}/file")
@@ -776,55 +831,3 @@ async def toggle_project_publish_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update project status"
         )
-
-# Debug endpoints
-@router.get("/debug/check-uploads")
-async def debug_check_uploads(
-    current_user: User = Depends(get_current_active_user),
-):
-    """Debug endpoint to check uploads directory and static file setup"""
-    from pathlib import Path
-    import os
-    
-    uploads_path = Path("uploads")
-    project_2_path = uploads_path / "projects" / "project_2"
-    
-    result = {
-        "current_working_directory": os.getcwd(),
-        "uploads_exists": uploads_path.exists(),
-        "uploads_absolute_path": str(uploads_path.absolute()),
-        "project_2_exists": project_2_path.exists(),
-        "project_2_files": [],
-        "all_upload_files": []
-    }
-    
-    # Check project_2 files
-    if project_2_path.exists():
-        result["project_2_files"] = [f.name for f in project_2_path.iterdir() if f.is_file()]
-    
-    # Check all files in uploads
-    if uploads_path.exists():
-        for root, dirs, files in os.walk(uploads_path):
-            for file in files:
-                rel_path = os.path.relpath(os.path.join(root, file), uploads_path)
-                result["all_upload_files"].append(rel_path)
-    
-    return result
-
-@router.get("/debug/project/{project_id}/images")
-async def debug_project_images(
-    project_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    """Debug endpoint to check project images in database"""
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        return {"error": "Project not found"}
-    
-    return {
-        "project_id": project.id,
-        "project_title": project.title,
-        "images_in_db": project.images or [],
-        "images_count": len(project.images) if project.images else 0
-    }
