@@ -28,8 +28,8 @@ import {
   ImageSearch as ExtractIcon,
 } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
-import { Project } from '../../types';
-import { adminApi } from '../../services/adminApi';
+import { Project } from '../types';
+import { adminApi } from '../services/adminApi';
 
 interface ProjectImagesTabProps {
   project: Project;
