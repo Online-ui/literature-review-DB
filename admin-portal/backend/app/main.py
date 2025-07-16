@@ -22,16 +22,23 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# Get the absolute path to the backend directory
+BASE_DIR = Path(__file__).resolve().parent
+UPLOAD_DIR = BASE_DIR / "uploads"
+
 # Create upload directories if they don't exist
-os.makedirs("uploads", exist_ok=True)
-os.makedirs("uploads/projects", exist_ok=True)
-os.makedirs("uploads/profile_images", exist_ok=True)
+UPLOAD_DIR.mkdir(exist_ok=True)
+(UPLOAD_DIR / "projects").mkdir(exist_ok=True)
+(UPLOAD_DIR / "profile_images").mkdir(exist_ok=True)
 
 # Create static directory for React build if it doesn't exist
-os.makedirs("static", exist_ok=True)
+STATIC_DIR = BASE_DIR / "static"
+STATIC_DIR.mkdir(exist_ok=True)
 
-# Mount static files for uploads
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+print(f"🚀 Starting {settings.PROJECT_NAME}")
+print(f"📁 Base directory: {BASE_DIR}")
+print(f"📁 Upload directory: {UPLOAD_DIR}")
+print(f"📁 Static directory: {STATIC_DIR}")
 
 # Fixed validation error handler
 @app.exception_handler(RequestValidationError)
@@ -58,7 +65,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
     )
 
-# CORS middleware
+# CORS middleware - MUST come before static files and routes
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -67,46 +74,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup"""
-    print(f"🚀 Starting {settings.PROJECT_NAME}")
-    print(f"📦 Version: {settings.VERSION}")
-    print(f"🗄️  Storage Backend: {settings.STORAGE_BACKEND}")
-    print(f"📁 Max file size: {settings.MAX_FILE_SIZE / 1024 / 1024:.1f}MB")
-    print(f"📄 Allowed file types: {', '.join(settings.ALLOWED_FILE_TYPES)}")
-    print("✅ Database Storage configured")
-    
-    # Verify directories
-    print("📁 Directories:")
-    print(f"   - uploads/ {'✓' if os.path.exists('uploads') else '✗'}")
-    print(f"   - uploads/projects/ {'✓' if os.path.exists('uploads/projects') else '✗'}")
-    print(f"   - uploads/profile_images/ {'✓' if os.path.exists('uploads/profile_images') else '✗'}")
-    print(f"   - static/ {'✓' if os.path.exists('static') else '✗'}")
-    
-    # Check if React build exists
-    index_path = Path("static/index.html")
-    if index_path.exists():
-        print("✅ React build found")
-    else:
-        print("⚠️  React build not found - frontend routes will return 404")
-    
-    # Debug: Print registered routes
-    print("\n📍 Registered API Routes:")
-    for route in app.routes:
-        if hasattr(route, 'methods') and hasattr(route, 'path'):
-            methods = ', '.join(route.methods)
-            print(f"  {methods} {route.path}")
-    print()
+# Mount static files for uploads - this MUST come after CORS but before API routes
+if UPLOAD_DIR.exists():
+    app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+    print(f"✅ Static files mounted at /uploads from {UPLOAD_DIR}")
+else:
+    print(f"⚠️  WARNING: Upload directory does not exist: {UPLOAD_DIR}")
 
-# Include routers - ORDER MATTERS!
+# Include routers with /api prefix
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(utils.router, prefix="/api/utils", tags=["utilities"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
+
+# Startup event
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup"""
+    print(f"\n{'='*60}")
+    print(f"🚀 {settings.PROJECT_NAME} v{settings.VERSION}")
+    print(f"{'='*60}")
+    print(f"📦 Storage Backend: {settings.STORAGE_BACKEND}")
+    print(f"📁 Max file size: {settings.MAX_FILE_SIZE / 1024 / 1024:.1f}MB")
+    print(f"📄 Allowed file types: {', '.join(settings.ALLOWED_FILE_TYPES)}")
+    print(f"✅ Database Storage configured")
+    
+    # Verify directories
+    print(f"\n📁 Directory Status:")
+    print(f"   - uploads/ {'✅' if UPLOAD_DIR.exists() else '❌'}")
+    print(f"   - uploads/projects/ {'✅' if (UPLOAD_DIR / 'projects').exists() else '❌'}")
+    print(f"   - uploads/profile_images/ {'✅' if (UPLOAD_DIR / 'profile_images').exists() else '❌'}")
+    print(f"   - static/ {'✅' if STATIC_DIR.exists() else '❌'}")
+    
+    # Check if React build exists
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        print(f"✅ React build found at {index_path}")
+    else:
+        print(f"⚠️  React build not found - frontend routes will return 404")
+    
+    # Debug: Print registered routes
+    print(f"\n📍 Registered Routes:")
+    for route in app.routes:
+        if hasattr(route, 'methods') and hasattr(route, 'path'):
+            methods = ', '.join(route.methods) if route.methods else 'N/A'
+            print(f"   {methods:8} {route.path}")
+    print(f"{'='*60}\n")
 
 # API root endpoint
 @app.get("/api")
@@ -129,11 +144,16 @@ async def health_check():
         "database": "connected",
         "max_file_size_mb": settings.MAX_FILE_SIZE / 1024 / 1024,
         "upload_dirs": {
-            "uploads": os.path.exists("uploads"),
-            "projects": os.path.exists("uploads/projects"),
-            "profile_images": os.path.exists("uploads/profile_images")
+            "uploads": UPLOAD_DIR.exists(),
+            "projects": (UPLOAD_DIR / "projects").exists(),
+            "profile_images": (UPLOAD_DIR / "profile_images").exists()
         },
-        "frontend": os.path.exists("static/index.html")
+        "frontend": (STATIC_DIR / "index.html").exists(),
+        "paths": {
+            "base_dir": str(BASE_DIR),
+            "upload_dir": str(UPLOAD_DIR),
+            "static_dir": str(STATIC_DIR)
+        }
     }
 
 @app.get("/api/config")
@@ -148,19 +168,35 @@ async def get_config():
         "cors_origins": settings.CORS_ORIGINS
     }
 
+# Test route for static files
+@app.get("/test-static")
+async def test_static():
+    """Test if static files are accessible"""
+    test_files = []
+    if UPLOAD_DIR.exists():
+        for root, dirs, files in os.walk(UPLOAD_DIR):
+            for file in files[:5]:  # Limit to first 5 files
+                rel_path = os.path.relpath(os.path.join(root, file), UPLOAD_DIR)
+                test_files.append(f"/uploads/{rel_path}")
+    
+    return {
+        "message": "Static file test",
+        "upload_dir": str(UPLOAD_DIR),
+        "exists": UPLOAD_DIR.exists(),
+        "sample_files": test_files,
+        "test_url": "/uploads/projects/test.jpg if it exists"
+    }
+
 # Serve static files (React build) - this should be after API routes
-static_files_path = Path("static")
-if static_files_path.exists() and static_files_path.is_dir():
-    # Check if there are actual files in the static directory
-    if any(static_files_path.iterdir()):
-        app.mount("/static", StaticFiles(directory="static"), name="static")
-        print("✅ Static files mounted at /static")
+if STATIC_DIR.exists() and any(STATIC_DIR.iterdir()):
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    print(f"✅ React static files mounted at /static")
 
 # Root route - serve React app
 @app.get("/")
 async def serve_root():
     """Serve the React app root"""
-    index_path = Path("static/index.html")
+    index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(str(index_path))
     else:
@@ -184,7 +220,8 @@ async def serve_spa(request: Request, full_path: str):
         full_path.startswith("docs") or 
         full_path.startswith("redoc") or
         full_path.startswith("openapi.json") or
-        full_path.startswith("static/")):
+        full_path.startswith("static/") or
+        full_path.startswith("test-static")):
         # Let FastAPI handle 404 for these routes
         return JSONResponse(
             status_code=404,
@@ -192,7 +229,7 @@ async def serve_spa(request: Request, full_path: str):
         )
     
     # For all other routes, serve the React app (if it exists)
-    index_path = Path("static/index.html")
+    index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(str(index_path))
     else:
