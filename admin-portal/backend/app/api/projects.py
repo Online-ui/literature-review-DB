@@ -20,6 +20,7 @@ from ..core.config import settings
 from ..core.constants import RESEARCH_AREAS, DEGREE_TYPES, ACADEMIC_YEARS, INSTITUTIONS
 from ..services.database_storage import database_storage
 from ..services.image_upload import ImageUploadService
+from ..services.document_image_extractor import DocumentImageExtractor
 
 router = APIRouter()
 
