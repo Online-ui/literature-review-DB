@@ -404,7 +404,7 @@ async def update_project(
         project.document_data = None
         project.document_content_type = None
         project.document_storage = "database"
-        print(f"🗑️  File removed from project: {project.title}")
+                print(f"🗑️  File removed from project: {project.title}")
     
     # Handle new file upload
     if file and file.filename:
@@ -764,3 +764,26 @@ async def toggle_project_publish_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update project status"
         )
+
+# Debug endpoint
+@router.get("/debug/uploads")
+async def debug_uploads(
+    current_user: User = Depends(get_current_active_user),
+):
+    """Debug endpoint to check uploads directory"""
+    from pathlib import Path
+    uploads_path = Path("uploads")
+    
+    result = {
+        "uploads_exists": uploads_path.exists(),
+        "uploads_is_dir": uploads_path.is_dir() if uploads_path.exists() else False,
+        "uploads_absolute_path": str(uploads_path.absolute()),
+        "contents": []
+    }
+    
+    if uploads_path.exists() and uploads_path.is_dir():
+        for item in uploads_path.rglob("*"):
+            if item.is_file():
+                result["contents"].append(str(item.relative_to(uploads_path)))
+    
+    return result
