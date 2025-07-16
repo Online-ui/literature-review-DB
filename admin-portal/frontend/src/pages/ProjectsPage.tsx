@@ -38,7 +38,9 @@ import {
   InputAdornment,
   Divider,
   Tabs,
-  Tab
+  Tab,
+  Badge,
+  Snackbar
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -56,7 +58,10 @@ import {
   Download as DownloadIcon,
   AttachFile as AttachFileIcon,
   FilterList as FilterIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  Image as ImageIcon,
+  Refresh as RefreshIcon,
+  CleaningServices as CleanupIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { adminApi } from '../services/adminApi';
@@ -114,6 +119,8 @@ const ProjectsPage: React.FC = () => {
   const [degreeTypes, setDegreeTypes] = useState<string[]>([]);
   const { user: currentUser } = useAuth();
   const theme = useTheme();
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const [cleaningUp, setCleaningUp] = useState(false);
 
   // Add these new state variables
   const [formConstants, setFormConstants] = useState<FormConstants>({
@@ -129,6 +136,10 @@ const ProjectsPage: React.FC = () => {
     custom_institution: ''
   });
 
+  // New state for managing images dialog
+  const [imagesDialogOpen, setImagesDialogOpen] = useState(false);
+  const [selectedProjectForImages, setSelectedProjectForImages] = useState<Project | null>(null);
+
   useEffect(() => {
     loadProjects();
     loadFilterOptions();
@@ -141,7 +152,6 @@ const ProjectsPage: React.FC = () => {
       setFormConstants(constants);
     } catch (error) {
       console.error('Failed to fetch form constants:', error);
-      // Fallback to empty arrays if API fails
     }
   };
 
@@ -211,7 +221,7 @@ const ProjectsPage: React.FC = () => {
       });
     }
     setFormError('');
-    setActiveTab('basic'); // Reset to first tab
+    setActiveTab('basic');
     setOpenDialog(true);
   };
 
@@ -225,6 +235,17 @@ const ProjectsPage: React.FC = () => {
       custom_degree_type: '',
       custom_institution: ''
     });
+  };
+
+  const handleOpenImagesDialog = (project: Project) => {
+    setSelectedProjectForImages(project);
+    setImagesDialogOpen(true);
+  };
+
+  const handleCloseImagesDialog = () => {
+    setImagesDialogOpen(false);
+    setSelectedProjectForImages(null);
+    loadProjects(); // Refresh projects to update image counts
   };
 
   const handleSubmit = async () => {
@@ -277,14 +298,32 @@ const ProjectsPage: React.FC = () => {
         submitData.append('file', formData.file);
       }
 
+      let savedProject: Project;
       if (editingProject) {
-        await adminApi.updateProject(editingProject.id, submitData);
+        savedProject = await adminApi.updateProject(editingProject.id, submitData);
       } else {
-        await adminApi.createProject(submitData);
+        savedProject = await adminApi.createProject(submitData);
       }
 
       await loadProjects();
       handleCloseDialog();
+
+      // Show success message
+      setSnackbar({
+        open: true,
+        message: editingProject ? 'Project updated successfully' : 'Project created successfully',
+        severity: 'success'
+      });
+
+      // If it's a new project and a file was uploaded, ask if they want to manage images
+      if (!editingProject && formData.file) {
+        setTimeout(() => {
+          if (window.confirm('Would you like to manage images for this project?')) {
+            const newProject = projects.find(p => p.id === savedProject.id) || savedProject;
+            handleOpenImagesDialog(newProject);
+          }
+        }, 500);
+      }
     } catch (err: any) {
       let errorMessage = 'Failed to save project';
       
@@ -305,7 +344,11 @@ const ProjectsPage: React.FC = () => {
       try {
         await adminApi.deleteProject(projectId);
         await loadProjects();
-        setError('');
+        setSnackbar({
+          open: true,
+          message: 'Project deleted successfully',
+          severity: 'success'
+        });
       } catch (err: any) {
         setError(err.response?.data?.detail || 'Failed to delete project');
       }
@@ -319,6 +362,34 @@ const ProjectsPage: React.FC = () => {
       setError('');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to toggle project status');
+    }
+  };
+
+  const handleCleanupImages = async (projectId?: number) => {
+    setCleaningUp(true);
+    try {
+      const endpoint = projectId 
+        ? `/projects/${projectId}/cleanup-images`
+        : '/projects/cleanup-all-images';
+      
+      const response = await adminApi.api.post(endpoint);
+      
+      setSnackbar({
+        open: true,
+        message: response.data.message,
+        severity: 'success'
+      });
+      
+      // Refresh projects
+      await loadProjects();
+    } catch (error: any) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Cleanup failed',
+        severity: 'error'
+      });
+    } finally {
+      setCleaningUp(false);
     }
   };
 
@@ -404,30 +475,52 @@ const ProjectsPage: React.FC = () => {
                 Manage research projects, publications, and academic content
               </Typography>
             </Box>
-            
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={<AddIcon />}
-              onClick={() => handleOpenDialog()}
-              sx={{
-                px: 4,
-                py: 1.5,
-                borderRadius: 3,
-                background: 'linear-gradient(135deg, #0a4f3c 0%, #2a9d7f 100%)',
-                textTransform: 'none',
-                fontWeight: 600,
-                boxShadow: '0 8px 24px rgba(10,79,60,0.3)',
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #063d2f 0%, #1a7a5e 100%)',
-                  boxShadow: '0 12px 32px rgba(10,79,60,0.4)',
-                  transform: 'translateY(-2px)'
-                },
-                transition: 'all 0.3s ease'
-              }}
-            >
-              Add New Project
-            </Button>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+              {currentUser?.role === 'main_coordinator' && (
+                <Tooltip title="Clean up invalid images from all projects">
+                  <Button
+                    variant="outlined"
+                    startIcon={cleaningUp ? <CircularProgress size={16} /> : <CleanupIcon />}
+                    onClick={() => handleCleanupImages()}
+                    disabled={cleaningUp}
+                    sx={{
+                      borderRadius: 3,
+                      borderColor: '#0a4f3c',
+                      color: '#0a4f3c',
+                      '&:hover': {
+                        borderColor: '#063d2f',
+                        bgcolor: alpha('#0a4f3c', 0.04)
+                      }
+                    }}
+                  >
+                    Cleanup Images
+                  </Button>
+                </Tooltip>
+              )}
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenDialog()}
+                sx={{
+                  px: 4,
+                  py: 1.5,
+                  borderRadius: 3,
+                  background: 'linear-gradient(135deg, #0a4f3c 0%, #2a9d7f 100%)',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  boxShadow: '0 8px 24px rgba(10,79,60,0.3)',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #063d2f 0%, #1a7a5e 100%)',
+                    boxShadow: '0 12px 32px rgba(10,79,60,0.4)',
+                    transform: 'translateY(-2px)'
+                  },
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                Add New Project
+              </Button>
+            </Box>
           </Box>
 
           {/* Stats Cards */}
@@ -465,7 +558,7 @@ const ProjectsPage: React.FC = () => {
               <Grid item xs={6} md={3} key={index}>
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                 >
                   <Card
@@ -687,7 +780,7 @@ const ProjectsPage: React.FC = () => {
                   <TableCell sx={{ fontWeight: 700, color: '#0a4f3c' }}>Research Info</TableCell>
                   <TableCell sx={{ fontWeight: 700, color: '#0a4f3c' }}>Status</TableCell>
                   <TableCell sx={{ fontWeight: 700, color: '#0a4f3c' }}>Analytics</TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: '#0a4f3c' }}>Created</TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: '#0a4f3c' }}>Media</TableCell>
                   <TableCell align="center" sx={{ fontWeight: 700, color: '#0a4f3c' }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -800,9 +893,51 @@ const ProjectsPage: React.FC = () => {
                       </TableCell>
                       
                       <TableCell>
-                        <Typography variant="caption" color="text.secondary">
-                          {new Date(project.created_at).toLocaleDateString()}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Badge 
+                            badgeContent={project.images?.length || 0} 
+                            color="primary"
+                            sx={{
+                              '& .MuiBadge-badge': {
+                                bgcolor: '#0a4f3c',
+                              }
+                            }}
+                          >
+                            <Tooltip title="Manage Images">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenImagesDialog(project)}
+                                sx={{
+                                  bgcolor: alpha('#0a4f3c', 0.1),
+                                  color: '#0a4f3c',
+                                  '&:hover': {
+                                    bgcolor: alpha('#0a4f3c', 0.2)
+                                  }
+                                }}
+                              >
+                                <ImageIcon sx={{ fontSize: 18 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Badge>
+                          {currentUser?.role === 'main_coordinator' && project.images && project.images.length > 0 && (
+                            <Tooltip title="Cleanup invalid images">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleCleanupImages(project.id)}
+                                disabled={cleaningUp}
+                                sx={{
+                                  bgcolor: alpha('#ff9800', 0.1),
+                                  color: '#ff9800',
+                                  '&:hover': {
+                                    bgcolor: alpha('#ff9800', 0.2)
+                                  }
+                                }}
+                              >
+                                <CleanupIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
                       </TableCell>
                       
                       <TableCell align="center">
@@ -867,7 +1002,7 @@ const ProjectsPage: React.FC = () => {
           </TableContainer>
 
           {projects.length === 0 && !loading && (
-                        <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Box sx={{ textAlign: 'center', py: 8 }}>
               <Avatar
                 sx={{
                   width: 80,
@@ -945,7 +1080,7 @@ const ProjectsPage: React.FC = () => {
         </DialogTitle>
 
         <DialogContent sx={{ px: 3 }}>
-          {/* Tab Navigation */}
+          {/* Tab Navigation - Only show images tab for existing projects */}
           <Tabs 
             value={activeTab} 
             onChange={(_, newValue) => setActiveTab(newValue)}
@@ -970,7 +1105,6 @@ const ProjectsPage: React.FC = () => {
           >
             <Tab label="Basic Info" value="basic" />
             <Tab label="Details" value="details" />
-            {editingProject && <Tab label="Images" value="images" />}
             <Tab label="Settings" value="settings" />
           </Tabs>
 
@@ -1176,7 +1310,7 @@ const ProjectsPage: React.FC = () => {
                         variant="outlined"
                         value={formData.department}
                         onChange={handleInputChange('department')}
-                        sx={{
+                          sx={{
                           '& .MuiOutlinedInput-root': {
                             borderRadius: 3,
                             '&.Mui-focused fieldset': {
@@ -1320,7 +1454,7 @@ const ProjectsPage: React.FC = () => {
                   }}
                 >
                   <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c', mb: 2 }}>
-                                        SEO & Metadata
+                    SEO & Metadata
                   </Typography>
                   <Grid container spacing={3}>
                     <Grid item xs={12}>
@@ -1372,20 +1506,6 @@ const ProjectsPage: React.FC = () => {
                   </Grid>
                 </Paper>
               </>
-            )}
-
-            {/* Images Tab */}
-            {activeTab === 'images' && editingProject && (
-              <ProjectImagesTab
-                projectId={editingProject.id}
-                images={editingProject.images || []}
-                featuredImageIndex={editingProject.featured_image_index || 0}
-                onImagesUpdate={() => {
-                  // Refresh project data
-                  loadProjects();
-                }}
-                disabled={false}
-              />
             )}
 
             {/* Settings Tab */}
@@ -1574,8 +1694,81 @@ const ProjectsPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Separate Images Management Dialog */}
+      <Dialog
+        open={imagesDialogOpen}
+        onClose={handleCloseImagesDialog}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            maxHeight: '90vh'
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Avatar
+                sx={{
+                  bgcolor: '#0a4f3c',
+                  width: 48,
+                  height: 48
+                }}
+              >
+                <ImageIcon />
+              </Avatar>
+              <Box>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: '#0a4f3c' }}>
+                  Manage Project Images
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedProjectForImages?.title}
+                </Typography>
+              </Box>
+            </Box>
+            <IconButton onClick={handleCloseImagesDialog} sx={{ color: 'text.secondary' }}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent sx={{ px: 3, py: 2 }}>
+          {selectedProjectForImages && (
+            <ProjectImagesTab
+              project={selectedProjectForImages}
+              onUpdate={() => {
+                loadProjects();
+              }}
+            />
+          )}
+                  </DialogContent>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ 
+            width: '100%',
+            borderRadius: 2,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+          }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
 
 export default ProjectsPage;
+        
