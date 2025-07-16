@@ -62,7 +62,7 @@ class DocumentImageExtractor:
                                 upload_file, 
                                 f"project_{project_id}"
                             )
-                            # Return the full path that matches what the frontend expects
+                            # Store path with /uploads/ prefix for consistency
                             image_paths.append(f"/uploads/{saved_path}")
                         
                         # Clean up temp file
@@ -123,7 +123,7 @@ class DocumentImageExtractor:
                                     upload_file,
                                     f"project_{project_id}"
                                 )
-                                # Return the full path that matches what the frontend expects
+                                # Store path with /uploads/ prefix for consistency
                                 image_paths.append(f"/uploads/{saved_path}")
                             
                             # Clean up
