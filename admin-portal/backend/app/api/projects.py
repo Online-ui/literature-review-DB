@@ -774,6 +774,103 @@ async def extract_images_from_project_document(
         "total_images": len(project.images)
     }
 
+# NEW CLEANUP ENDPOINTS
+@router.post("/{project_id}/cleanup-images")
+async def cleanup_project_images(
+    project_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Remove invalid or missing images from project"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not enough permissions"
+        )
+    
+    if not project.images:
+        return {"message": "No images to cleanup", "removed": 0}
+    
+    valid_images = []
+    removed_count = 0
+    
+    for image_path in project.images:
+        # Check if file exists
+        clean_path = image_path.replace('/uploads/', '')
+        file_path = Path("uploads") / clean_path
+        
+        if file_path.exists() and file_path.is_file():
+            valid_images.append(image_path)
+        else:
+            removed_count += 1
+            print(f"Removing missing image from database: {image_path}")
+    
+    project.images = valid_images
+    
+    # Reset featured index if needed
+    if project.featured_image_index >= len(valid_images):
+        project.featured_image_index = 0
+    
+    db.commit()
+    
+    return {
+        "message": f"Cleanup completed. Removed {removed_count} invalid images",
+        "removed": removed_count,
+        "remaining": len(valid_images)
+    }
+
+@router.post("/cleanup-all-images")
+async def cleanup_all_project_images(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Remove invalid images from all projects (admin only)"""
+    if current_user.role != "main_coordinator":
+        raise HTTPException(
+            status_code=403,
+            detail="Only main coordinators can perform global cleanup"
+        )
+    
+    projects = db.query(Project).filter(Project.images != None).all()
+    total_removed = 0
+    projects_cleaned = 0
+    
+    for project in projects:
+        if not project.images:
+            continue
+            
+        valid_images = []
+        removed_in_project = 0
+        
+        for image_path in project.images:
+            clean_path = image_path.replace('/uploads/', '')
+            file_path = Path("uploads") / clean_path
+            
+            if file_path.exists() and file_path.is_file():
+                valid_images.append(image_path)
+            else:
+                removed_in_project += 1
+                total_removed += 1
+        
+        if removed_in_project > 0:
+            project.images = valid_images
+            if project.featured_image_index >= len(valid_images):
+                project.featured_image_index = 0
+            projects_cleaned += 1
+    
+    db.commit()
+    
+    return {
+        "message": "Global cleanup completed",
+        "projects_cleaned": projects_cleaned,
+        "total_images_removed": total_removed
+    }
+
 # Keep existing endpoints
 @router.get("/research-areas/list")
 async def get_research_areas(
