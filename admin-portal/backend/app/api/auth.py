@@ -200,7 +200,7 @@ async def forgot_password(
     Request password reset token - accepts FormData and sends email.
     Always returns success to prevent email enumeration.
     """
-        logger.info(f"Password reset requested for email: {email}")
+    logger.info(f"Password reset requested for email: {email}")
     
     # Find user by email
     user = db.query(User).filter(User.email == email).first()
