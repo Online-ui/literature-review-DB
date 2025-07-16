@@ -27,7 +27,7 @@ import {
   Image as ImageIcon,
   Close as CloseIcon,
   DragIndicator as DragIcon,
-  ImageSearch as ExtractIcon // Changed from AutoAwesome to ImageSearch
+  ImageSearch as ExtractIcon
 } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -54,6 +54,16 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Helper function to get the correct image URL
+  const getImageUrl = (imagePath: string) => {
+    // If the path already starts with /uploads/, use it as is
+    if (imagePath.startsWith('/uploads/')) {
+      return `${process.env.REACT_APP_API_URL}${imagePath}`;
+    }
+    // Otherwise, prepend /uploads/
+    return `${process.env.REACT_APP_API_URL}/uploads/${imagePath}`;
+  };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -150,7 +160,7 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
   };
 
   return (
-    <Box>
+        <Box>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 1, fontWeight: 600, color: '#0a4f3c' }}>
           Project Images Gallery
@@ -306,7 +316,7 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
                             <CardMedia
                               component="img"
                               height="200"
-                              image={`${process.env.REACT_APP_API_URL}${image}`}
+                              image={getImageUrl(image)}
                               alt={`Project image ${index + 1}`}
                               sx={{
                                 cursor: 'pointer',
@@ -499,7 +509,7 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
         <DialogContent sx={{ p: 0 }}>
           {selectedImage && (
             <img
-              src={`${process.env.REACT_APP_API_URL}${selectedImage}`}
+              src={getImageUrl(selectedImage)}
               alt="Preview"
               style={{ width: '100%', height: 'auto', display: 'block' }}
             />
