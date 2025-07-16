@@ -337,6 +337,18 @@ class AdminApiService {
     const response = await this.api.get('/health');
     return response.data;
   }
+
+  // In adminApi.ts, add these methods to the AdminApiService class:
+
+  async cleanupProjectImages(projectId: number): Promise<any> {
+    const response = await this.api.post(`/projects/${projectId}/cleanup-images`);
+    return response.data;
+  }
+  
+  async cleanupAllProjectImages(): Promise<any> {
+    const response = await this.api.post('/projects/cleanup-all-images');
+    return response.data;
+  }
 }
 
 export const adminApi = new AdminApiService();
