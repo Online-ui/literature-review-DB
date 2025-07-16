@@ -7,6 +7,7 @@ import os
 import uuid
 from datetime import datetime
 import io
+from pathlib import Path
 
 from ..database import get_db
 from ..models.user import User
@@ -25,7 +26,7 @@ from ..services.document_image_extractor import DocumentImageExtractor
 router = APIRouter()
 
 # Initialize services
-image_service = ImageUploadService(upload_dir="uploads/projects")
+image_service = ImageUploadService()
 document_extractor = DocumentImageExtractor(image_service)
 
 def create_slug(title: str) -> str:
@@ -400,7 +401,7 @@ async def update_project(
     # Handle file removal
     if remove_file:
         project.document_filename = None
-        project.document_size = None
+                project.document_size = None
         project.document_data = None
         project.document_content_type = None
         project.document_storage = "database"
@@ -516,6 +517,16 @@ async def delete_project(
             detail="Not enough permissions to delete this project"
         )
     
+    # Delete associated images from filesystem
+    if project.images:
+        for image_path in project.images:
+            try:
+                # Remove /uploads/ prefix if present
+                clean_path = image_path.replace('/uploads/', '')
+                await image_service.delete_image(clean_path)
+            except Exception as e:
+                print(f"Failed to delete image {image_path}: {e}")
+    
     try:
         db.delete(project)
         db.commit()
@@ -556,7 +567,8 @@ async def upload_project_images(
     new_images = []
     for file in files:
         image_path = await image_service.save_image(file, f"project_{project_id}")
-        new_images.append(f"/uploads/projects/{image_path}")
+        # Store path with /uploads/ prefix for consistency
+        new_images.append(f"/uploads/{image_path}")
     
     # Update project
     project.images = current_images + new_images
@@ -590,7 +602,7 @@ async def delete_project_image(
         raise HTTPException(status_code=400, detail="Invalid image index")
     
     # Delete file
-    image_path = images[index].replace("/uploads/projects/", "")
+    image_path = images[index].replace("/uploads/", "")
     await image_service.delete_image(image_path)
     
     # Update array
@@ -765,25 +777,54 @@ async def toggle_project_publish_status(
             detail="Failed to update project status"
         )
 
-# Debug endpoint
-@router.get("/debug/uploads")
-async def debug_uploads(
+# Debug endpoints
+@router.get("/debug/check-uploads")
+async def debug_check_uploads(
     current_user: User = Depends(get_current_active_user),
 ):
-    """Debug endpoint to check uploads directory"""
+    """Debug endpoint to check uploads directory and static file setup"""
     from pathlib import Path
+    import os
+    
     uploads_path = Path("uploads")
+    project_2_path = uploads_path / "projects" / "project_2"
     
     result = {
+        "current_working_directory": os.getcwd(),
         "uploads_exists": uploads_path.exists(),
-        "uploads_is_dir": uploads_path.is_dir() if uploads_path.exists() else False,
         "uploads_absolute_path": str(uploads_path.absolute()),
-        "contents": []
+        "project_2_exists": project_2_path.exists(),
+        "project_2_files": [],
+        "all_upload_files": []
     }
     
-    if uploads_path.exists() and uploads_path.is_dir():
-        for item in uploads_path.rglob("*"):
-            if item.is_file():
-                result["contents"].append(str(item.relative_to(uploads_path)))
+    # Check project_2 files
+    if project_2_path.exists():
+        result["project_2_files"] = [f.name for f in project_2_path.iterdir() if f.is_file()]
+    
+    # Check all files in uploads
+    if uploads_path.exists():
+        for root, dirs, files in os.walk(uploads_path):
+            for file in files:
+                rel_path = os.path.relpath(os.path.join(root, file), uploads_path)
+                result["all_upload_files"].append(rel_path)
     
     return result
+
+@router.get("/debug/project/{project_id}/images")
+async def debug_project_images(
+    project_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to check project images in database"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        return {"error": "Project not found"}
+    
+    return {
+        "project_id": project.id,
+        "project_title": project.title,
+        "images_in_db": project.images or [],
+        "images_count": len(project.images) if project.images else 0
+    }
