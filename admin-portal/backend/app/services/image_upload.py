@@ -58,15 +58,22 @@ class ImageUploadService:
 
     async def delete_image(self, path: str) -> None:
         """Delete an image file"""
+        # Clean up the path
+        clean_path = path
+        
         # Remove leading slash if present
-        if path.startswith('/'):
-            path = path[1:]
+        if clean_path.startswith('/'):
+            clean_path = clean_path[1:]
         
         # Remove 'uploads/' prefix if present
-        if path.startswith('uploads/'):
-            path = path[8:]
+        if clean_path.startswith('uploads/'):
+            clean_path = clean_path[8:]
+        
+        # Remove 'api/uploads/' prefix if present (from frontend calls)
+        if clean_path.startswith('api/uploads/'):
+            clean_path = clean_path[12:]
             
-        filepath = self.upload_dir / path
+        filepath = self.upload_dir / clean_path
         print(f"Attempting to delete: {filepath}")
         
         if filepath.exists() and filepath.is_file():
@@ -74,6 +81,11 @@ class ImageUploadService:
             print(f"Deleted successfully")
         else:
             print(f"File not found: {filepath}")
+            # Also check without the projects prefix in case of path issues
+            alt_path = self.upload_dir / clean_path.replace('projects/', '')
+            if alt_path.exists() and alt_path.is_file():
+                alt_path.unlink()
+                print(f"Deleted from alternate path: {alt_path}")
 
     async def _validate_image(self, file: UploadFile) -> None:
         """Validate uploaded image"""
