@@ -27,7 +27,7 @@ import {
   Image as ImageIcon,
   Close as CloseIcon,
   DragIndicator as DragIcon,
-  AutoAwesome as ExtractIcon
+  ImageSearch as ExtractIcon // Changed from AutoAwesome to ImageSearch
 } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -129,31 +129,21 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
   };
 
   const handleExtractImages = async () => {
+    if (disabled) return;
+    
     setExtracting(true);
     setError(null);
     
     try {
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/projects/${projectId}/extract-images`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        alert(`Extracted ${data.message}`);
-        // Reload images
+      const result = await adminApi.extractProjectImages(projectId);
+      
+      if (result.message) {
+        // Show success message
+        alert(result.message);
         onImagesUpdate();
-      } else {
-        throw new Error('Failed to extract images');
       }
-    } catch (error) {
-      console.error('Failed to extract images:', error);
-      setError('Failed to extract images from project content');
+    } catch (err: any) {
+      setError(err.message || 'Failed to extract images');
     } finally {
       setExtracting(false);
     }
@@ -184,10 +174,10 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
       )}
 
       {/* Action Buttons */}
-      <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
+      <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
         <Button
           variant="outlined"
-          startIcon={<ExtractIcon />}
+          startIcon={extracting ? <CircularProgress size={20} /> : <ExtractIcon />}
           onClick={handleExtractImages}
           disabled={disabled || extracting}
           sx={{
@@ -201,14 +191,32 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
             }
           }}
         >
-          {extracting ? (
-            <>
-              <CircularProgress size={16} sx={{ mr: 1 }} />
-              Extracting...
-            </>
-          ) : (
-            'Extract Images'
-          )}
+          {extracting ? 'Extracting...' : 'Extract from Document'}
+        </Button>
+
+        <Button
+          variant="contained"
+          component="label"
+          startIcon={uploading ? <CircularProgress size={20} /> : <UploadIcon />}
+          disabled={disabled || uploading || images.length >= 20}
+          sx={{
+            bgcolor: '#0a4f3c',
+            textTransform: 'none',
+            fontWeight: 600,
+            '&:hover': { 
+              bgcolor: '#063d2f' 
+            }
+          }}
+        >
+          {uploading ? 'Uploading...' : 'Upload Images'}
+          <input
+            type="file"
+            hidden
+            multiple
+            accept="image/*"
+            onChange={handleFileSelect}
+            disabled={disabled || uploading}
+          />
         </Button>
       </Box>
 
@@ -298,7 +306,7 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
                             <CardMedia
                               component="img"
                               height="200"
-                              image={image}
+                              image={`${process.env.REACT_APP_API_URL}${image}`}
                               alt={`Project image ${index + 1}`}
                               sx={{
                                 cursor: 'pointer',
@@ -422,31 +430,54 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
             No images uploaded yet
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Upload images to showcase your project
+            Upload images to showcase your project or extract them from the document
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<UploadIcon />}
-            component="label"
-            disabled={disabled || uploading}
-            sx={{
-              background: 'linear-gradient(135deg, #0a4f3c 0%, #2a9d7f 100%)',
-              textTransform: 'none',
-              fontWeight: 600,
-              px: 4,
-              py: 1.5,
-              borderRadius: 3
-            }}
-          >
-            Upload Images
-            <input
-              type="file"
-              multiple
-              accept="image/*"
-              onChange={handleFileSelect}
-              hidden
-            />
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+            <Button
+              variant="outlined"
+              startIcon={<ExtractIcon />}
+              onClick={handleExtractImages}
+              disabled={disabled || extracting}
+              sx={{
+                color: '#0a4f3c',
+                borderColor: '#0a4f3c',
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 3,
+                py: 1.5,
+                borderRadius: 3,
+                '&:hover': {
+                  borderColor: '#0a4f3c',
+                  bgcolor: alpha('#0a4f3c', 0.05)
+                }
+              }}
+            >
+              {extracting ? 'Extracting...' : 'Extract from Document'}
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<UploadIcon />}
+              component="label"
+              disabled={disabled || uploading}
+              sx={{
+                background: 'linear-gradient(135deg, #0a4f3c 0%, #2a9d7f 100%)',
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 4,
+                py: 1.5,
+                borderRadius: 3
+              }}
+            >
+              Upload Images
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleFileSelect}
+                hidden
+              />
+            </Button>
+          </Box>
         </Box>
       )}
 
@@ -468,7 +499,7 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
         <DialogContent sx={{ p: 0 }}>
           {selectedImage && (
             <img
-              src={selectedImage}
+              src={`${process.env.REACT_APP_API_URL}${selectedImage}`}
               alt="Preview"
               style={{ width: '100%', height: 'auto', display: 'block' }}
             />
