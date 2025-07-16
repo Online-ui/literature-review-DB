@@ -1,123 +1,127 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Box,
-  Typography,
-  Alert,
-  Button,
-  IconButton,
   Grid,
   Card,
   CardMedia,
   CardActions,
-  Chip,
+  IconButton,
+  Button,
+  Typography,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress,
-  LinearProgress,
   Tooltip,
-  alpha
+  Badge,
+  CircularProgress,
+  Alert,
+  Snackbar,
 } from '@mui/material';
 import {
-  CloudUpload as UploadIcon,
   Delete as DeleteIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon,
-  Image as ImageIcon,
-  Close as CloseIcon,
+  CloudUpload as UploadIcon,
   DragIndicator as DragIcon,
-  ImageSearch as ExtractIcon
+  Refresh as RefreshIcon,
+  ImageSearch as ExtractIcon,
 } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
-import { motion, AnimatePresence } from 'framer-motion';
-import { adminApi } from '../services/adminApi';
+import { Project } from '../../types';
+import { adminApi } from '../../services/adminApi';
 
 interface ProjectImagesTabProps {
-  projectId: number;
-  images: string[];
-  featuredImageIndex: number;
-  onImagesUpdate: () => void;
-  disabled?: boolean;
+  project: Project;
+  onUpdate: () => void;
 }
 
-export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
-  projectId,
-  images,
-  featuredImageIndex,
-  onImagesUpdate,
-  disabled = false
-}) => {
-  const [uploading, setUploading] = useState(false);
-  const [extracting, setExtracting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({ project, onUpdate }) => {
+  const [images, setImages] = useState<string[]>(project.images || []);
+  const [featuredIndex, setFeaturedIndex] = useState(project.featured_image_index || 0);
+  const [loading, setLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const [imageVersion, setImageVersion] = useState<{ [key: string]: number }>({});
 
-  // Helper function to get the correct image URL
-  const getImageUrl = (imagePath: string) => {
-    // If the path already starts with /uploads/, use it as is
-    if (imagePath.startsWith('/uploads/')) {
-      return `${process.env.REACT_APP_API_URL}${imagePath}`;
-    }
-    // Otherwise, prepend /uploads/
-    return `${process.env.REACT_APP_API_URL}/uploads/${imagePath}`;
+  // Add cache busting to image URLs
+  const getImageUrl = (path: string) => {
+    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8001';
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    const version = imageVersion[path] || 0;
+    return `${baseUrl}${cleanPath}?v=${version}`;
   };
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    if (files.length === 0) return;
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
+    // Check limit
     if (images.length + files.length > 20) {
-      setError(`Maximum 20 images allowed. You can add ${20 - images.length} more.`);
+      setSnackbar({ open: true, message: 'Maximum 20 images allowed', severity: 'error' });
       return;
     }
 
-    setUploading(true);
-    setError(null);
-    setUploadProgress(0);
-
+    setLoading(true);
     try {
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => Math.min(prev + 10, 90));
-      }, 200);
-
-      await adminApi.uploadImages(projectId, files);
-      
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-      
-      setTimeout(() => {
-        setUploadProgress(0);
-      }, 500);
-      
-      onImagesUpdate();
-    } catch (err: any) {
-      setError(err.message || 'Failed to upload images');
+      const response = await adminApi.uploadImages(project.id, Array.from(files));
+      setImages(response.images);
+      setSnackbar({ open: true, message: 'Images uploaded successfully', severity: 'success' });
+      onUpdate();
+    } catch (error: any) {
+      setSnackbar({ open: true, message: error.message || 'Failed to upload images', severity: 'error' });
     } finally {
-      setUploading(false);
+      setLoading(false);
     }
   };
 
   const handleDelete = async () => {
     if (deleteIndex === null) return;
 
+    setLoading(true);
     try {
-      await adminApi.deleteImage(projectId, deleteIndex);
+      await adminApi.deleteImage(project.id, deleteIndex);
+      
+      // Update local state
+      const newImages = [...images];
+      newImages.splice(deleteIndex, 1);
+      setImages(newImages);
+      
+      // Adjust featured index if needed
+      if (featuredIndex >= newImages.length) {
+        setFeaturedIndex(0);
+      }
+      
+      // Force cache refresh for all images
+      const newVersions = { ...imageVersion };
+      images.forEach(img => {
+        newVersions[img] = (newVersions[img] || 0) + 1;
+      });
+      setImageVersion(newVersions);
+      
+      setSnackbar({ open: true, message: 'Image deleted successfully', severity: 'success' });
+      onUpdate();
+    } catch (error: any) {
+      setSnackbar({ open: true, message: error.message || 'Failed to delete image', severity: 'error' });
+    } finally {
+      setLoading(false);
+      setDeleteDialogOpen(false);
       setDeleteIndex(null);
-      onImagesUpdate();
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete image');
     }
   };
 
   const handleSetFeatured = async (index: number) => {
+    setLoading(true);
     try {
-      await adminApi.setFeaturedImage(projectId, index);
-      onImagesUpdate();
-    } catch (err: any) {
-      setError(err.message || 'Failed to set featured image');
+      await adminApi.setFeaturedImage(project.id, index);
+      setFeaturedIndex(index);
+      setSnackbar({ open: true, message: 'Featured image updated', severity: 'success' });
+      onUpdate();
+    } catch (error: any) {
+      setSnackbar({ open: true, message: error.message || 'Failed to update featured image', severity: 'error' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -128,413 +132,249 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
 
-    const newOrder = items.map(item => images.indexOf(item));
-    
+    // Create new order array
+    const newOrder = Array.from({ length: images.length }, (_, i) => i);
+    const [movedIndex] = newOrder.splice(result.source.index, 1);
+    newOrder.splice(result.destination.index, 0, movedIndex);
+
+    setImages(items);
+    setLoading(true);
+
     try {
-      await adminApi.reorderImages(projectId, newOrder);
-      onImagesUpdate();
-    } catch (err: any) {
-      setError(err.message || 'Failed to reorder images');
+      await adminApi.reorderImages(project.id, newOrder);
+      setSnackbar({ open: true, message: 'Images reordered successfully', severity: 'success' });
+      onUpdate();
+    } catch (error: any) {
+      // Revert on error
+      setImages(images);
+      setSnackbar({ open: true, message: error.message || 'Failed to reorder images', severity: 'error' });
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleExtractImages = async () => {
-    if (disabled) return;
-    
-    setExtracting(true);
-    setError(null);
-    
+    setLoading(true);
     try {
-      const result = await adminApi.extractProjectImages(projectId);
+      const response = await adminApi.extractProjectImages(project.id);
       
-      if (result.message) {
-        // Show success message
-        alert(result.message);
-        onImagesUpdate();
+      // Refresh the images list
+      const updatedProject = await adminApi.getProjects({ search: project.title });
+      const currentProject = updatedProject.find(p => p.id === project.id);
+      
+      if (currentProject) {
+        setImages(currentProject.images || []);
+        setSnackbar({ 
+          open: true, 
+          message: response.message || 'Images extracted successfully', 
+          severity: 'success' 
+        });
+        onUpdate();
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to extract images');
+    } catch (error: any) {
+      setSnackbar({ 
+        open: true, 
+        message: error.message || 'Failed to extract images', 
+        severity: 'error' 
+      });
     } finally {
-      setExtracting(false);
+      setLoading(false);
     }
   };
 
+  const refreshImages = () => {
+    // Force refresh all image versions
+    const newVersions = { ...imageVersion };
+    images.forEach(img => {
+      newVersions[img] = Date.now();
+    });
+    setImageVersion(newVersions);
+  };
+
   return (
+    <Box>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h6">
+          Project Images ({images.length}/20)
+        </Typography>
         <Box>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 1, fontWeight: 600, color: '#0a4f3c' }}>
-          Project Images Gallery
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Upload up to 20 images. The starred image will be used as the featured image.
-          Drag and drop to reorder images.
-        </Typography>
-      </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {uploadProgress > 0 && (
-        <Box sx={{ mb: 2 }}>
-          <LinearProgress variant="determinate" value={uploadProgress} />
-        </Box>
-      )}
-
-      {/* Action Buttons */}
-      <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
-        <Button
-          variant="outlined"
-          startIcon={extracting ? <CircularProgress size={20} /> : <ExtractIcon />}
-          onClick={handleExtractImages}
-          disabled={disabled || extracting}
-          sx={{
-            color: '#0a4f3c',
-            borderColor: '#0a4f3c',
-            textTransform: 'none',
-            fontWeight: 600,
-            '&:hover': {
-              borderColor: '#0a4f3c',
-              bgcolor: alpha('#0a4f3c', 0.05)
-            }
-          }}
-        >
-          {extracting ? 'Extracting...' : 'Extract from Document'}
-        </Button>
-
-        <Button
-          variant="contained"
-          component="label"
-          startIcon={uploading ? <CircularProgress size={20} /> : <UploadIcon />}
-          disabled={disabled || uploading || images.length >= 20}
-          sx={{
-            bgcolor: '#0a4f3c',
-            textTransform: 'none',
-            fontWeight: 600,
-            '&:hover': { 
-              bgcolor: '#063d2f' 
-            }
-          }}
-        >
-          {uploading ? 'Uploading...' : 'Upload Images'}
-          <input
-            type="file"
-            hidden
-            multiple
-            accept="image/*"
-            onChange={handleFileSelect}
-            disabled={disabled || uploading}
-          />
-        </Button>
-      </Box>
-
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <Droppable droppableId="project-images" direction="horizontal">
-          {(provided) => (
-            <Grid
-              container
-              spacing={2}
-              ref={provided.innerRef}
-              {...provided.droppableProps}
-              sx={{ mb: 2 }}
+          <Tooltip title="Refresh Images">
+            <IconButton onClick={refreshImages} disabled={loading}>
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+          {project.document_filename && (
+            <Button
+              variant="outlined"
+              startIcon={<ExtractIcon />}
+              onClick={handleExtractImages}
+              disabled={loading}
+              sx={{ mr: 1 }}
             >
-              <AnimatePresence>
+              Extract from PDF
+            </Button>
+          )}
+          <Button
+            variant="contained"
+            component="label"
+            startIcon={<UploadIcon />}
+            disabled={loading || images.length >= 20}
+          >
+            Upload Images
+            <input
+              type="file"
+              hidden
+              multiple
+              accept="image/*"
+              onChange={handleFileUpload}
+            />
+          </Button>
+        </Box>
+      </Box>
+
+      {images.length === 0 ? (
+        <Alert severity="info">
+          No images uploaded yet. Upload images or extract them from the PDF document.
+        </Alert>
+      ) : (
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <Droppable droppableId="images" direction="horizontal">
+            {(provided) => (
+              <Grid
+                container
+                spacing={2}
+                {...provided.droppableProps}
+                ref={provided.innerRef}
+              >
                 {images.map((image, index) => (
-                  <Draggable
-                    key={`image-${index}`}
-                    draggableId={`image-${index}`}
-                    index={index}
-                    isDragDisabled={disabled}
-                  >
+                  <Draggable key={image} draggableId={image} index={index}>
                     {(provided, snapshot) => (
                       <Grid
                         item
-                        xs={6}
-                        sm={4}
-                        md={3}
+                        xs={12}
+                        sm={6}
+                        md={4}
+                        lg={3}
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                       >
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.8 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.8 }}
-                          transition={{ duration: 0.3 }}
+                        <Badge
+                          badgeContent={index === featuredIndex ? <StarIcon /> : null}
+                          color="primary"
+                          anchorOrigin={{
+                            vertical: 'top',
+                            horizontal: 'right',
+                          }}
                         >
                           <Card
-                            elevation={snapshot.isDragging ? 8 : 1}
                             sx={{
-                              position: 'relative',
-                              borderRadius: 3,
-                              overflow: 'hidden',
-                              transform: snapshot.isDragging ? 'scale(1.05)' : 'scale(1)',
-                              transition: 'transform 0.2s ease',
-                              '&:hover': {
-                                boxShadow: 4,
-                                '& .image-actions': {
-                                  opacity: 1
-                                }
-                              }
+                              opacity: snapshot.isDragging ? 0.5 : 1,
+                              cursor: 'move',
                             }}
                           >
-                            {index === featuredImageIndex && (
-                              <Chip
-                                label="Featured"
-                                size="small"
-                                icon={<StarIcon />}
-                                sx={{
-                                  position: 'absolute',
-                                  top: 8,
-                                  left: 8,
-                                  zIndex: 1,
-                                  bgcolor: 'rgba(10, 79, 60, 0.9)',
-                                  color: 'white',
-                                  fontWeight: 600
-                                }}
-                              />
-                            )}
-                            
                             <Box
                               {...provided.dragHandleProps}
                               sx={{
-                                position: 'absolute',
-                                top: 8,
-                                right: 8,
-                                zIndex: 1,
-                                bgcolor: 'rgba(255, 255, 255, 0.9)',
-                                borderRadius: 1,
-                                p: 0.5,
-                                cursor: 'grab',
-                                '&:active': { cursor: 'grabbing' }
+                                display: 'flex',
+                                justifyContent: 'center',
+                                py: 0.5,
+                                bgcolor: 'grey.100',
                               }}
                             >
                               <DragIcon />
                             </Box>
-
                             <CardMedia
                               component="img"
                               height="200"
                               image={getImageUrl(image)}
-                              alt={`Project image ${index + 1}`}
-                              sx={{
-                                cursor: 'pointer',
-                                objectFit: 'cover'
+                              alt={`Image ${index + 1}`}
+                              sx={{ objectFit: 'cover' }}
+                              onError={(e: any) => {
+                                e.target.src = '/placeholder-image.png'; // Add a placeholder image
                               }}
-                              onClick={() => setSelectedImage(image)}
                             />
-                            
-                            <CardActions
-                              className="image-actions"
-                              sx={{
-                                position: 'absolute',
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                bgcolor: 'rgba(0, 0, 0, 0.7)',
-                                opacity: 0,
-                                transition: 'opacity 0.3s ease',
-                                justifyContent: 'space-between',
-                                py: 1
-                              }}
-                            >
-                              <Tooltip title={index === featuredImageIndex ? "Featured image" : "Set as featured"}>
+                            <CardActions>
+                              <Tooltip title={index === featuredIndex ? 'Featured Image' : 'Set as Featured'}>
                                 <IconButton
-                                  size="small"
                                   onClick={() => handleSetFeatured(index)}
-                                  disabled={disabled || index === featuredImageIndex}
-                                  sx={{ color: 'white' }}
+                                  disabled={loading}
+                                  color={index === featuredIndex ? 'primary' : 'default'}
                                 >
-                                  {index === featuredImageIndex ? <StarIcon /> : <StarBorderIcon />}
+                                  {index === featuredIndex ? <StarIcon /> : <StarBorderIcon />}
                                 </IconButton>
                               </Tooltip>
-                              
-                              <Tooltip title="Delete image">
+                              <Tooltip title="Delete Image">
                                 <IconButton
-                                  size="small"
-                                  onClick={() => setDeleteIndex(index)}
-                                  disabled={disabled}
-                                  sx={{ color: 'white' }}
+                                  onClick={() => {
+                                    setDeleteIndex(index);
+                                    setDeleteDialogOpen(true);
+                                  }}
+                                  disabled={loading}
+                                  color="error"
                                 >
                                   <DeleteIcon />
                                 </IconButton>
                               </Tooltip>
                             </CardActions>
                           </Card>
-                        </motion.div>
+                        </Badge>
                       </Grid>
                     )}
                   </Draggable>
                 ))}
-              </AnimatePresence>
-              {provided.placeholder}
-              
-              {images.length < 20 && (
-                <Grid item xs={6} sm={4} md={3}>
-                  <Card
-                    sx={{
-                      height: 200,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: 3,
-                      border: '2px dashed',
-                      borderColor: alpha('#0a4f3c', 0.3),
-                      bgcolor: alpha('#0a4f3c', 0.02),
-                      cursor: disabled ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.3s ease',
-                      '&:hover': {
-                        borderColor: disabled ? alpha('#0a4f3c', 0.3) : '#0a4f3c',
-                        bgcolor: disabled ? alpha('#0a4f3c', 0.02) : alpha('#0a4f3c', 0.05)
-                      }
-                    }}
-                  >
-                    <label htmlFor="image-upload" style={{ cursor: 'inherit' }}>
-                      <input
-                        id="image-upload"
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        onChange={handleFileSelect}
-                        disabled={disabled || uploading}
-                        style={{ display: 'none' }}
-                      />
-                      <Box sx={{ textAlign: 'center' }}>
-                        {uploading ? (
-                          <CircularProgress size={40} sx={{ color: '#0a4f3c' }} />
-                        ) : (
-                          <>
-                            <UploadIcon sx={{ fontSize: 40, color: '#0a4f3c', mb: 1 }} />
-                            <Typography variant="body2" color="text.secondary">
-                              Add Images
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {20 - images.length} remaining
-                            </Typography>
-                          </>
-                        )}
-                      </Box>
-                    </label>
-                  </Card>
-                </Grid>
-              )}
-            </Grid>
-          )}
-        </Droppable>
-      </DragDropContext>
-
-      {images.length === 0 && (
-        <Box
-          sx={{
-            py: 8,
-            textAlign: 'center',
-            bgcolor: alpha('#0a4f3c', 0.02),
-            borderRadius: 3,
-            border: '1px solid',
-            borderColor: alpha('#0a4f3c', 0.1)
-          }}
-        >
-          <ImageIcon sx={{ fontSize: 64, color: alpha('#0a4f3c', 0.3), mb: 2 }} />
-          <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
-            No images uploaded yet
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Upload images to showcase your project or extract them from the document
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-            <Button
-              variant="outlined"
-              startIcon={<ExtractIcon />}
-              onClick={handleExtractImages}
-              disabled={disabled || extracting}
-              sx={{
-                color: '#0a4f3c',
-                borderColor: '#0a4f3c',
-                textTransform: 'none',
-                fontWeight: 600,
-                px: 3,
-                py: 1.5,
-                borderRadius: 3,
-                '&:hover': {
-                  borderColor: '#0a4f3c',
-                  bgcolor: alpha('#0a4f3c', 0.05)
-                }
-              }}
-            >
-              {extracting ? 'Extracting...' : 'Extract from Document'}
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<UploadIcon />}
-              component="label"
-              disabled={disabled || uploading}
-              sx={{
-                background: 'linear-gradient(135deg, #0a4f3c 0%, #2a9d7f 100%)',
-                textTransform: 'none',
-                fontWeight: 600,
-                px: 4,
-                py: 1.5,
-                borderRadius: 3
-              }}
-            >
-              Upload Images
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleFileSelect}
-                hidden
-              />
-            </Button>
-          </Box>
-        </Box>
+                {provided.placeholder}
+              </Grid>
+            )}
+          </Droppable>
+        </DragDropContext>
       )}
 
-      {/* Image Preview Dialog */}
-      <Dialog
-        open={!!selectedImage}
-        onClose={() => setSelectedImage(null)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle sx={{ m: 0, p: 2 }}>
-          <IconButton
-            onClick={() => setSelectedImage(null)}
-            sx={{ position: 'absolute', right: 8, top: 8 }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ p: 0 }}>
-          {selectedImage && (
-            <img
-              src={getImageUrl(selectedImage)}
-              alt="Preview"
-              style={{ width: '100%', height: 'auto', display: 'block' }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
       {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteIndex !== null}
-        onClose={() => setDeleteIndex(null)}
-      >
-        <DialogTitle>Delete Image?</DialogTitle>
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle>Delete Image</DialogTitle>
         <DialogContent>
-          <Typography>
-            Are you sure you want to delete this image? This action cannot be undone.
-          </Typography>
+          Are you sure you want to delete this image? This action cannot be undone.
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteIndex(null)}>Cancel</Button>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleDelete} color="error" variant="contained">
             Delete
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Loading Overlay */}
+      {loading && (
+        <Box
+          position="fixed"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          bgcolor="rgba(0, 0, 0, 0.5)"
+          zIndex={9999}
+        >
+          <CircularProgress />
+        </Box>
+      )}
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
