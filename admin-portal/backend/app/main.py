@@ -38,6 +38,7 @@ STATIC_DIR.mkdir(exist_ok=True)
 print(f"🚀 Starting {settings.PROJECT_NAME}")
 print(f"📁 Base directory: {BASE_DIR}")
 print(f"📁 Upload directory: {UPLOAD_DIR}")
+print(f"📁 Upload directory exists: {UPLOAD_DIR.exists()}")
 print(f"📁 Static directory: {STATIC_DIR}")
 
 # Fixed validation error handler
@@ -65,21 +66,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
     )
 
-# CORS middleware - MUST come before static files and routes
+# CORS middleware - MUST come before routes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["*"],  # Allow all origins for now
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Mount static files for uploads - this MUST come after CORS but before API routes
-if UPLOAD_DIR.exists():
-    app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
-    print(f"✅ Static files mounted at /uploads from {UPLOAD_DIR}")
-else:
-    print(f"⚠️  WARNING: Upload directory does not exist: {UPLOAD_DIR}")
 
 # Include routers with /api prefix
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
@@ -88,6 +82,30 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"]
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(utils.router, prefix="/api/utils", tags=["utilities"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
+
+# Serve static files manually since the automatic mount isn't working
+@app.get("/uploads/{path:path}")
+async def serve_upload(path: str):
+    """Manually serve uploaded files"""
+    file_path = UPLOAD_DIR / path
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(file_path)
+    return JSONResponse(
+        status_code=404,
+        content={"error": "File not found", "path": str(file_path)}
+    )
+
+# Also handle the /api/uploads path that frontend is using
+@app.get("/api/uploads/{path:path}")
+async def serve_upload_api(path: str):
+    """Serve uploaded files from /api/uploads path"""
+    file_path = UPLOAD_DIR / path
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(file_path)
+    return JSONResponse(
+        status_code=404,
+        content={"error": "File not found", "path": str(file_path)}
+    )
 
 # Startup event
 @app.on_event("startup")
@@ -168,6 +186,23 @@ async def get_config():
         "cors_origins": settings.CORS_ORIGINS
     }
 
+# Debug endpoint to list files
+@app.get("/api/debug/list-uploads")
+async def list_uploads():
+    """List all files in uploads directory"""
+    files = []
+    if UPLOAD_DIR.exists():
+        for root, dirs, filenames in os.walk(UPLOAD_DIR):
+            for filename in filenames:
+                rel_path = os.path.relpath(os.path.join(root, filename), UPLOAD_DIR)
+                files.append(rel_path)
+    return {
+        "upload_dir": str(UPLOAD_DIR),
+        "exists": UPLOAD_DIR.exists(),
+        "files": files,
+        "total_files": len(files)
+    }
+
 # Test route for static files
 @app.get("/test-static")
 async def test_static():
@@ -177,14 +212,20 @@ async def test_static():
         for root, dirs, files in os.walk(UPLOAD_DIR):
             for file in files[:5]:  # Limit to first 5 files
                 rel_path = os.path.relpath(os.path.join(root, file), UPLOAD_DIR)
-                test_files.append(f"/uploads/{rel_path}")
+                test_files.append({
+                    "path": rel_path,
+                    "urls": [
+                        f"/uploads/{rel_path}",
+                        f"/api/uploads/{rel_path}"
+                    ]
+                })
     
     return {
         "message": "Static file test",
         "upload_dir": str(UPLOAD_DIR),
         "exists": UPLOAD_DIR.exists(),
         "sample_files": test_files,
-        "test_url": "/uploads/projects/test.jpg if it exists"
+        "instructions": "Try accessing the URLs listed in sample_files"
     }
 
 # Serve static files (React build) - this should be after API routes
@@ -206,7 +247,9 @@ async def serve_root():
                 "message": "Literature Review Admin Portal API",
                 "docs": "/docs",
                 "api": "/api",
-                "note": "Frontend not deployed. Please build and deploy the React app."
+                "note": "Frontend not deployed. Please build and deploy the React app.",
+                "test_uploads": "/test-static",
+                "debug_uploads": "/api/debug/list-uploads"
             }
         )
 
