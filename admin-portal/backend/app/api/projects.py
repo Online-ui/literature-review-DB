@@ -404,7 +404,7 @@ async def update_project(
         project.document_data = None
         project.document_content_type = None
         project.document_storage = "database"
-                print(f"🗑️  File removed from project: {project.title}")
+        print(f"🗑️  File removed from project: {project.title}")
     
     # Handle new file upload
     if file and file.filename:
