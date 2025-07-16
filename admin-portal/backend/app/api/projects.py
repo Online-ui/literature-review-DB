@@ -24,8 +24,9 @@ from ..services.document_image_extractor import DocumentImageExtractor
 
 router = APIRouter()
 
-# Initialize image service
+# Initialize services
 image_service = ImageUploadService(upload_dir="uploads/projects")
+document_extractor = DocumentImageExtractor(image_service)
 
 def create_slug(title: str) -> str:
     """Create a URL-friendly slug from title"""
@@ -187,6 +188,24 @@ async def create_project(
         db.commit()
         db.refresh(db_project)
         print(f"✅ Project created successfully: {db_project.title}")
+        
+        # Extract images from document if uploaded
+        if file and file.filename and document_data:
+            try:
+                extracted_images = await document_extractor.extract_images_from_document(
+                    document_data,
+                    document_filename,
+                    db_project.id
+                )
+                
+                if extracted_images:
+                    db_project.images = extracted_images
+                    db.commit()  # Save the extracted images
+                    print(f"✅ Extracted {len(extracted_images)} images from document")
+            except Exception as e:
+                print(f"⚠️ Failed to extract images: {e}")
+                # Continue anyway - image extraction is not critical
+        
         return db_project
     except Exception as e:
         db.rollback()
@@ -384,7 +403,7 @@ async def update_project(
         project.document_size = None
         project.document_data = None
         project.document_content_type = None
-        project.document_storage = "database"
+                project.document_storage = "database"
         print(f"🗑️  File removed from project: {project.title}")
     
     # Handle new file upload
@@ -401,10 +420,26 @@ async def update_project(
             
             print(f"✅ File updated for project: {project.title}")
             
+            # Extract images from the new document
+            try:
+                extracted_images = await document_extractor.extract_images_from_document(
+                    file_result["data"],
+                    file_result["filename"],
+                    project.id
+                )
+                
+                if extracted_images:
+                    # Append to existing images or replace
+                    current_images = project.images or []
+                    project.images = current_images + extracted_images
+                    print(f"✅ Extracted {len(extracted_images)} images from updated document")
+            except Exception as e:
+                print(f"⚠️ Failed to extract images from updated document: {e}")
+                
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                                detail=f"Failed to process uploaded file: {str(e)}"
+                detail=f"Failed to process uploaded file: {str(e)}"
             )
     
     try:
@@ -631,6 +666,46 @@ async def reorder_images(
     
     db.commit()
     return {"message": "Images reordered successfully"}
+
+# New endpoint for manual image extraction
+@router.post("/{project_id}/extract-images")
+async def extract_images_from_project_document(
+    project_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Extract images from an already uploaded document"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not enough permissions"
+        )
+    
+    if not project.document_data:
+        raise HTTPException(status_code=400, detail="No document uploaded")
+    
+    # Extract images
+    extracted_images = await document_extractor.extract_images_from_document(
+        project.document_data,
+        project.document_filename,
+        project_id
+    )
+    
+    # Add to existing images
+    current_images = project.images or []
+    project.images = current_images + extracted_images
+    
+    db.commit()
+    
+    return {
+        "message": f"Extracted {len(extracted_images)} images",
+        "total_images": len(project.images)
+    }
 
 # Keep existing endpoints
 @router.get("/research-areas/list")
