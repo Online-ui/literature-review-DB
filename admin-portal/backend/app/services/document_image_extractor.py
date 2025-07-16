@@ -1,127 +1,116 @@
-import io
 import os
 import uuid
 from pathlib import Path
-from typing import List, Dict, Optional
-import fitz  # PyMuPDF for PDF
-from docx import Document as DocxDocument
+from typing import Optional
+from fastapi import UploadFile, HTTPException
+import aiofiles
 from PIL import Image
-import zipfile
+import io
 
-class DocumentImageExtractor:
-    def __init__(self, image_service):
-        self.image_service = image_service
-        self.temp_dir = Path("temp_extractions")
-        self.temp_dir.mkdir(exist_ok=True)
-    
-    async def extract_images_from_document(self, document_data: bytes, filename: str, project_id: int) -> List[str]:
-        """Extract images from document and return list of saved image paths"""
-        file_ext = Path(filename).suffix.lower()
+class ImageUploadService:
+    def __init__(self, upload_dir: str = "uploads"):
+        self.upload_dir = Path(upload_dir)
+        self.upload_dir.mkdir(parents=True, exist_ok=True)
+        self.allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+        self.max_file_size = 10 * 1024 * 1024  # 10MB
+        self.max_dimensions = (4000, 4000)  # Max width/height
+
+    async def save_image(self, file: UploadFile, subfolder: Optional[str] = None) -> str:
+        """Save uploaded image and return the path"""
+        # Validate file
+        await self._validate_image(file)
         
-        if file_ext == '.pdf':
-            return await self._extract_from_pdf(document_data, project_id)
-        elif file_ext in ['.docx', '.doc']:
-            return await self._extract_from_docx(document_data, project_id)
+        # Generate unique filename
+        ext = Path(file.filename).suffix.lower()
+        filename = f"{uuid.uuid4()}{ext}"
+        
+        # Create subfolder if specified
+        if subfolder:
+            save_dir = self.upload_dir / subfolder
+            save_dir.mkdir(parents=True, exist_ok=True)  # Create all parent directories
         else:
-            return []
-    
-    async def _extract_from_pdf(self, pdf_data: bytes, project_id: int) -> List[str]:
-        """Extract images from PDF"""
-        image_paths = []
-        
-        try:
-            # Open PDF from bytes
-            pdf_document = fitz.open(stream=pdf_data, filetype="pdf")
+            save_dir = self.upload_dir
             
-            for page_num in range(len(pdf_document)):
-                page = pdf_document.load_page(page_num)
-                image_list = page.get_images()
+        filepath = save_dir / filename
+        
+        # Save file
+        async with aiofiles.open(filepath, 'wb') as f:
+            content = await file.read()
+            await f.write(content)
+        
+        # Optimize image
+        await self._optimize_image(filepath)
+        
+        # Return relative path from uploads directory
+        if subfolder:
+            return f"{subfolder}/{filename}"
+        else:
+            return filename
+
+    async def delete_image(self, path: str) -> None:
+        """Delete an image file"""
+        filepath = self.upload_dir / path
+        if filepath.exists() and filepath.is_file():
+            filepath.unlink()
+
+    async def _validate_image(self, file: UploadFile) -> None:
+        """Validate uploaded image"""
+        # Check extension
+        ext = Path(file.filename).suffix.lower()
+        if ext not in self.allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type. Allowed types: {', '.join(self.allowed_extensions)}"
+            )
+        
+        # Check file size
+        file.file.seek(0, 2)
+        size = file.file.tell()
+        file.file.seek(0)
+        
+        if size > self.max_file_size:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File too large. Maximum size: {self.max_file_size // 1024 // 1024}MB"
+            )
+        
+        # Validate it's actually an image
+        try:
+            content = await file.read()
+            image = Image.open(io.BytesIO(content))
+            
+            # Check dimensions
+            if image.width > self.max_dimensions[0] or image.height > self.max_dimensions[1]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Image dimensions too large. Maximum: {self.max_dimensions[0]}x{self.max_dimensions[1]}"
+                )
+            
+            # Reset file position
+            file.file.seek(0)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid image file"
+            )
+
+    async def _optimize_image(self, filepath: Path) -> None:
+        """Optimize image for web use"""
+        try:
+            with Image.open(filepath) as img:
+                # Convert RGBA to RGB if necessary
+                if img.mode in ('RGBA', 'LA'):
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                    img = background
                 
-                for img_index, img in enumerate(image_list):
-                    # Extract image
-                    xref = img[0]
-                    base_image = pdf_document.extract_image(xref)
-                    image_bytes = base_image["image"]
-                    
-                    # Save to temporary file
-                    temp_filename = f"pdf_p{page_num}_img{img_index}.{base_image['ext']}"
-                    temp_path = self.temp_dir / temp_filename
-                    
-                    with open(temp_path, "wb") as f:
-                        f.write(image_bytes)
-                    
-                    # Create a mock UploadFile object
-                    from fastapi import UploadFile
-                    with open(temp_path, "rb") as f:
-                        upload_file = UploadFile(
-                            filename=temp_filename,
-                            file=f
-                        )
-                        # Save using image service
-                        saved_path = await self.image_service.save_image(
-                            upload_file, 
-                            f"project_{project_id}"
-                        )
-                        image_paths.append(f"/uploads/projects/{saved_path}")
-                    
-                    # Clean up temp file
-                    temp_path.unlink()
-            
-            pdf_document.close()
-            
+                # Resize if too large
+                max_size = 2000
+                if img.width > max_size or img.height > max_size:
+                    img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+                
+                # Save optimized image
+                img.save(filepath, optimize=True, quality=85)
         except Exception as e:
-            print(f"Error extracting images from PDF: {e}")
-        
-        return image_paths
-    
-    async def _extract_from_docx(self, docx_data: bytes, project_id: int) -> List[str]:
-        """Extract images from DOCX"""
-        image_paths = []
-        
-        try:
-            # Save to temporary file (docx library needs a file path)
-            temp_docx = self.temp_dir / f"temp_{uuid.uuid4()}.docx"
-            with open(temp_docx, "wb") as f:
-                f.write(docx_data)
-            
-            # Open as zip to extract images
-            with zipfile.ZipFile(temp_docx, 'r') as docx_zip:
-                # Images are stored in word/media/
-                for file_info in docx_zip.filelist:
-                    if file_info.filename.startswith('word/media/'):
-                        # Extract image
-                        image_data = docx_zip.read(file_info.filename)
-                        
-                        # Get file extension
-                        ext = Path(file_info.filename).suffix
-                        temp_filename = f"docx_{Path(file_info.filename).stem}{ext}"
-                        temp_path = self.temp_dir / temp_filename
-                        
-                        # Save temporarily
-                        with open(temp_path, "wb") as f:
-                            f.write(image_data)
-                        
-                        # Create mock UploadFile
-                        from fastapi import UploadFile
-                        with open(temp_path, "rb") as f:
-                            upload_file = UploadFile(
-                                filename=temp_filename,
-                                file=f
-                            )
-                            # Save using image service
-                            saved_path = await self.image_service.save_image(
-                                upload_file,
-                                f"project_{project_id}"
-                            )
-                            image_paths.append(f"/uploads/projects/{saved_path}")
-                        
-                        # Clean up
-                        temp_path.unlink()
-            
-            # Clean up temp docx
-            temp_docx.unlink()
-            
-        except Exception as e:
-            print(f"Error extracting images from DOCX: {e}")
-        
-        return image_paths
+            # If optimization fails, keep original
+            print(f"Failed to optimize image: {e}")
