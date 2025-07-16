@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -365,18 +366,20 @@ const ProjectsPage: React.FC = () => {
     }
   };
 
+  
   const handleCleanupImages = async (projectId?: number) => {
     setCleaningUp(true);
     try {
-      const endpoint = projectId 
-        ? `/projects/${projectId}/cleanup-images`
-        : '/projects/cleanup-all-images';
-      
-      const response = await adminApi.api.post(endpoint);
+      let response;
+      if (projectId) {
+        response = await adminApi.cleanupProjectImages(projectId);
+      } else {
+        response = await adminApi.cleanupAllProjectImages();
+      }
       
       setSnackbar({
         open: true,
-        message: response.data.message,
+        message: response.message,
         severity: 'success'
       });
       
