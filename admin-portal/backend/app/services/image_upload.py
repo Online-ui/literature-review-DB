@@ -9,11 +9,16 @@ import io
 
 class ImageUploadService:
     def __init__(self, upload_dir: str = "uploads"):
-        self.upload_dir = Path(upload_dir)
+        # Use absolute path
+        self.base_dir = Path(__file__).resolve().parent.parent  # Go up to app directory
+        self.upload_dir = self.base_dir / upload_dir
         self.upload_dir.mkdir(parents=True, exist_ok=True)
+        
         self.allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
         self.max_file_size = 10 * 1024 * 1024  # 10MB
         self.max_dimensions = (4000, 4000)  # Max width/height
+        
+        print(f"ImageUploadService initialized with upload_dir: {self.upload_dir}")
 
     async def save_image(self, file: UploadFile, subfolder: Optional[str] = None) -> str:
         """Save uploaded image and return the path"""
@@ -26,12 +31,17 @@ class ImageUploadService:
         
         # Create subfolder if specified
         if subfolder:
-            save_dir = self.upload_dir / str(subfolder)
-            save_dir.mkdir(exist_ok=True)
+            save_dir = self.upload_dir / "projects" / subfolder
+            save_dir.mkdir(parents=True, exist_ok=True)
+            relative_path = f"projects/{subfolder}/{filename}"
         else:
-            save_dir = self.upload_dir
+            save_dir = self.upload_dir / "projects"
+            save_dir.mkdir(parents=True, exist_ok=True)
+            relative_path = f"projects/{filename}"
             
         filepath = save_dir / filename
+        
+        print(f"Saving image to: {filepath}")
         
         # Save file
         async with aiofiles.open(filepath, 'wb') as f:
@@ -41,14 +51,29 @@ class ImageUploadService:
         # Optimize image
         await self._optimize_image(filepath)
         
-        # Return relative path
-        return str(filepath.relative_to(self.upload_dir))
+        print(f"Image saved successfully, returning path: {relative_path}")
+        
+        # Return relative path from uploads directory
+        return relative_path
 
     async def delete_image(self, path: str) -> None:
         """Delete an image file"""
+        # Remove leading slash if present
+        if path.startswith('/'):
+            path = path[1:]
+        
+        # Remove 'uploads/' prefix if present
+        if path.startswith('uploads/'):
+            path = path[8:]
+            
         filepath = self.upload_dir / path
-        if filepath.exists():
+        print(f"Attempting to delete: {filepath}")
+        
+                if filepath.exists() and filepath.is_file():
             filepath.unlink()
+            print(f"Deleted successfully")
+        else:
+            print(f"File not found: {filepath}")
 
     async def _validate_image(self, file: UploadFile) -> None:
         """Validate uploaded image"""
@@ -110,4 +135,5 @@ class ImageUploadService:
                 img.save(filepath, optimize=True, quality=85)
         except Exception as e:
             # If optimization fails, keep original
+            print(f"Warning: Failed to optimize image {filepath}: {e}")
             pass
