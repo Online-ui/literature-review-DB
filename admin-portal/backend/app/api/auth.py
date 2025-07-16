@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Form, BackgroundTasks, Request
 from fastapi.security import OAuth2PasswordRequestForm, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from typing import Optional
-from pydantic import BaseModel, EmailStr
+from typing import Optional, Dict, Any
+from pydantic import BaseModel, EmailStr, Field, validator
 from jose import JWTError, jwt
 import secrets
 import string
+import logging
 
 from ..database import get_db
 from ..models.user import User
@@ -14,24 +15,38 @@ from ..core.security import verify_password, get_password_hash, create_access_to
 from ..core.config import settings
 from ..core.email import send_password_reset_email
 
+# Set up logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 security = HTTPBearer()
 
+# Pydantic models
 class Token(BaseModel):
     access_token: str
     token_type: str
 
+class LoginRequest(BaseModel):
+    username: str = Field(..., description="Username or email")
+    password: str = Field(..., min_length=1)
+
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str
-    user: dict
+    user: Dict[str, Any]
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
 
 class PasswordResetConfirm(BaseModel):
-    token: str
-    new_password: str
+    token: str = Field(..., min_length=32, max_length=32)
+    new_password: str = Field(..., min_length=8)
+    
+    @validator('new_password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+        return v
 
 class PasswordResetResponse(BaseModel):
     message: str
@@ -41,16 +56,33 @@ class TokenVerificationResponse(BaseModel):
     email: str
     username: str
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+
+class UserInfo(BaseModel):
+    id: int
+    username: str
+    email: str
+    full_name: str
+    role: str
+    institution: Optional[str]
+    department: Optional[str]
+    is_active: bool
+    created_at: datetime
+
+# Helper functions
 def generate_reset_token() -> str:
     """Generate a secure random token for password reset"""
     alphabet = string.ascii_letters + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(32))
 
 # Authentication dependency functions
-def get_current_user(
+async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
+    """Get current authenticated user from JWT token"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -60,27 +92,34 @@ def get_current_user(
     try:
         username = verify_token(credentials.credentials)
         if username is None:
+            logger.warning("Invalid token - no username extracted")
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        logger.warning(f"JWT validation error: {str(e)}")
         raise credentials_exception
     
     user = db.query(User).filter(User.username == username).first()
     if user is None:
+        logger.warning(f"User not found: {username}")
         raise credentials_exception
     
     if not user.is_active:
+        logger.warning(f"Inactive user attempted access: {username}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive"
         )
     
     return user
 
-def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+    """Ensure user is active"""
     return current_user
 
-def require_main_coordinator(current_user: User = Depends(get_current_active_user)) -> User:
+async def require_main_coordinator(current_user: User = Depends(get_current_active_user)) -> User:
+    """Require main coordinator role"""
     if not current_user.is_main_coordinator:
+        logger.warning(f"Unauthorized access attempt by {current_user.username} to coordinator-only resource")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions. Main coordinator access required."
@@ -88,61 +127,90 @@ def require_main_coordinator(current_user: User = Depends(get_current_active_use
     return current_user
 
 # Authentication endpoints
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    """Login endpoint that accepts form data"""
+    """
+    Login endpoint that accepts form data.
+    Username field can be either username or email.
+    """
+    logger.info(f"Login attempt for: {form_data.username}")
+    
+    # Find user by username or email
     user = db.query(User).filter(
         (User.username == form_data.username) | (User.email == form_data.username)
     ).first()
     
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    # Check user exists and password is correct
+    if not user:
+        logger.warning(f"Login failed - user not found: {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username/email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    if not user.is_active:
+    if not verify_password(form_data.password, user.hashed_password):
+        logger.warning(f"Login failed - incorrect password for user: {user.username}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user account"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username/email or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Check if user is active
+    if not user.is_active:
+        logger.warning(f"Login failed - inactive user: {user.username}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive. Please contact an administrator."
+        )
+    
+    # Create access token
     access_token = create_access_token(data={"sub": user.username})
     
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
+    logger.info(f"Login successful for user: {user.username}")
+    
+    return LoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user={
             "id": user.id,
             "username": user.username,
             "email": user.email,
             "full_name": user.full_name,
             "role": user.role,
             "institution": user.institution,
-            "department": user.department
+            "department": user.department,
+            "is_active": user.is_active,
+            "is_main_coordinator": user.is_main_coordinator
         }
-    }
+    )
 
-@router.post("/forgot-password", response_model=PasswordResetResponse)
+@router.post("/forgot-password", response_model=PasswordResetResponse, status_code=status.HTTP_200_OK)
 async def forgot_password(
     background_tasks: BackgroundTasks,
-    email: str = Form(...),
+    email: str = Form(..., regex=r'^[\w\.-]+@[\w\.-]+\.\w+$'),
     db: Session = Depends(get_db)
 ):
-    """Request password reset token - accepts FormData and sends email"""
-    print(f"🔐 Password reset requested for email: {email}")
+    """
+    Request password reset token - accepts FormData and sends email.
+    Always returns success to prevent email enumeration.
+    """
+        logger.info(f"Password reset requested for email: {email}")
     
     # Find user by email
     user = db.query(User).filter(User.email == email).first()
     
     # Always return success message to prevent email enumeration
     if not user:
-        print(f"❌ No user found with email: {email}")
-        return {"message": "If the email exists in our system, you will receive a password reset email shortly."}
+        logger.info(f"Password reset requested for non-existent email: {email}")
+        return PasswordResetResponse(
+            message="If the email exists in our system, you will receive a password reset email shortly."
+        )
     
     # Generate reset token
     reset_token = generate_reset_token()
@@ -150,13 +218,22 @@ async def forgot_password(
     # Save token and expiration to database
     user.reset_token = reset_token
     user.reset_token_expires = datetime.utcnow() + timedelta(minutes=30)
-    db.commit()
+    
+    try:
+        db.commit()
+        logger.info(f"Reset token generated for user: {user.username}")
+    except Exception as e:
+        logger.error(f"Failed to save reset token: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process password reset request"
+        )
 
     # Generate the reset URL with hash routing
     reset_url = f"{settings.FRONTEND_URL}/#/reset-password?token={reset_token}"
     
-    print(f"✅ Reset token generated for user: {user.username}")
-    print(f"📧 Reset URL: {reset_url}")
+    logger.info(f"Reset URL generated: {reset_url}")
     
     # Send email in background
     try:
@@ -166,32 +243,36 @@ async def forgot_password(
             username=user.username,
             reset_url=reset_url
         )
-        print(f"📨 Password reset email queued for: {user.email}")
+        logger.info(f"Password reset email queued for: {user.email}")
     except Exception as e:
-        print(f"❌ Failed to queue email: {str(e)}")
+        logger.error(f"Failed to queue password reset email: {str(e)}")
         # Don't reveal email sending errors to the user
 
-    return {"message": "If the email exists in our system, you will receive a password reset email shortly."}
+    return PasswordResetResponse(
+        message="If the email exists in our system, you will receive a password reset email shortly."
+    )
 
-@router.post("/reset-password", response_model=PasswordResetResponse)
+@router.post("/reset-password", response_model=PasswordResetResponse, status_code=status.HTTP_200_OK)
 async def reset_password(
     request: PasswordResetConfirm,
     db: Session = Depends(get_db)
 ):
     """Reset password using token"""
-    print(f"🔐 Password reset attempt with token: {request.token}")
+    logger.info(f"Password reset attempt with token: {request.token[:8]}...")
     
+    # Find user by reset token
     user = db.query(User).filter(User.reset_token == request.token).first()
     
     if not user:
-        print(f"❌ Invalid reset token: {request.token}")
+        logger.warning(f"Invalid reset token: {request.token[:8]}...")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid reset token"
+            detail="Invalid or expired reset token"
         )
     
+    # Check if token has expired
     if user.has_reset_token_expired():
-        print(f"⏰ Expired reset token for user: {user.username}")
+        logger.warning(f"Expired reset token for user: {user.username}")
         user.clear_reset_token()
         db.commit()
         raise HTTPException(
@@ -199,45 +280,59 @@ async def reset_password(
             detail="Reset token has expired. Please request a new one."
         )
     
-    if len(request.new_password) < 8:
+    # Update password
+    try:
+        user.hashed_password = get_password_hash(request.new_password)
+        user.clear_reset_token()
+        db.commit()
+        logger.info(f"Password reset successful for user: {user.username}")
+    except Exception as e:
+        logger.error(f"Failed to reset password: {str(e)}")
+        db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 8 characters long"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset password"
         )
     
-    user.hashed_password = get_password_hash(request.new_password)
-    user.clear_reset_token()
-    db.commit()
-    
-    print(f"✅ Password reset successful for user: {user.username}")
-    
-    return {"message": "Password has been successfully reset. You can now login with your new password."}
+    return PasswordResetResponse(
+        message="Password has been successfully reset. You can now login with your new password."
+    )
 
-@router.get("/verify-reset-token", response_model=TokenVerificationResponse)
+@router.get("/verify-reset-token", response_model=TokenVerificationResponse, status_code=status.HTTP_200_OK)
 async def verify_reset_token(
     token: str,
     db: Session = Depends(get_db)
 ):
     """Verify if a reset token is valid"""
-    print(f"🔍 Verifying reset token: {token}")
+    logger.info(f"Verifying reset token: {token[:8]}...")
     
+    # Validate token format
+    if len(token) != 32:
+        logger.warning(f"Invalid token format: {token[:8]}...")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid reset token format"
+        )
+    
+    # Find user by token
     user = db.query(User).filter(User.reset_token == token).first()
     
     if not user:
-        print(f"❌ Invalid token: {token}")
+        logger.warning(f"Token not found: {token[:8]}...")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid reset token"
         )
     
+    # Check expiration
     if user.has_reset_token_expired():
-        print(f"⏰ Expired token for user: {user.username}")
+        logger.warning(f"Expired token for user: {user.username}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Reset token has expired"
         )
     
-    print(f"✅ Valid token for user: {user.username}")
+    logger.info(f"Valid token for user: {user.username}")
     
     return TokenVerificationResponse(
         valid=True,
@@ -245,71 +340,117 @@ async def verify_reset_token(
         username=user.username
     )
 
-@router.get("/me")
+@router.get("/me", response_model=UserInfo, status_code=status.HTTP_200_OK)
 async def get_current_user_info(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get current user information"""
-    return {
-        "id": current_user.id,
-        "username": current_user.username,
-        "email": current_user.email,
-        "full_name": current_user.full_name,
-        "role": current_user.role,
-        "institution": current_user.institution,
-        "department": current_user.department,
-        "is_active": current_user.is_active,
-        "created_at": current_user.created_at
-    }
+    return UserInfo(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        role=current_user.role,
+        institution=current_user.institution,
+        department=current_user.department,
+        is_active=current_user.is_active,
+        created_at=current_user.created_at
+    )
 
-@router.post("/logout")
+@router.post("/logout", status_code=status.HTTP_200_OK)
 async def logout(
     current_user: User = Depends(get_current_active_user)
 ):
-    """Logout endpoint"""
+    """
+    Logout endpoint.
+    Note: With JWT tokens, logout is typically handled client-side by removing the token.
+    This endpoint can be used for logging purposes or future session management.
+    """
+    logger.info(f"User logged out: {current_user.username}")
     return {"message": "Successfully logged out"}
 
-@router.post("/change-password")
+@router.post("/change-password", response_model=PasswordResetResponse, status_code=status.HTTP_200_OK)
 async def change_password(
-    current_password: str,
-    new_password: str,
+    request: ChangePasswordRequest,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Change user password"""
-    if not verify_password(current_password, current_user.hashed_password):
+    """Change current user's password"""
+    logger.info(f"Password change requested by user: {current_user.username}")
+    
+    # Verify current password
+    if not verify_password(request.current_password, current_user.hashed_password):
+        logger.warning(f"Password change failed - incorrect current password for user: {current_user.username}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect current password"
+            detail="Current password is incorrect"
         )
     
-    if len(new_password) < 8:
+    # Check if new password is same as current
+    if verify_password(request.new_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be at least 8 characters long"
+            detail="New password must be different from current password"
         )
     
-    current_user.hashed_password = get_password_hash(new_password)
-    db.commit()
+    # Update password
+    try:
+        current_user.hashed_password = get_password_hash(request.new_password)
+        db.commit()
+        logger.info(f"Password changed successfully for user: {current_user.username}")
+    except Exception as e:
+        logger.error(f"Failed to change password: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to change password"
+        )
     
-    return {"message": "Password updated successfully"}
+    return PasswordResetResponse(
+        message="Password updated successfully"
+    )
 
-@router.get("/protected")
+@router.get("/check-auth", status_code=status.HTTP_200_OK)
+async def check_authentication(
+    current_user: User = Depends(get_current_active_user)
+):
+    """Check if current authentication is valid"""
+    return {
+        "authenticated": True,
+        "username": current_user.username,
+        "role": current_user.role
+    }
+
+# Error handler for authentication errors
+@router.get("/protected", status_code=status.HTTP_200_OK)
 async def protected_route(
     current_user: User = Depends(get_current_active_user)
 ):
     """Example protected route"""
     return {
         "message": f"Hello {current_user.username}, this is a protected route!",
-        "user_role": current_user.role
+        "user_role": current_user.role,
+        "timestamp": datetime.utcnow().isoformat()
     }
 
-@router.get("/admin-only")
+@router.get("/admin-only", status_code=status.HTTP_200_OK)
 async def admin_only_route(
     current_user: User = Depends(require_main_coordinator)
 ):
     """Example admin-only route"""
     return {
         "message": f"Hello {current_user.username}, you have main coordinator access!",
-        "user_role": current_user.role
+        "user_role": current_user.role,
+        "is_main_coordinator": current_user.is_main_coordinator,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+# Health check for auth service
+@router.get("/health", status_code=status.HTTP_200_OK)
+async def auth_health_check():
+    """Check auth service health"""
+    return {
+        "service": "auth",
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat()
     }
