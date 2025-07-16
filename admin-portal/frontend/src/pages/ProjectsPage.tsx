@@ -64,7 +64,7 @@ import {
   CleaningServices as CleanupIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { adminApi } from '../services/adminApi';
+import { adminApi } from '../../services/adminApi';
 import { Project, FormConstants } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { ResearchAreaSelect } from '../components/ResearchAreaSelect';
