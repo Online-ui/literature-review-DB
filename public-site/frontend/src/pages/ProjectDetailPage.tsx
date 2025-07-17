@@ -53,6 +53,7 @@ const ImageGallery: React.FC<{
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
+  const [imageErrors, setImageErrors] = useState<{ [key: number]: boolean }>({});
   
   const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
   const cleanBaseUrl = API_BASE_URL.endsWith('/api') 
@@ -67,6 +68,11 @@ const ImageGallery: React.FC<{
     // Remove leading slash if present
     const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
     return `${cleanBaseUrl}${cleanPath}`;
+  };
+
+  const handleImageError = (index: number) => {
+    console.error(`Failed to load image at index ${index}:`, images[index]);
+    setImageErrors(prev => ({ ...prev, [index]: true }));
   };
 
   const handlePrevious = () => {
@@ -155,16 +161,33 @@ const ImageGallery: React.FC<{
               }}
               onClick={() => setSelectedImage(index)}
             >
-              <img
-                src={getImageUrl(image)}
-                alt={`${projectTitle} - Image ${index + 1}`}
-                loading="lazy"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover'
-                }}
-              />
+              {imageErrors[index] ? (
+                <Box
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: '#f5f5f5',
+                    color: '#666'
+                  }}
+                >
+                  <Typography variant="caption">Image unavailable</Typography>
+                </Box>
+              ) : (
+                <img
+                  src={getImageUrl(image)}
+                  alt={`${projectTitle} - Image ${index + 1}`}
+                  loading="lazy"
+                  onError={() => handleImageError(index)}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover'
+                  }}
+                />
+              )}
               {index === 0 && featuredIndex === 0 && (
                 <Chip
                   label="Featured"
@@ -271,17 +294,36 @@ const ImageGallery: React.FC<{
             {/* Image */}
             {selectedImage !== null && (
               <>
-                <img
-                  src={getImageUrl(sortedImages[selectedImage])}
-                  alt={`${projectTitle} - Image ${selectedImage + 1}`}
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '80vh',
-                    objectFit: 'contain',
-                    borderRadius: 8,
-                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
-                  }}
-                />
+                {imageErrors[selectedImage] ? (
+                  <Box
+                    sx={{
+                      width: '100%',
+                      maxWidth: 600,
+                      height: 400,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      bgcolor: '#f5f5f5',
+                      borderRadius: 2,
+                      color: '#666'
+                    }}
+                  >
+                    <Typography variant="h6">Image unavailable</Typography>
+                  </Box>
+                ) : (
+                  <img
+                    src={getImageUrl(sortedImages[selectedImage])}
+                    alt={`${projectTitle} - Image ${selectedImage + 1}`}
+                    onError={() => handleImageError(selectedImage)}
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '80vh',
+                      objectFit: 'contain',
+                      borderRadius: 8,
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
+                    }}
+                  />
+                )}
                 <Typography
                   variant="body1"
                   sx={{
