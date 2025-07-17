@@ -1,6 +1,6 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Response
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Response, BackgroundTasks
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 import os
@@ -11,23 +11,23 @@ from pathlib import Path
 
 from ..database import get_db
 from ..models.user import User
-from ..models.project import Project
+from ..models.project import Project, ProjectImage
 from ..schemas.project import (
-    ProjectCreate, ProjectUpdate, ProjectResponse,
+    ProjectCreate, ProjectUpdate, ProjectResponse, ProjectImageResponse,
     ImageUploadResponse, SetFeaturedImageRequest, ReorderImagesRequest
 )
 from ..core.auth import get_current_active_user
 from ..core.config import settings
 from ..core.constants import RESEARCH_AREAS, DEGREE_TYPES, ACADEMIC_YEARS, INSTITUTIONS
 from ..services.database_storage import database_storage
-from ..services.image_upload import ImageUploadService
+from ..services.database_image_service import DatabaseImageService
 from ..services.document_image_extractor import DocumentImageExtractor
 
 router = APIRouter()
 
 # Initialize services
-image_service = ImageUploadService()
-document_extractor = DocumentImageExtractor(image_service)
+db_image_service = DatabaseImageService()
+document_extractor = DocumentImageExtractor(db_image_service)
 
 def create_slug(title: str) -> str:
     """Create a URL-friendly slug from title"""
@@ -35,6 +35,29 @@ def create_slug(title: str) -> str:
     slug = re.sub(r'[^\w\s-]', '', title.lower())
     slug = re.sub(r'[-\s]+', '-', slug)
     return slug.strip('-')
+
+# Background task for image extraction
+async def extract_images_background(
+    document_data: bytes,
+    document_filename: str,
+    project_id: int
+):
+    """Extract images in the background after project creation"""
+    from ..database import SessionLocal
+    db = SessionLocal()
+    try:
+        print(f"🔄 Starting background image extraction for project {project_id}")
+        extracted_count = await document_extractor.extract_images_from_document(
+            document_data,
+            document_filename,
+            project_id,
+            db
+        )
+        print(f"✅ Background extraction completed: {extracted_count} images for project {project_id}")
+    except Exception as e:
+        print(f"❌ Background image extraction failed for project {project_id}: {e}")
+    finally:
+        db.close()
 
 @router.get("/", response_model=List[ProjectResponse])
 async def get_projects(
@@ -74,6 +97,12 @@ async def get_projects(
         query = query.filter(Project.created_by_id == current_user.id)
     
     projects = query.offset(skip).limit(limit).all()
+    
+    # Add image URLs to response
+    for project in projects:
+        for img in project.image_records:
+            img.image_url = f"/api/projects/{project.id}/images/{img.id}"
+    
     return projects
 
 @router.post("/", response_model=ProjectResponse)
@@ -96,6 +125,7 @@ async def create_project(
     meta_keywords: Optional[str] = Form(None),
     is_published: bool = Form(True),
     file: Optional[UploadFile] = File(None),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
@@ -180,7 +210,7 @@ async def create_project(
         document_content_type=document_content_type,
         document_storage=document_storage,
         created_by_id=current_user.id,
-        images=[],
+        images=[],  # For backward compatibility
         featured_image_index=0
     )
     
@@ -190,22 +220,19 @@ async def create_project(
         db.refresh(db_project)
         print(f"✅ Project created successfully: {db_project.title}")
         
-        # Extract images from document if uploaded
+        # Schedule image extraction as background task if document was uploaded
         if file and file.filename and document_data:
-            try:
-                extracted_images = await document_extractor.extract_images_from_document(
-                    document_data,
-                    document_filename,
-                    db_project.id
-                )
-                
-                if extracted_images:
-                    db_project.images = extracted_images
-                    db.commit()  # Save the extracted images
-                    print(f"✅ Extracted {len(extracted_images)} images from document")
-            except Exception as e:
-                print(f"⚠️ Failed to extract images: {e}")
-                # Continue anyway - image extraction is not critical
+            background_tasks.add_task(
+                extract_images_background,
+                document_data,
+                document_filename,
+                db_project.id
+            )
+            print(f"📋 Scheduled background image extraction for project {db_project.id}")
+        
+        # Add image URLs to response
+        for img in db_project.image_records:
+            img.image_url = f"/api/projects/{db_project.id}/images/{img.id}"
         
         return db_project
     except Exception as e:
@@ -214,6 +241,203 @@ async def create_project(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create project"
         )
+
+# Public endpoint to serve images (no auth required)
+@router.get("/{project_id}/images/{image_id}")
+async def get_project_image(
+    project_id: int,
+    image_id: int,
+    db: Session = Depends(get_db)
+):
+    """Serve image from database (public endpoint)"""
+    # Get image from database
+    image = db.query(ProjectImage).filter(
+        ProjectImage.id == image_id,
+        ProjectImage.project_id == project_id
+    ).first()
+    
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    return Response(
+        content=image.image_data,
+        media_type=image.content_type,
+        headers={
+            "Cache-Control": "public, max-age=86400",
+            "Content-Disposition": f'inline; filename="{image.filename}"'
+        }
+    )
+
+# Upload images endpoint
+@router.post("/{project_id}/images", response_model=ImageUploadResponse)
+async def upload_project_images(
+    project_id: int,
+    files: List[UploadFile] = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    # Check image limit
+    current_image_count = db.query(ProjectImage).filter(ProjectImage.project_id == project_id).count()
+    if current_image_count + len(files) > 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 images allowed")
+    
+    # Upload each file to database
+    new_images = []
+    for idx, file in enumerate(files):
+        db_image = await db_image_service.save_image_to_db(
+            file=file,
+            project_id=project_id,
+            db=db,
+            order_index=current_image_count + idx,
+            is_featured=(current_image_count == 0 and idx == 0)
+        )
+        new_images.append(f"/api/projects/{project_id}/images/{db_image.id}")
+    
+    return ImageUploadResponse(
+        images=new_images,
+        message="Images uploaded successfully"
+    )
+
+@router.delete("/{project_id}/images/{image_id}")
+async def delete_project_image(
+    project_id: int,
+    image_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    # Get image
+    image = db.query(ProjectImage).filter(
+        ProjectImage.id == image_id,
+        ProjectImage.project_id == project_id
+    ).first()
+    
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    # Delete image
+    db.delete(image)
+    
+    # Reorder remaining images
+    remaining_images = db.query(ProjectImage).filter(
+        ProjectImage.project_id == project_id,
+        ProjectImage.order_index > image.order_index
+    ).all()
+    
+    for img in remaining_images:
+        img.order_index -= 1
+    
+    db.commit()
+    return {"message": "Image deleted successfully"}
+
+@router.put("/{project_id}/featured-image")
+async def set_featured_image(
+    project_id: int,
+    request: SetFeaturedImageRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    # Remove featured status from all images
+    db.query(ProjectImage).filter(ProjectImage.project_id == project_id).update({"is_featured": False})
+    
+    # Set new featured image
+    image = db.query(ProjectImage).filter(
+        ProjectImage.id == request.image_id,
+        ProjectImage.project_id == project_id
+    ).first()
+    
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    image.is_featured = True
+    db.commit()
+    
+    return {"message": "Featured image updated"}
+
+@router.put("/{project_id}/images/reorder")
+async def reorder_images(
+    project_id: int,
+    request: ReorderImagesRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    # Verify all image IDs belong to this project
+    images = db.query(ProjectImage).filter(
+        ProjectImage.id.in_(request.image_ids),
+        ProjectImage.project_id == project_id
+    ).all()
+    
+    if len(images) != len(request.image_ids):
+        raise HTTPException(status_code=400, detail="Invalid image IDs")
+
+    # Update order
+    for idx, image_id in enumerate(request.image_ids):
+        db.query(ProjectImage).filter(ProjectImage.id == image_id).update({"order_index": idx})
+    
+    db.commit()
+    return {"message": "Images reordered successfully"}
+
+@router.post("/{project_id}/extract-images")
+async def extract_images_from_project_document(
+    project_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Manually extract images from an already uploaded document"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    if not project.document_data:
+        raise HTTPException(status_code=400, detail="No document uploaded")
+    
+    # Extract images
+    extracted_count = await document_extractor.extract_images_from_document(
+        project.document_data,
+        project.document_filename,
+        project_id,
+        db
+    )
+    
+    return {
+        "message": f"Extracted {extracted_count} images",
+        "total_images": db.query(ProjectImage).filter(ProjectImage.project_id == project_id).count()
+    }
 
 @router.get("/{project_id}/download")
 async def download_project_file(
@@ -224,32 +448,19 @@ async def download_project_file(
     """Download project file from database"""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
+        raise HTTPException(status_code=404, detail="Project not found")
     
     # Check permissions
     if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to download this file"
-        )
+        raise HTTPException(status_code=403, detail="Not enough permissions")
     
     if not project.document_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No file available for download"
-        )
+        raise HTTPException(status_code=404, detail="No file available for download")
     
     # Increment download counter
     project.download_count = (project.download_count or 0) + 1
     db.commit()
     
-    # Create file stream
-    file_stream = io.BytesIO(project.document_data)
-    
-    # Return file as streaming response
     return StreamingResponse(
         io.BytesIO(project.document_data),
         media_type=project.document_content_type or "application/octet-stream",
@@ -267,23 +478,14 @@ async def view_project_file(
     """View project file in browser"""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
+        raise HTTPException(status_code=404, detail="Project not found")
     
     # Check permissions
     if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to view this file"
-        )
+        raise HTTPException(status_code=403, detail="Not enough permissions")
     
     if not project.document_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No file available for viewing"
-        )
+        raise HTTPException(status_code=404, detail="No file available for viewing")
     
     # Increment view counter
     project.view_count = (project.view_count or 0) + 1
@@ -320,22 +522,18 @@ async def update_project(
     is_published: Optional[bool] = Form(None),
     file: Optional[UploadFile] = File(None),
     remove_file: Optional[bool] = Form(False),
+    extract_images: Optional[bool] = Form(False),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
+        raise HTTPException(status_code=404, detail="Project not found")
     
     # Check permissions
     if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to update this project"
-        )
+        raise HTTPException(status_code=403, detail="Not enough permissions")
     
     # Handle custom fields
     if research_area is not None:
@@ -421,22 +619,15 @@ async def update_project(
             
             print(f"✅ File updated for project: {project.title}")
             
-            # Extract images from the new document
-            # IMPORTANT: Don't append to existing images when updating document
-            try:
-                extracted_images = await document_extractor.extract_images_from_document(
+            # Extract images if requested
+            if extract_images:
+                background_tasks.add_task(
+                    extract_images_background,
                     file_result["data"],
                     file_result["filename"],
                     project.id
                 )
-                
-                if extracted_images:
-                    # Ask user if they want to replace existing images or keep them
-                    # For now, we'll just add the new images without duplicating
-                    print(f"✅ Extracted {len(extracted_images)} images from updated document")
-                    # Note: Don't automatically add these images - let the user decide
-            except Exception as e:
-                print(f"⚠️ Failed to extract images from updated document: {e}")
+                print(f"📋 Scheduled background image extraction for updated document")
                 
         except Exception as e:
             raise HTTPException(
@@ -447,6 +638,11 @@ async def update_project(
     try:
         db.commit()
         db.refresh(project)
+        
+        # Add image URLs to response
+        for img in project.image_records:
+            img.image_url = f"/api/projects/{project.id}/images/{img.id}"
+        
         return project
     except Exception as e:
         db.rollback()
@@ -460,6 +656,7 @@ async def update_project_document(
     project_id: int,
     file: UploadFile = File(...),
     extract_images: bool = Form(False),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
@@ -482,25 +679,21 @@ async def update_project_document(
         project.document_content_type = file_result["content_type"]
         project.document_storage = file_result["storage"]
         
-        extracted_count = 0
         if extract_images:
-            # Extract images only if requested
-            extracted_images = await document_extractor.extract_images_from_document(
+            # Extract images in background
+            background_tasks.add_task(
+                extract_images_background,
                 file_result["data"],
                 file_result["filename"],
                 project.id
             )
-            if extracted_images:
-                current_images = project.images or []
-                project.images = current_images + extracted_images
-                extracted_count = len(extracted_images)
         
         db.commit()
         db.refresh(project)
         
         return {
             "message": "Document updated successfully",
-            "extracted_images": extracted_count
+            "extract_images_scheduled": extract_images
         }
     except Exception as e:
         db.rollback()
@@ -517,23 +710,14 @@ async def delete_project_file(
 ):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
+        raise HTTPException(status_code=404, detail="Project not found")
     
     # Check permissions
     if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to delete file"
-        )
+        raise HTTPException(status_code=403, detail="Not enough permissions")
     
     if not project.document_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No file to delete"
-        )
+        raise HTTPException(status_code=404, detail="No file to delete")
     
     # Clear file fields in database
     project.document_filename = None
@@ -560,28 +744,13 @@ async def delete_project(
 ):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
+        raise HTTPException(status_code=404, detail="Project not found")
     
     # Check permissions
     if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to delete this project"
-        )
+        raise HTTPException(status_code=403, detail="Not enough permissions")
     
-    # Delete associated images from filesystem
-    if project.images:
-        for image_path in project.images:
-            try:
-                # Remove /uploads/ prefix if present
-                clean_path = image_path.replace('/uploads/', '')
-                await image_service.delete_image(clean_path)
-            except Exception as e:
-                print(f"Failed to delete image {image_path}: {e}")
-    
+    # Note: Images will be cascade deleted due to foreign key constraint
     try:
         db.delete(project)
         db.commit()
@@ -593,301 +762,6 @@ async def delete_project(
             detail="Failed to delete project"
         )
 
-# Image management endpoints
-@router.post("/{project_id}/images", response_model=ImageUploadResponse)
-async def upload_project_images(
-    project_id: int,
-    files: List[UploadFile] = File(...),
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    # Check if project exists and user has permission
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Check permissions
-    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to upload images"
-        )
-    
-    # Check image limit (20 max as per ProjectImagesTab)
-    current_images = project.images or []
-    if len(current_images) + len(files) > 20:
-        raise HTTPException(status_code=400, detail="Maximum 20 images allowed")
-    
-    # Upload each file
-    new_images = []
-    for file in files:
-        image_path = await image_service.save_image(file, f"project_{project_id}")
-        # Store path with /uploads/ prefix for consistency
-        new_images.append(f"/uploads/{image_path}")
-    
-    # Update project
-    project.images = current_images + new_images
-    db.commit()
-    
-    return ImageUploadResponse(
-        images=project.images,
-        message="Images uploaded successfully"
-    )
-
-@router.delete("/{project_id}/images/{index}")
-async def delete_project_image(
-    project_id: int,
-    index: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Check permissions
-    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to delete images"
-        )
-    
-    images = project.images or []
-    if index < 0 or index >= len(images):
-        raise HTTPException(status_code=400, detail="Invalid image index")
-    
-    # Delete file
-    image_path = images[index].replace("/uploads/", "")
-    await image_service.delete_image(image_path)
-    
-    # Update array
-    images.pop(index)
-    project.images = images
-    
-    # Adjust featured index if needed
-    if project.featured_image_index >= len(images):
-        project.featured_image_index = 0
-    
-    db.commit()
-    return {"message": "Image deleted successfully"}
-
-@router.put("/{project_id}/featured-image")
-async def set_featured_image(
-    project_id: int,
-    request: SetFeaturedImageRequest,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Check permissions
-    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to set featured image"
-        )
-    
-    if request.index < 0 or request.index >= len(project.images or []):
-        raise HTTPException(status_code=400, detail="Invalid image index")
-    
-    project.featured_image_index = request.index
-    db.commit()
-    
-    return {"message": "Featured image updated"}
-
-@router.put("/{project_id}/images/reorder")
-async def reorder_images(
-    project_id: int,
-    request: ReorderImagesRequest,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Check permissions
-    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to reorder images"
-        )
-    
-    images = project.images or []
-    if len(request.new_order) != len(images):
-        raise HTTPException(status_code=400, detail="Invalid reorder request")
-    
-    # Validate indices
-    if sorted(request.new_order) != list(range(len(images))):
-        raise HTTPException(status_code=400, detail="Invalid indices in reorder request")
-    
-    # Reorder images based on new_order indices
-    new_images = [images[i] for i in request.new_order]
-    project.images = new_images
-    
-    # Update featured index
-    old_featured = project.featured_image_index
-    project.featured_image_index = request.new_order.index(old_featured)
-    
-    db.commit()
-    return {"message": "Images reordered successfully"}
-
-# New endpoint for manual image extraction
-@router.post("/{project_id}/extract-images")
-async def extract_images_from_project_document(
-    project_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    """Extract images from an already uploaded document"""
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Check permissions
-    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not enough permissions"
-        )
-    
-    if not project.document_data:
-        raise HTTPException(status_code=400, detail="No document uploaded")
-    
-    # Extract images
-    extracted_images = await document_extractor.extract_images_from_document(
-        project.document_data,
-        project.document_filename,
-        project_id
-    )
-    
-    # Add to existing images
-    current_images = project.images or []
-    project.images = current_images + extracted_images
-    
-    db.commit()
-    
-    return {
-        "message": f"Extracted {len(extracted_images)} images",
-        "total_images": len(project.images)
-    }
-
-# NEW CLEANUP ENDPOINTS
-@router.post("/{project_id}/cleanup-images")
-async def cleanup_project_images(
-    project_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    """Remove invalid or missing images from project"""
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Check permissions
-    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not enough permissions"
-        )
-    
-    if not project.images:
-        return {"message": "No images to cleanup", "removed": 0}
-    
-    valid_images = []
-    removed_count = 0
-    
-    for image_path in project.images:
-        # Check if file exists
-        clean_path = image_path.replace('/uploads/', '')
-        file_path = Path("uploads") / clean_path
-        
-        if file_path.exists() and file_path.is_file():
-            valid_images.append(image_path)
-        else:
-            removed_count += 1
-            print(f"Removing missing image from database: {image_path}")
-    
-    project.images = valid_images
-    
-    # Reset featured index if needed
-    if project.featured_image_index >= len(valid_images):
-        project.featured_image_index = 0
-    
-    db.commit()
-    
-    return {
-        "message": f"Cleanup completed. Removed {removed_count} invalid images",
-        "removed": removed_count,
-        "remaining": len(valid_images)
-    }
-
-@router.post("/cleanup-all-images")
-async def cleanup_all_project_images(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    """Remove invalid images from all projects (admin only)"""
-    if current_user.role != "main_coordinator":
-        raise HTTPException(
-            status_code=403,
-            detail="Only main coordinators can perform global cleanup"
-        )
-    
-    projects = db.query(Project).filter(Project.images != None).all()
-    total_removed = 0
-    projects_cleaned = 0
-    
-    for project in projects:
-        if not project.images:
-            continue
-            
-        valid_images = []
-        removed_in_project = 0
-        
-        for image_path in project.images:
-            clean_path = image_path.replace('/uploads/', '')
-            file_path = Path("uploads") / clean_path
-            
-            if file_path.exists() and file_path.is_file():
-                valid_images.append(image_path)
-            else:
-                removed_in_project += 1
-                total_removed += 1
-        
-        if removed_in_project > 0:
-            project.images = valid_images
-            if project.featured_image_index >= len(valid_images):
-                project.featured_image_index = 0
-            projects_cleaned += 1
-    
-    db.commit()
-    
-    return {
-        "message": "Global cleanup completed",
-        "projects_cleaned": projects_cleaned,
-        "total_images_removed": total_removed
-    }
-
-# Keep existing endpoints
-@router.get("/research-areas/list")
-async def get_research_areas(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    """Get predefined research areas"""
-    return RESEARCH_AREAS
-
-@router.get("/degree-types/list")
-async def get_degree_types(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    """Get predefined degree types"""
-    return DEGREE_TYPES
-
 @router.patch("/{project_id}/toggle-publish")
 async def toggle_project_publish_status(
     project_id: int,
@@ -896,17 +770,11 @@ async def toggle_project_publish_status(
 ):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
+        raise HTTPException(status_code=404, detail="Project not found")
     
     # Check permissions
     if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to modify this project"
-        )
+        raise HTTPException(status_code=403, detail="Not enough permissions")
     
     project.is_published = not project.is_published
     
@@ -928,45 +796,332 @@ async def toggle_project_publish_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update project status"
         )
-        
-@router.get("/public/images/{path:path}")
-async def serve_public_image(path: str):
-    """Public endpoint to serve images (no auth required)"""
-    from pathlib import Path
-    from fastapi.responses import FileResponse
+
+# Utility endpoints
+@router.get("/research-areas/list")
+async def get_research_areas(
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get predefined research areas"""
+    return RESEARCH_AREAS
+
+@router.get("/degree-types/list")
+async def get_degree_types(
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get predefined degree types"""
+    return DEGREE_TYPES
+
+@router.get("/academic-years/list")
+async def get_academic_years(
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get predefined academic years"""
+    return ACADEMIC_YEARS
+
+@router.get("/institutions/list")
+async def get_institutions(
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get predefined institutions"""
+    return INSTITUTIONS
+
+# Statistics endpoints
+@router.get("/{project_id}/stats")
+async def get_project_stats(
+    project_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get project statistics"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
     
-    # Get the correct uploads directory
-    uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
-    file_path = uploads_dir / path
+    # Check permissions
+    if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
     
-    print(f"Public image request: {path}")
-    print(f"Looking for file at: {file_path}")
+    image_count = db.query(ProjectImage).filter(ProjectImage.project_id == project_id).count()
     
-    if file_path.exists() and file_path.is_file():
-        # Determine content type
-        content_type = "application/octet-stream"
-        if str(file_path).lower().endswith('.png'):
-            content_type = "image/png"
-        elif str(file_path).lower().endswith(('.jpg', '.jpeg')):
-            content_type = "image/jpeg"
-        elif str(file_path).lower().endswith('.gif'):
-            content_type = "image/gif"
-        elif str(file_path).lower().endswith('.webp'):
-            content_type = "image/webp"
-        
-        return FileResponse(
-            path=str(file_path),
-            media_type=content_type,
-            headers={
-                "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
-                "Access-Control-Allow-Origin": "*"
-            }
+    return {
+        "view_count": project.view_count or 0,
+        "download_count": project.download_count or 0,
+        "image_count": image_count,
+        "document_size": project.document_size or 0,
+        "has_document": bool(project.document_data),
+        "is_published": project.is_published
+    }
+
+@router.get("/stats/summary")
+async def get_projects_summary(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get summary statistics for all projects (filtered by user role)"""
+    query = db.query(Project)
+    
+    # Filter by user if not main coordinator
+    if current_user.role != "main_coordinator":
+        query = query.filter(Project.created_by_id == current_user.id)
+    
+    total_projects = query.count()
+    published_projects = query.filter(Project.is_published == True).count()
+    unpublished_projects = query.filter(Project.is_published == False).count()
+    
+    # Get projects with documents
+    projects_with_docs = query.filter(Project.document_data != None).count()
+    
+    # Get total views and downloads
+    stats = query.with_entities(
+        db.func.sum(Project.view_count).label('total_views'),
+        db.func.sum(Project.download_count).label('total_downloads')
+    ).first()
+    
+    return {
+        "total_projects": total_projects,
+        "published_projects": published_projects,
+        "unpublished_projects": unpublished_projects,
+        "projects_with_documents": projects_with_docs,
+        "total_views": stats.total_views or 0,
+        "total_downloads": stats.total_downloads or 0
+    }
+
+# Batch operations
+@router.post("/batch/publish")
+async def batch_publish_projects(
+    project_ids: List[int],
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Publish multiple projects at once"""
+    if current_user.role != "main_coordinator":
+        raise HTTPException(
+            status_code=403,
+            detail="Only main coordinators can perform batch operations"
         )
     
-    # Log what's in the directory for debugging
-    parent_dir = file_path.parent
-    if parent_dir.exists():
-        files_in_dir = [f.name for f in parent_dir.iterdir() if f.is_file()][:5]
-        print(f"Files in {parent_dir}: {files_in_dir}")
+    updated = db.query(Project).filter(
+        Project.id.in_(project_ids)
+    ).update(
+        {"is_published": True},
+        synchronize_session=False
+    )
     
-    raise HTTPException(status_code=404, detail=f"Image not found: {path}")
+    db.commit()
+    
+    return {
+        "message": f"Published {updated} projects",
+        "updated_count": updated
+    }
+
+@router.post("/batch/unpublish")
+async def batch_unpublish_projects(
+    project_ids: List[int],
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Unpublish multiple projects at once"""
+    if current_user.role != "main_coordinator":
+        raise HTTPException(
+            status_code=403,
+            detail="Only main coordinators can perform batch operations"
+        )
+    
+    updated = db.query(Project).filter(
+        Project.id.in_(project_ids)
+    ).update(
+        {"is_published": False},
+        synchronize_session=False
+    )
+    
+    db.commit()
+    
+    return {
+        "message": f"Unpublished {updated} projects",
+        "updated_count": updated
+    }
+
+@router.post("/batch/delete")
+async def batch_delete_projects(
+    project_ids: List[int],
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Delete multiple projects at once"""
+    if current_user.role != "main_coordinator":
+        raise HTTPException(
+            status_code=403,
+            detail="Only main coordinators can perform batch operations"
+        )
+    
+    # Get projects to delete
+    projects = db.query(Project).filter(Project.id.in_(project_ids)).all()
+    deleted_count = len(projects)
+    
+    # Delete projects (images will cascade delete)
+    for project in projects:
+        db.delete(project)
+    
+    db.commit()
+    
+    return {
+        "message": f"Deleted {deleted_count} projects",
+        "deleted_count": deleted_count
+    }
+
+# Search and filter endpoints
+@router.get("/search/advanced")
+async def advanced_search(
+    title: Optional[str] = None,
+    author: Optional[str] = None,
+    supervisor: Optional[str] = None,
+    institution: Optional[str] = None,
+    department: Optional[str] = None,
+    research_area: Optional[str] = None,
+    degree_type: Optional[str] = None,
+    academic_year: Optional[str] = None,
+    keywords: Optional[str] = None,
+    has_document: Optional[bool] = None,
+    has_images: Optional[bool] = None,
+    is_published: Optional[bool] = None,
+    created_after: Optional[datetime] = None,
+    created_before: Optional[datetime] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Advanced search with multiple filters"""
+    query = db.query(Project)
+    
+    # Apply user filter if not main coordinator
+    if current_user.role != "main_coordinator":
+        query = query.filter(Project.created_by_id == current_user.id)
+    
+    # Apply filters
+    if title:
+        query = query.filter(Project.title.ilike(f"%{title}%"))
+    if author:
+        query = query.filter(Project.author_name.ilike(f"%{author}%"))
+    if supervisor:
+        query = query.filter(Project.supervisor.ilike(f"%{supervisor}%"))
+    if institution:
+        query = query.filter(Project.institution == institution)
+    if department:
+        query = query.filter(Project.department.ilike(f"%{department}%"))
+    if research_area:
+        query = query.filter(Project.research_area == research_area)
+    if degree_type:
+        query = query.filter(Project.degree_type == degree_type)
+    if academic_year:
+        query = query.filter(Project.academic_year == academic_year)
+    if keywords:
+        query = query.filter(Project.keywords.ilike(f"%{keywords}%"))
+    if has_document is not None:
+        if has_document:
+            query = query.filter(Project.document_data != None)
+        else:
+            query = query.filter(Project.document_data == None)
+    if is_published is not None:
+        query = query.filter(Project.is_published == is_published)
+    if created_after:
+        query = query.filter(Project.created_at >= created_after)
+    if created_before:
+        query = query.filter(Project.created_at <= created_before)
+    
+    # Handle has_images filter
+    if has_images is not None:
+        if has_images:
+            query = query.join(ProjectImage).distinct()
+        else:
+            query = query.outerjoin(ProjectImage).filter(ProjectImage.id == None)
+    
+    # Get total count before pagination
+    total_count = query.count()
+    
+    # Apply pagination
+    projects = query.offset(skip).limit(limit).all()
+    
+    # Add image URLs to response
+    for project in projects:
+        for img in project.image_records:
+            img.image_url = f"/api/projects/{project.id}/images/{img.id}"
+    
+    return {
+        "total": total_count,
+        "skip": skip,
+        "limit": limit,
+        "projects": projects
+    }
+
+# Export endpoint
+@router.get("/export/csv")
+async def export_projects_csv(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Export projects to CSV"""
+    import csv
+    import io
+    
+    query = db.query(Project)
+    
+    # Filter by user if not main coordinator
+    if current_user.role != "main_coordinator":
+        query = query.filter(Project.created_by_id == current_user.id)
+    
+    projects = query.all()
+    
+    # Create CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow([
+        "ID", "Title", "Author", "Email", "Institution", "Department",
+        "Research Area", "Degree Type", "Academic Year", "Supervisor",
+        "Published", "Created At", "View Count", "Download Count",
+        "Has Document", "Image Count"
+    ])
+    
+    # Write data
+    for project in projects:
+        image_count = db.query(ProjectImage).filter(
+            ProjectImage.project_id == project.id
+        ).count()
+        
+        writer.writerow([
+            project.id,
+            project.title,
+            project.author_name,
+            project.author_email or "",
+            project.institution or "",
+            project.department or "",
+            project.research_area or "",
+            project.degree_type or "",
+            project.academic_year or "",
+            project.supervisor or "",
+            "Yes" if project.is_published else "No",
+            project.created_at.strftime("%Y-%m-%d %H:%M:%S") if project.created_at else "",
+            project.view_count or 0,
+            project.download_count or 0,
+            "Yes" if project.document_data else "No",
+            image_count
+        ])
+    
+    # Return CSV file
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode()),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename=projects_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        }
+    )
+
+# Health check endpoint
+@router.get("/health")
+async def health_check():
+    """Check if the projects API is working"""
+    return {"status": "healthy", "service": "projects"}
