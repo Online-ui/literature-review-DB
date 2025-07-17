@@ -15,7 +15,13 @@ import {
   CardContent,
   Avatar,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  ImageList,
+  ImageListItem,
+  Modal,
+  Backdrop,
+  Fade,
+  IconButton
 } from '@mui/material';
 import {
   Download as DownloadIcon,
@@ -27,12 +33,277 @@ import {
   Category as CategoryIcon,
   LocalHospital as HealthIcon,
   Science as ResearchIcon,
-  Public as PublicIcon
+  Public as PublicIcon,
+  Close as CloseIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  Image as ImageIcon
 } from '@mui/icons-material';
 import { apiService, Project } from '../services/api';
 import DocumentViewer from '../components/DocumentViewer';
 import SEOHead from '../components/SEOHead';
 import StructuredData from '../components/StructuredData';
+
+// Image Gallery Component
+const ImageGallery: React.FC<{ 
+  images: string[]; 
+  featuredIndex?: number;
+  projectTitle: string;
+}> = ({ images, featuredIndex = 0, projectTitle }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [selectedImage, setSelectedImage] = useState<number | null>(null);
+  
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+  const cleanBaseUrl = API_BASE_URL.endsWith('/api') 
+    ? API_BASE_URL.slice(0, -4) 
+    : API_BASE_URL.replace(/\/$/, '');
+
+  const getImageUrl = (imagePath: string) => {
+    // Handle different path formats
+    if (imagePath.startsWith('http')) {
+      return imagePath;
+    }
+    // Remove leading slash if present
+    const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+    return `${cleanBaseUrl}${cleanPath}`;
+  };
+
+  const handlePrevious = () => {
+    if (selectedImage !== null && selectedImage > 0) {
+      setSelectedImage(selectedImage - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (selectedImage !== null && selectedImage < images.length - 1) {
+      setSelectedImage(selectedImage + 1);
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'ArrowLeft') {
+      handlePrevious();
+    } else if (event.key === 'ArrowRight') {
+      handleNext();
+    } else if (event.key === 'Escape') {
+      setSelectedImage(null);
+    }
+  };
+
+  // Sort images to put featured image first
+  const sortedImages = [...images];
+  if (featuredIndex > 0 && featuredIndex < images.length) {
+    const featured = sortedImages.splice(featuredIndex, 1);
+    sortedImages.unshift(featured[0]);
+  }
+
+  return (
+    <>
+      <Paper sx={{ 
+        p: { xs: 2, sm: 4 }, 
+        mb: { xs: 2, sm: 4 }, 
+        borderRadius: 4,
+        border: '2px solid #c8e6c9',
+        boxShadow: '0 4px 16px rgba(27, 94, 32, 0.1)',
+        background: 'linear-gradient(135deg, #ffffff 0%, #f1f8e9 100%)'
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: { xs: 2, sm: 3 } }}>
+          <Avatar sx={{ bgcolor: '#2e7d32', width: { xs: 32, sm: 40 }, height: { xs: 32, sm: 40 } }}>
+            <ImageIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
+          </Avatar>
+          <Typography variant={isMobile ? "h6" : "h5"} sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
+            Research Images
+          </Typography>
+          <Chip 
+            label={`${images.length} ${images.length === 1 ? 'image' : 'images'}`}
+            size="small"
+            sx={{
+              bgcolor: '#e8f5e9',
+              color: '#1b5e20',
+              fontWeight: 600,
+              ml: 'auto'
+            }}
+          />
+        </Box>
+
+        <ImageList 
+          sx={{ 
+            width: '100%', 
+            height: isMobile ? 300 : 450,
+            borderRadius: 2,
+            overflow: 'hidden'
+          }} 
+          cols={isMobile ? 2 : 3} 
+          rowHeight={isMobile ? 150 : 200}
+          gap={isMobile ? 8 : 16}
+        >
+          {sortedImages.map((image, index) => (
+            <ImageListItem 
+              key={index}
+              sx={{
+                cursor: 'pointer',
+                borderRadius: 2,
+                overflow: 'hidden',
+                border: '2px solid transparent',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'scale(1.05)',
+                  borderColor: '#2e7d32',
+                  boxShadow: '0 8px 24px rgba(27, 94, 32, 0.3)'
+                }
+              }}
+              onClick={() => setSelectedImage(index)}
+            >
+              <img
+                src={getImageUrl(image)}
+                alt={`${projectTitle} - Image ${index + 1}`}
+                loading="lazy"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover'
+                }}
+              />
+              {index === 0 && featuredIndex === 0 && (
+                <Chip
+                  label="Featured"
+                  size="small"
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    bgcolor: '#1b5e20',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '0.7rem'
+                  }}
+                />
+              )}
+            </ImageListItem>
+          ))}
+        </ImageList>
+      </Paper>
+
+      {/* Lightbox Modal */}
+      <Modal
+        open={selectedImage !== null}
+        onClose={() => setSelectedImage(null)}
+        closeAfterTransition
+        BackdropComponent={Backdrop}
+        BackdropProps={{
+          timeout: 500,
+          sx: { bgcolor: 'rgba(0, 0, 0, 0.9)' }
+        }}
+        onKeyDown={handleKeyDown}
+      >
+        <Fade in={selectedImage !== null}>
+          <Box sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: { xs: '95vw', sm: '90vw', md: '80vw' },
+            maxWidth: 1200,
+            maxHeight: '90vh',
+            bgcolor: 'transparent',
+            outline: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
+          }}>
+            {/* Close button */}
+            <IconButton
+              onClick={() => setSelectedImage(null)}
+              sx={{
+                position: 'absolute',
+                top: { xs: -40, sm: -50 },
+                right: { xs: -10, sm: 0 },
+                color: 'white',
+                bgcolor: 'rgba(0, 0, 0, 0.5)',
+                '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.7)'
+                }
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+
+            {/* Navigation buttons */}
+            {selectedImage !== null && selectedImage > 0 && (
+              <IconButton
+                onClick={handlePrevious}
+                sx={{
+                  position: 'absolute',
+                  left: { xs: 10, sm: -60 },
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'white',
+                  bgcolor: 'rgba(0, 0, 0, 0.5)',
+                  '&:hover': {
+                    bgcolor: 'rgba(0, 0, 0, 0.7)'
+                  }
+                }}
+              >
+                <ChevronLeftIcon sx={{ fontSize: { xs: 30, sm: 40 } }} />
+              </IconButton>
+            )}
+
+            {selectedImage !== null && selectedImage < images.length - 1 && (
+              <IconButton
+                onClick={handleNext}
+                sx={{
+                  position: 'absolute',
+                  right: { xs: 10, sm: -60 },
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'white',
+                  bgcolor: 'rgba(0, 0, 0, 0.5)',
+                  '&:hover': {
+                    bgcolor: 'rgba(0, 0, 0, 0.7)'
+                  }
+                }}
+              >
+                <ChevronRightIcon sx={{ fontSize: { xs: 30, sm: 40 } }} />
+              </IconButton>
+            )}
+
+            {/* Image */}
+            {selectedImage !== null && (
+              <>
+                <img
+                  src={getImageUrl(sortedImages[selectedImage])}
+                  alt={`${projectTitle} - Image ${selectedImage + 1}`}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '80vh',
+                    objectFit: 'contain',
+                    borderRadius: 8,
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
+                  }}
+                />
+                <Typography
+                  variant="body1"
+                  sx={{
+                    color: 'white',
+                    mt: 2,
+                    textAlign: 'center',
+                    bgcolor: 'rgba(0, 0, 0, 0.7)',
+                    px: 3,
+                    py: 1,
+                    borderRadius: 2
+                  }}
+                >
+                  Image {selectedImage + 1} of {images.length}
+                </Typography>
+              </>
+            )}
+          </Box>
+        </Fade>
+      </Modal>
+    </>
+  );
+};
 
 const ProjectDetailPage: React.FC = () => {
   // Add this at the very top
@@ -88,16 +359,17 @@ const ProjectDetailPage: React.FC = () => {
   };
 
   const handleViewDocument = () => {
-  if (!project) return; // Add this null check
-  
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-  const cleanBaseUrl = API_BASE_URL.endsWith('/api') 
-    ? API_BASE_URL.slice(0, -4) 
-    : API_BASE_URL.replace(/\/$/, '');
-  
-  const viewUrl = `${cleanBaseUrl}/api/projects/${project.slug}/view-document`;
-  window.open(viewUrl, '_blank');
-};
+    if (!project) return; // Add this null check
+    
+    const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const cleanBaseUrl = API_BASE_URL.endsWith('/api') 
+      ? API_BASE_URL.slice(0, -4) 
+      : API_BASE_URL.replace(/\/$/, '');
+    
+    const viewUrl = `${cleanBaseUrl}/api/projects/${project.slug}/view-document`;
+    window.open(viewUrl, '_blank');
+  };
+
   // Also log when buttons are rendered
   console.log('Rendering buttons', project?.document_filename);
 
@@ -404,7 +676,7 @@ const ProjectDetailPage: React.FC = () => {
                       transform: 'translateY(-2px)',
                       boxShadow: '0 8px 24px rgba(46, 125, 50, 0.3)'
                     },
-                                        '&:disabled': {
+                    '&:disabled': {
                       borderColor: '#c8e6c9',
                       color: '#81c784'
                     }
@@ -489,6 +761,15 @@ const ProjectDetailPage: React.FC = () => {
                   {project.abstract}
                 </Typography>
               </Paper>
+            )}
+
+            {/* Image Gallery */}
+            {project.images && project.images.length > 0 && (
+              <ImageGallery 
+                images={project.images} 
+                featuredIndex={project.featured_image_index}
+                projectTitle={project.title}
+              />
             )}
 
             {/* Keywords */}
@@ -702,7 +983,7 @@ const ProjectDetailPage: React.FC = () => {
                       <Typography variant={isMobile ? "body2" : "body1"} sx={{ 
                         color: '#2e7d32', 
                         fontWeight: 600, 
-                                                mb: 1,
+                        mb: 1,
                         fontSize: { xs: '0.875rem', sm: '1rem' },
                         wordBreak: 'break-word'
                       }}>
