@@ -7,10 +7,10 @@ import os
 
 from .api import projects, sitemap
 from .database import engine
-from .models import base
+from .models.base import Base
 
 # Create tables
-base.Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Literature Review Public API")
 
@@ -31,15 +31,20 @@ print(f"Admin backend directory: {ADMIN_BACKEND_DIR}")
 print(f"Admin uploads directory: {ADMIN_UPLOAD_DIR}")
 print(f"Admin uploads exists: {ADMIN_UPLOAD_DIR.exists()}")
 
-# Serve static files from admin portal's uploads directory
-@app.get("/uploads/{path:path}")
-async def serve_upload(path: str):
-    """Serve uploaded files from admin portal"""
+# Helper function to serve uploads
+async def serve_upload_file(path: str):
+    """Helper to serve uploaded files"""
     file_path = ADMIN_UPLOAD_DIR / path
     print(f"Requested file: {file_path}")
     
     if file_path.exists() and file_path.is_file():
         return FileResponse(file_path)
+    
+    # Try without 'projects/' prefix if not found
+    if not file_path.exists() and path.startswith('projects/'):
+        alt_path = ADMIN_UPLOAD_DIR / path.replace('projects/', '')
+        if alt_path.exists() and alt_path.is_file():
+            return FileResponse(alt_path)
     
     return {
         "error": "File not found", 
@@ -47,6 +52,17 @@ async def serve_upload(path: str):
         "full_path": str(file_path),
         "exists": file_path.exists()
     }
+
+# Serve static files from both /uploads and /api/uploads paths
+@app.get("/uploads/{path:path}")
+async def serve_upload(path: str):
+    """Serve uploaded files from admin portal"""
+    return await serve_upload_file(path)
+
+@app.get("/api/uploads/{path:path}")
+async def serve_upload_api(path: str):
+    """Serve uploaded files from /api/uploads path for compatibility"""
+    return await serve_upload_file(path)
 
 # Include routers
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
@@ -66,7 +82,11 @@ async def health_check():
         "status": "healthy",
         "admin_uploads_dir": str(ADMIN_UPLOAD_DIR),
         "uploads_exists": ADMIN_UPLOAD_DIR.exists(),
-        "sample_files": upload_files[:5]  # Show first 5 files for debugging
+        "sample_files": upload_files[:5],  # Show first 5 files for debugging
+        "test_image_urls": [
+            "/uploads/projects/project_7/a4beaba6-2d75-4497-aedd-0cca7570e944.png",
+            "/api/uploads/projects/project_7/a4beaba6-2d75-4497-aedd-0cca7570e944.png"
+        ]
     }
 
 @app.get("/")
