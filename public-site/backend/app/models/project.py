@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, LargeBinary
+from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, LargeBinary, JSON
 from . import Base  # Import Base from __init__.py
 
 class Project(Base):
@@ -47,7 +47,8 @@ class Project(Base):
     # Stats
     view_count = Column(Integer, default=0)
     download_count = Column(Integer, default=0)
-
+    
+    # Image fields
     images = Column(JSON, nullable=True, default=list)
     featured_image_index = Column(Integer, default=0)
     
