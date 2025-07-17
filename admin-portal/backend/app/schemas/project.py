@@ -130,3 +130,37 @@ class SetFeaturedImageRequest(BaseModel):
 
 class ReorderImagesRequest(BaseModel):
     new_order: List[int]
+class ProjectImageBase(BaseModel):
+    filename: str
+    content_type: str = "image/png"
+    order_index: int = 0
+    is_featured: bool = False
+
+class ProjectImageResponse(ProjectImageBase):
+    id: int
+    project_id: int
+    image_size: Optional[int] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class ProjectImageCreate(BaseModel):
+    # Used when uploading images
+    pass
+
+# Update ProjectResponse to include image_records
+class ProjectResponse(ProjectBase):
+    id: int
+    slug: str
+    is_published: bool
+    publication_date: datetime
+    view_count: int
+    download_count: int
+    
+    # Legacy image fields
+    images: Optional[List[str]] = []
+    featured_image_index: Optional[int] = 0
+    
+    # New image records
+    image_records: List[ProjectImageResponse] = []
