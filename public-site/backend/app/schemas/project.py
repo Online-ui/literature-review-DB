@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class ProjectBase(BaseModel):
@@ -25,6 +25,10 @@ class ProjectResponse(ProjectBase):
     view_count: int
     download_count: int
     
+    # Image fields
+    images: Optional[List[str]] = []
+    featured_image_index: Optional[int] = 0
+    
     # Database Storage Fields
     document_filename: Optional[str] = None
     document_size: Optional[int] = None
@@ -37,6 +41,7 @@ class ProjectResponse(ProjectBase):
     
     class Config:
         from_attributes = True
+        orm_mode = True  # Added for compatibility
 
 class ProjectStats(BaseModel):
     """Schema for project statistics"""
