@@ -17,58 +17,72 @@ interface TokenVerificationResponse {
 class AdminApiService {
   private api = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 10000,
+    timeout: 10000, // Default timeout for most requests
+  });
+
+  // Create a separate axios instance for long-running operations
+  private apiLongRunning = axios.create({
+    baseURL: API_BASE_URL,
+    timeout: 60000, // 60 seconds for file uploads and processing
   });
 
   constructor() {
-    // Add auth token to requests
-    this.api.interceptors.request.use((config) => {
-      const token = localStorage.getItem('admin_token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      
-      // Don't override Content-Type if it's already set (like for multipart/form-data)
-      if (config.method === 'post' && !config.headers['Content-Type'] && !(config.data instanceof FormData)) {
-        config.headers['Content-Type'] = 'application/json';
-      }
-      
-      return config;
-    });
+    // Configure both axios instances
+    [this.api, this.apiLongRunning].forEach(instance => {
+      // Add auth token to requests
+      instance.interceptors.request.use((config) => {
+        const token = localStorage.getItem('admin_token');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+        
+        // Don't override Content-Type if it's already set (like for multipart/form-data)
+        if (config.method === 'post' && !config.headers['Content-Type'] && !(config.data instanceof FormData)) {
+          config.headers['Content-Type'] = 'application/json';
+        }
+        
+        return config;
+      });
 
-    // Handle auth errors and format error messages
-    this.api.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          localStorage.removeItem('admin_token');
-          localStorage.removeItem('admin_user');
-          window.location.href = '/login';
-        }
-        
-        // Format error message for better display
-        if (error.response?.data) {
-          const errorData = error.response.data;
-          
-          // Handle FastAPI validation errors
-          if (Array.isArray(errorData.detail)) {
-            const messages = errorData.detail.map((err: any) => {
-              if (typeof err === 'object' && err.msg) {
-                return `${err.loc?.join(' → ') || 'Field'}: ${err.msg}`;
-              }
-              return err.toString();
-            });
-            error.message = messages.join(', ');
-          } else if (typeof errorData.detail === 'string') {
-            error.message = errorData.detail;
-          } else if (errorData.message) {
-            error.message = errorData.message;
+      // Handle auth errors and format error messages
+      instance.interceptors.response.use(
+        (response) => response,
+        (error) => {
+          if (error.response?.status === 401) {
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_user');
+            window.location.href = '/login';
           }
+          
+          // Format error message for better display
+          if (error.response?.data) {
+            const errorData = error.response.data;
+            
+            // Handle FastAPI validation errors
+            if (Array.isArray(errorData.detail)) {
+              const messages = errorData.detail.map((err: any) => {
+                if (typeof err === 'object' && err.msg) {
+                  return `${err.loc?.join(' → ') || 'Field'}: ${err.msg}`;
+                }
+                return err.toString();
+              });
+              error.message = messages.join(', ');
+            } else if (typeof errorData.detail === 'string') {
+              error.message = errorData.detail;
+            } else if (errorData.message) {
+              error.message = errorData.message;
+            }
+          }
+          
+          // Handle timeout errors specifically
+          if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
+            error.message = 'Request timed out. The operation may still be processing in the background.';
+          }
+          
+          return Promise.reject(error);
         }
-        
-        return Promise.reject(error);
-      }
-    );
+      );
+    });
   }
 
   // Authentication
@@ -200,21 +214,53 @@ class AdminApiService {
   }
 
   async createProject(projectData: FormData): Promise<Project> {
-    const response = await this.api.post('/projects/', projectData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
+    try {
+      // Use long-running API instance for project creation with file upload
+      const response = await this.apiLongRunning.post('/projects/', projectData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        // Optional: Add progress tracking
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            console.log(`Upload progress: ${percentCompleted}%`);
+          }
+        },
+      });
+      return response.data;
+    } catch (error: any) {
+      // If it's a timeout error, provide a more helpful message
+      if (error.code === 'ECONNABORTED') {
+        error.message = 'The project creation is taking longer than expected. It may still be processing. Please check the projects list in a moment.';
+      }
+      throw error;
+    }
   }
 
   async updateProject(projectId: number, projectData: FormData): Promise<Project> {
-    const response = await this.api.put(`/projects/${projectId}`, projectData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
+    try {
+      // Use long-running API instance for project updates with file upload
+      const response = await this.apiLongRunning.put(`/projects/${projectId}`, projectData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        // Optional: Add progress tracking
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            console.log(`Update progress: ${percentCompleted}%`);
+          }
+        },
+      });
+      return response.data;
+    } catch (error: any) {
+      // If it's a timeout error, provide a more helpful message
+      if (error.code === 'ECONNABORTED') {
+        error.message = 'The project update is taking longer than expected. It may still be processing. Please check the projects list in a moment.';
+      }
+      throw error;
+    }
   }
 
   async deleteProject(projectId: number): Promise<void> {
@@ -244,7 +290,8 @@ class AdminApiService {
     const formData = new FormData();
     files.forEach(file => formData.append('files', file));
     
-    const response = await this.api.post(`/projects/${projectId}/images`, formData, {
+    // Use long-running instance for image uploads
+    const response = await this.apiLongRunning.post(`/projects/${projectId}/images`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -270,9 +317,9 @@ class AdminApiService {
     return response.data;
   }
 
-  // Extract images from project PDF
+  // Extract images from project PDF - use long timeout
   async extractProjectImages(projectId: number): Promise<any> {
-    const response = await this.api.post(`/projects/${projectId}/extract-images`);
+    const response = await this.apiLongRunning.post(`/projects/${projectId}/extract-images`);
     return response.data;
   }
 
