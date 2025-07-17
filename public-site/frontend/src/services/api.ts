@@ -24,7 +24,6 @@ export interface Project {
   publication_date: string;
   view_count: number;
   download_count: number;
-  // Updated for database storage
   document_filename?: string;
   document_size?: number;
   document_content_type?: string;
@@ -32,6 +31,8 @@ export interface Project {
   created_by_id?: number;
   created_at: string;
   updated_at?: string;  
+  images?: string[];
+  featured_image_index?: number;
 }
 
 export interface ProjectSummary {
