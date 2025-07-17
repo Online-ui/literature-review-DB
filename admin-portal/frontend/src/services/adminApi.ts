@@ -396,6 +396,44 @@ class AdminApiService {
     const response = await this.api.post('/projects/cleanup-all-images');
     return response.data;
   }
+
+  // Project Image Methods
+  async uploadProjectImages(projectId: number, files: File[]): Promise<any> {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    
+    const response = await this.apiLongRunning.post(`/projects/${projectId}/images`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
+    return response.data;
+  }
+  
+  async deleteProjectImage(projectId: number, imageId: number): Promise<any> {
+    const response = await this.api.delete(`/projects/${projectId}/images/${imageId}`);
+    return response.data;
+  }
+  
+  async setFeaturedImage(projectId: number, imageId: number): Promise<any> {
+    const response = await this.api.put(`/projects/${projectId}/featured-image`, { 
+      image_id: imageId 
+    });
+    return response.data;
+  }
+  
+  async reorderProjectImages(projectId: number, imageIds: number[]): Promise<any> {
+    const response = await this.api.put(`/projects/${projectId}/images/reorder`, { 
+      image_ids: imageIds 
+    });
+    return response.data;
+  }
+  
+  async extractProjectImages(projectId: number): Promise<any> {
+    const response = await this.apiLongRunning.post(`/projects/${projectId}/extract-images`);
+    return response.data;
+  }
 }
 
 export const adminApi = new AdminApiService();
