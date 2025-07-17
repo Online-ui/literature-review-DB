@@ -47,6 +47,9 @@ class Project(Base):
     # Stats
     view_count = Column(Integer, default=0)
     download_count = Column(Integer, default=0)
+
+    images = Column(JSON, nullable=True, default=list)
+    featured_image_index = Column(Integer, default=0)
     
     # User Relationship (simplified for public site)
     created_by_id = Column(Integer, nullable=True)
