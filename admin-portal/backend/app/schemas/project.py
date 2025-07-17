@@ -1,135 +1,7 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import datetime
 
-class ProjectBase(BaseModel):
-    title: str
-    abstract: Optional[str] = None
-    keywords: Optional[str] = None
-    research_area: Optional[str] = None
-    custom_research_area: Optional[str] = None  # New field for custom research area
-    degree_type: Optional[str] = None
-    custom_degree_type: Optional[str] = None  # New field for custom degree type
-    academic_year: Optional[str] = None
-    institution: Optional[str] = None
-    custom_institution: Optional[str] = None  # New field for custom institution
-    department: Optional[str] = None
-    supervisor: Optional[str] = None
-    author_name: str
-    author_email: Optional[str] = None
-    meta_description: Optional[str] = None
-    meta_keywords: Optional[str] = None
-    
-    # Image fields
-    images: List[str] = []
-    featured_image_index: int = 0
-
-class ProjectCreate(ProjectBase):
-    @validator('research_area')
-    def validate_research_area(cls, v, values):
-        if v == "Others" and not values.get('custom_research_area'):
-            raise ValueError('Custom research area is required when "Others" is selected')
-        return v
-    
-    @validator('degree_type')
-    def validate_degree_type(cls, v, values):
-        if v == "Others" and not values.get('custom_degree_type'):
-            raise ValueError('Custom degree type is required when "Others" is selected')
-        return v
-    
-    @validator('institution')
-    def validate_institution(cls, v, values):
-        if v == "Others" and not values.get('custom_institution'):
-            raise ValueError('Custom institution is required when "Others" is selected')
-        return v
-
-class ProjectUpdate(BaseModel):
-    title: Optional[str] = None
-    abstract: Optional[str] = None
-    keywords: Optional[str] = None
-    research_area: Optional[str] = None
-    custom_research_area: Optional[str] = None
-    degree_type: Optional[str] = None
-    custom_degree_type: Optional[str] = None
-    academic_year: Optional[str] = None
-    institution: Optional[str] = None
-    custom_institution: Optional[str] = None
-    department: Optional[str] = None
-    supervisor: Optional[str] = None
-    author_name: Optional[str] = None
-    author_email: Optional[str] = None
-    is_published: Optional[bool] = None
-    meta_description: Optional[str] = None
-    meta_keywords: Optional[str] = None
-    
-    # Image fields
-    images: Optional[List[str]] = None
-    featured_image_index: Optional[int] = None
-
-class ProjectResponse(ProjectBase):
-    id: int
-    slug: str
-    is_published: bool
-    publication_date: datetime
-    view_count: int
-    download_count: int
-    
-    # Supabase Storage Fields
-    document_url: Optional[str] = None
-    document_filename: Optional[str] = None
-    document_size: Optional[int] = None
-    document_path: Optional[str] = None  # New: Supabase storage path
-    document_content_type: Optional[str] = None  # New: MIME type
-    document_storage: Optional[str] = None  # New: Storage backend identifier
-    
-    # Legacy fields (for backward compatibility)
-    document_public_id: Optional[str] = None  # Legacy: Cloudinary public ID
-    
-    # Metadata
-    created_by_id: Optional[int] = None
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-class ProjectFileInfo(BaseModel):
-    """Schema for file information responses"""
-    filename: Optional[str] = None
-    size: Optional[int] = None
-    content_type: Optional[str] = None
-    storage: Optional[str] = None
-    download_count: int = 0
-    view_count: int = 0
-    url: Optional[str] = None
-    path: Optional[str] = None
-
-class ProjectStats(BaseModel):
-    """Schema for project statistics"""
-    total_projects: int
-    total_institutions: int
-    total_research_areas: int
-    total_downloads: int
-    total_views: int = 0
-
-class ProjectSearchResponse(BaseModel):
-    """Schema for search results with metadata"""
-    projects: list[ProjectResponse]
-    total: int
-    page: int
-    per_page: int
-    has_next: bool
-    has_prev: bool
-
-# Image operation schemas
-class ImageUploadResponse(BaseModel):
-    images: List[str]
-    message: str
-
-class SetFeaturedImageRequest(BaseModel):
-    index: int
-
-class ReorderImagesRequest(BaseModel):
-    new_order: List[int]
 class ProjectImageBase(BaseModel):
     filename: str
     content_type: str = "image/png"
@@ -141,15 +13,46 @@ class ProjectImageResponse(ProjectImageBase):
     project_id: int
     image_size: Optional[int] = None
     created_at: datetime
+    image_url: str  # Computed field for API URL
     
     class Config:
         from_attributes = True
 
-class ProjectImageCreate(BaseModel):
-    # Used when uploading images
+class ProjectBase(BaseModel):
+    title: str
+    abstract: Optional[str] = None
+    keywords: Optional[str] = None
+    research_area: Optional[str] = None
+    degree_type: Optional[str] = None
+    academic_year: Optional[str] = None
+    institution: Optional[str] = None
+    department: Optional[str] = None
+    supervisor: Optional[str] = None
+    author_name: str
+    author_email: Optional[str] = None
+    meta_description: Optional[str] = None
+    meta_keywords: Optional[str] = None
+    is_published: bool = True
+
+class ProjectCreate(ProjectBase):
     pass
 
-# Update ProjectResponse to include image_records
+class ProjectUpdate(BaseModel):
+    title: Optional[str] = None
+    abstract: Optional[str] = None
+    keywords: Optional[str] = None
+    research_area: Optional[str] = None
+    degree_type: Optional[str] = None
+    academic_year: Optional[str] = None
+    institution: Optional[str] = None
+    department: Optional[str] = None
+    supervisor: Optional[str] = None
+    author_name: Optional[str] = None
+    author_email: Optional[str] = None
+    meta_description: Optional[str] = None
+    meta_keywords: Optional[str] = None
+    is_published: Optional[bool] = None
+
 class ProjectResponse(ProjectBase):
     id: int
     slug: str
@@ -164,3 +67,38 @@ class ProjectResponse(ProjectBase):
     
     # New image records
     image_records: List[ProjectImageResponse] = []
+    
+    # Database Storage Fields
+    document_filename: Optional[str] = None
+    document_size: Optional[int] = None
+    document_content_type: Optional[str] = None
+    document_storage: Optional[str] = None
+    
+    # Metadata
+    created_by_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        # Populate image URLs for backward compatibility
+        if self.image_records:
+            self.images = [f"/api/projects/{self.id}/images/{img.id}" for img in self.image_records]
+            # Find featured image index
+            for idx, img in enumerate(self.image_records):
+                if img.is_featured:
+                    self.featured_image_index = idx
+                    break
+
+class ImageUploadResponse(BaseModel):
+    images: List[str]
+    message: str
+
+class SetFeaturedImageRequest(BaseModel):
+    image_id: int
+
+class ReorderImagesRequest(BaseModel):
+    image_ids: List[int]
