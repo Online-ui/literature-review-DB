@@ -331,19 +331,22 @@ const ProjectDetailPage: React.FC = () => {
   }, [slug]);
 
   const loadProject = async (projectSlug: string) => {
-    try {
-      const data = await apiService.getProjectBySlug(projectSlug);
-      if (data) {
-        setProject(data);
-      } else {
-        setError('Research project not found');
-      }
-    } catch (err) {
-      setError('Failed to load research project');
-    } finally {
-      setLoading(false);
+  try {
+    const data = await apiService.getProjectBySlug(projectSlug);
+    console.log('Loaded project data:', data); // Debug log
+    console.log('Project images:', data?.images); // Debug log
+    if (data) {
+      setProject(data);
+    } else {
+      setError('Research project not found');
     }
-  };
+  } catch (err) {
+    console.error('Error loading project:', err); // Debug log
+    setError('Failed to load research project');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleDownload = async () => {
     if (!project?.slug) return;
