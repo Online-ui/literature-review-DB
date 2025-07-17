@@ -928,3 +928,45 @@ async def toggle_project_publish_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update project status"
         )
+        
+@router.get("/public/images/{path:path}")
+async def serve_public_image(path: str):
+    """Public endpoint to serve images (no auth required)"""
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    
+    # Get the correct uploads directory
+    uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
+    file_path = uploads_dir / path
+    
+    print(f"Public image request: {path}")
+    print(f"Looking for file at: {file_path}")
+    
+    if file_path.exists() and file_path.is_file():
+        # Determine content type
+        content_type = "application/octet-stream"
+        if str(file_path).lower().endswith('.png'):
+            content_type = "image/png"
+        elif str(file_path).lower().endswith(('.jpg', '.jpeg')):
+            content_type = "image/jpeg"
+        elif str(file_path).lower().endswith('.gif'):
+            content_type = "image/gif"
+        elif str(file_path).lower().endswith('.webp'):
+            content_type = "image/webp"
+        
+        return FileResponse(
+            path=str(file_path),
+            media_type=content_type,
+            headers={
+                "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
+                "Access-Control-Allow-Origin": "*"
+            }
+        )
+    
+    # Log what's in the directory for debugging
+    parent_dir = file_path.parent
+    if parent_dir.exists():
+        files_in_dir = [f.name for f in parent_dir.iterdir() if f.is_file()][:5]
+        print(f"Files in {parent_dir}: {files_in_dir}")
+    
+    raise HTTPException(status_code=404, detail=f"Image not found: {path}")
