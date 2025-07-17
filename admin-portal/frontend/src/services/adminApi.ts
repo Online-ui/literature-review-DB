@@ -17,13 +17,13 @@ interface TokenVerificationResponse {
 class AdminApiService {
   private api = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 10000, // Default timeout for most requests
+    timeout: 120000, // Default timeout for most requests
   });
 
   // Create a separate axios instance for long-running operations
   private apiLongRunning = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 60000, // 60 seconds for file uploads and processing
+    timeout: 120000, // 60 seconds for file uploads and processing
   });
 
   constructor() {
