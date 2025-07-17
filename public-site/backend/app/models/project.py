@@ -1,5 +1,7 @@
 from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, LargeBinary, JSON
-from . import Base  # Import Base from __init__.py
+from sqlalchemy.ext.declarative import declarative_base
+
+Base = declarative_base()
 
 class Project(Base):
     __tablename__ = "projects"
