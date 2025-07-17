@@ -44,6 +44,28 @@ import DocumentViewer from '../components/DocumentViewer';
 import SEOHead from '../components/SEOHead';
 import StructuredData from '../components/StructuredData';
 
+// Add this helper function at the top of the file
+const getImageUrl = (imagePath: string) => {
+  if (!imagePath) return '';
+  
+  // If the path already starts with http, return as is
+  if (imagePath.startsWith('http')) return imagePath;
+  
+  // Remove any leading slashes
+  let cleanPath = imagePath;
+  if (cleanPath.startsWith('/')) {
+    cleanPath = cleanPath.substring(1);
+  }
+  
+  // If it already starts with 'uploads/', use it directly
+  if (cleanPath.startsWith('uploads/')) {
+    return `${process.env.REACT_APP_API_URL}/${cleanPath}`;
+  }
+  
+  // Otherwise, prepend 'uploads/'
+  return `${process.env.REACT_APP_API_URL}/uploads/${cleanPath}`;
+};
+
 // Image Gallery Component
 const ImageGallery: React.FC<{ 
   images: string[]; 
@@ -54,24 +76,10 @@ const ImageGallery: React.FC<{
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [imageErrors, setImageErrors] = useState<{ [key: number]: boolean }>({});
-  
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-  const cleanBaseUrl = API_BASE_URL.endsWith('/api') 
-    ? API_BASE_URL.slice(0, -4) 
-    : API_BASE_URL.replace(/\/$/, '');
-
-  const getImageUrl = (imagePath: string) => {
-    // Handle different path formats
-    if (imagePath.startsWith('http')) {
-      return imagePath;
-    }
-    // Remove leading slash if present
-    const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
-    return `${cleanBaseUrl}${cleanPath}`;
-  };
 
   const handleImageError = (index: number) => {
-    console.error(`Failed to load image at index ${index}:`, images[index]);
+    console.error(`Failed to load image: ${images[index]}`);
+    console.error(`Attempted URL: ${getImageUrl(images[index])}`);
     setImageErrors(prev => ({ ...prev, [index]: true }));
   };
 
@@ -373,22 +381,22 @@ const ProjectDetailPage: React.FC = () => {
   }, [slug]);
 
   const loadProject = async (projectSlug: string) => {
-  try {
-    const data = await apiService.getProjectBySlug(projectSlug);
-    console.log('Loaded project data:', data); // Debug log
-    console.log('Project images:', data?.images); // Debug log
-    if (data) {
-      setProject(data);
-    } else {
-      setError('Research project not found');
+    try {
+      const data = await apiService.getProjectBySlug(projectSlug);
+      console.log('Loaded project data:', data); // Debug log
+      console.log('Project images:', data?.images); // Debug log
+      if (data) {
+        setProject(data);
+      } else {
+        setError('Research project not found');
+      }
+    } catch (err) {
+      console.error('Error loading project:', err); // Debug log
+      setError('Failed to load research project');
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error('Error loading project:', err); // Debug log
-    setError('Failed to load research project');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleDownload = async () => {
     if (!project?.slug) return;
@@ -1120,3 +1128,4 @@ const ProjectDetailPage: React.FC = () => {
 };
 
 export default ProjectDetailPage;
+    
