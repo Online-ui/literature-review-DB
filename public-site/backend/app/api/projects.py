@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from typing import List, Optional
 import io
 import base64
 import logging
+from pathlib import Path
 
 from ..database import get_db
 from ..models.project import Project
@@ -94,6 +95,44 @@ async def get_institutions(db: Session = Depends(get_db)):
     ).distinct().all()
     return [inst[0] for inst in institutions if inst[0]]
 
+@router.get("/debug/{slug}/images")
+async def debug_project_images(slug: str, db: Session = Depends(get_db)):
+    """Debug endpoint to check project images"""
+    project = db.query(Project).filter(
+        Project.slug == slug,
+        Project.is_published == True
+    ).first()
+    
+    if not project:
+        return {"error": "Project not found"}
+    
+    # Check if admin uploads directory exists
+    admin_upload_dir = Path(__file__).resolve().parent.parent.parent.parent.parent / "admin-portal" / "backend" / "uploads"
+    
+    images_info = []
+    if project.images:
+        for img_path in project.images:
+            # Clean the path
+            clean_path = img_path.replace('/uploads/', '') if img_path.startswith('/uploads/') else img_path
+            full_path = admin_upload_dir / clean_path
+            
+            images_info.append({
+                "stored_path": img_path,
+                "clean_path": clean_path,
+                "full_path": str(full_path),
+                "exists": full_path.exists() if full_path else False
+            })
+    
+    return {
+        "project_slug": slug,
+        "project_title": project.title,
+        "images_count": len(project.images) if project.images else 0,
+        "featured_index": project.featured_image_index,
+        "images": images_info,
+        "admin_upload_dir": str(admin_upload_dir),
+        "admin_upload_exists": admin_upload_dir.exists()
+    }
+
 @router.get("/{slug}", response_model=ProjectResponse)
 async def get_project(slug: str, db: Session = Depends(get_db)):
     project = db.query(Project).filter(
@@ -112,8 +151,7 @@ async def get_project(slug: str, db: Session = Depends(get_db)):
     db.commit()
     
     # Log to verify images are included
-    print(f"Project images: {project.images}")
-    print(f"Featured index: {project.featured_image_index}")
+    logger.info(f"Project {slug} - Images: {project.images}, Featured index: {project.featured_image_index}")
     
     return project
 
@@ -131,27 +169,12 @@ async def view_project_document(project_slug: str, db: Session = Depends(get_db)
     if not project.document_data:
         raise HTTPException(status_code=404, detail="No document found for this project")
     
-    # Decode the base64 data
-    try:
-        file_data = base64.b64decode(project.document_data)
-    except Exception as e:
-        logger.error(f"Failed to decode document for project {project_slug}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to decode document")
+    # The document_data is already in binary format, not base64
+    file_data = project.document_data
     
     # Determine content type
     filename = project.document_filename or f"{project_slug}_document"
-    content_type = "application/octet-stream"
-    
-    if filename.lower().endswith('.pdf'):
-        content_type = "application/pdf"
-    elif filename.lower().endswith(('.jpg', '.jpeg')):
-        content_type = "image/jpeg"
-    elif filename.lower().endswith('.png'):
-        content_type = "image/png"
-    elif filename.lower().endswith('.doc'):
-        content_type = "application/msword"
-    elif filename.lower().endswith('.docx'):
-        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    content_type = project.document_content_type or "application/octet-stream"
     
     # Return file with inline disposition for viewing in browser
     return Response(
@@ -175,18 +198,13 @@ async def get_project_file_info(project_slug: str, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="Project not found")
     
     has_document = bool(project.document_data)
-    file_size = 0
-    
-    if has_document:
-        try:
-            file_size = len(base64.b64decode(project.document_data))
-        except:
-            file_size = 0
+    file_size = len(project.document_data) if has_document else 0
     
     return {
         "available": has_document,
         "filename": project.document_filename if has_document else None,
-        "size": file_size
+        "size": file_size,
+        "content_type": project.document_content_type
     }
 
 @router.get("/{slug}/download")
@@ -213,12 +231,8 @@ async def download_document(slug: str, db: Session = Depends(get_db)):
     project.download_count = (project.download_count or 0) + 1
     db.commit()
     
-    # Decode the base64 data
-    try:
-        file_data = base64.b64decode(project.document_data)
-    except Exception as e:
-        logger.error(f"Failed to decode document for project {slug}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to decode document")
+    # The document_data is already in binary format
+    file_data = project.document_data
     
     # Determine content type
     filename = project.document_filename or f"{slug}_document"
