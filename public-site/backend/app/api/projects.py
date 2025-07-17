@@ -111,6 +111,10 @@ async def get_project(slug: str, db: Session = Depends(get_db)):
     project.view_count = (project.view_count or 0) + 1
     db.commit()
     
+    # Log to verify images are included
+    print(f"Project images: {project.images}")
+    print(f"Featured index: {project.featured_image_index}")
+    
     return project
 
 @router.get("/{project_slug}/view-document")
@@ -266,20 +270,3 @@ async def increment_project_view(slug: str, db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update view count"
         )
-# In your public API routes (public.py or similar)
-
-@router.get("/projects/{slug}")
-async def get_project_by_slug(slug: str, db: Session = Depends(get_db)):
-    project = db.query(Project).filter(
-        Project.slug == slug,
-        Project.is_published == True
-    ).first()
-    
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Log to verify images are included
-    print(f"Project images: {project.images}")
-    print(f"Featured index: {project.featured_image_index}")
-    
-    return project
