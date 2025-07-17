@@ -62,7 +62,7 @@ async def health_check():
                 rel_path = os.path.relpath(os.path.join(root, file), ADMIN_UPLOAD_DIR)
                 upload_files.append(rel_path)
     
-        return {
+    return {
         "status": "healthy",
         "admin_uploads_dir": str(ADMIN_UPLOAD_DIR),
         "uploads_exists": ADMIN_UPLOAD_DIR.exists(),
