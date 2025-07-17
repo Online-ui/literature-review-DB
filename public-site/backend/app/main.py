@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -23,35 +23,73 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Get the path to admin portal's uploads directory
-ADMIN_BACKEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "admin-portal" / "backend"
-ADMIN_UPLOAD_DIR = ADMIN_BACKEND_DIR / "uploads"
+# Try multiple possible paths for uploads directory
+def find_uploads_directory():
+    possible_paths = [
+        # Current structure
+        Path(__file__).resolve().parent.parent.parent.parent / "admin-portal" / "backend" / "uploads",
+        # Alternative structure
+        Path("/opt/render/project/src/admin-portal/backend/uploads"),
+        # Check if uploads is in the same backend
+        Path(__file__).resolve().parent / "uploads",
+        # Check parent directories
+        Path(__file__).resolve().parent.parent / "uploads",
+        Path(__file__).resolve().parent.parent.parent / "uploads",
+    ]
+    
+    for path in possible_paths:
+        print(f"Checking path: {path}")
+        if path.exists() and path.is_dir():
+            print(f"✅ Found uploads directory at: {path}")
+            # List first few files to confirm
+            try:
+                files = list(path.rglob("*.png"))[:3] + list(path.rglob("*.jpg"))[:3]
+                if files:
+                    print(f"Sample files found: {[f.name for f in files]}")
+            except:
+                pass
+            return path
+    
+    print("❌ No uploads directory found in any expected location")
+    return None
 
-print(f"Admin backend directory: {ADMIN_BACKEND_DIR}")
-print(f"Admin uploads directory: {ADMIN_UPLOAD_DIR}")
-print(f"Admin uploads exists: {ADMIN_UPLOAD_DIR.exists()}")
+# Find the uploads directory
+ADMIN_UPLOAD_DIR = find_uploads_directory()
+
+if ADMIN_UPLOAD_DIR:
+    print(f"Using uploads directory: {ADMIN_UPLOAD_DIR}")
+else:
+    print("WARNING: No uploads directory found!")
 
 # Helper function to serve uploads
 async def serve_upload_file(path: str):
     """Helper to serve uploaded files"""
+    if not ADMIN_UPLOAD_DIR:
+        raise HTTPException(status_code=500, detail="Uploads directory not configured")
+    
     file_path = ADMIN_UPLOAD_DIR / path
     print(f"Requested file: {file_path}")
+    print(f"File exists: {file_path.exists()}")
     
     if file_path.exists() and file_path.is_file():
-        return FileResponse(file_path)
+        # Get file size for debugging
+        file_size = file_path.stat().st_size
+        print(f"Serving file: {file_path.name}, size: {file_size} bytes")
+        return FileResponse(
+            path=str(file_path),
+            media_type="image/png" if str(file_path).endswith('.png') else "image/jpeg"
+        )
     
-    # Try without 'projects/' prefix if not found
-    if not file_path.exists() and path.startswith('projects/'):
-        alt_path = ADMIN_UPLOAD_DIR / path.replace('projects/', '')
-        if alt_path.exists() and alt_path.is_file():
-            return FileResponse(alt_path)
+    # Log what files exist in the directory
+    parent_dir = file_path.parent
+    if parent_dir.exists():
+        existing_files = [f.name for f in parent_dir.iterdir() if f.is_file()]
+        print(f"Files in {parent_dir}: {existing_files[:5]}")  # Show first 5 files
     
-    return {
-        "error": "File not found", 
-        "requested": path, 
-        "full_path": str(file_path),
-        "exists": file_path.exists()
-    }
+    raise HTTPException(
+        status_code=404, 
+        detail=f"File not found: {path}"
+    )
 
 # Serve static files from both /uploads and /api/uploads paths
 @app.get("/uploads/{path:path}")
@@ -72,27 +110,84 @@ app.include_router(sitemap.router, prefix="/api", tags=["sitemap"])
 async def health_check():
     # List some files in uploads directory for debugging
     upload_files = []
-    if ADMIN_UPLOAD_DIR.exists():
-        for root, dirs, files in os.walk(ADMIN_UPLOAD_DIR):
-            for file in files[:10]:  # Limit to first 10 files
-                rel_path = os.path.relpath(os.path.join(root, file), ADMIN_UPLOAD_DIR)
-                upload_files.append(rel_path)
-    
-    return {
+    upload_info = {
         "status": "healthy",
-        "admin_uploads_dir": str(ADMIN_UPLOAD_DIR),
-        "uploads_exists": ADMIN_UPLOAD_DIR.exists(),
-        "sample_files": upload_files[:5],  # Show first 5 files for debugging
-        "test_image_urls": [
-            "/uploads/projects/project_7/a4beaba6-2d75-4497-aedd-0cca7570e944.png",
-            "/api/uploads/projects/project_7/a4beaba6-2d75-4497-aedd-0cca7570e944.png"
-        ]
+        "uploads_configured": ADMIN_UPLOAD_DIR is not None,
+        "uploads_dir": str(ADMIN_UPLOAD_DIR) if ADMIN_UPLOAD_DIR else None,
+        "uploads_exists": ADMIN_UPLOAD_DIR.exists() if ADMIN_UPLOAD_DIR else False,
     }
+    
+    if ADMIN_UPLOAD_DIR and ADMIN_UPLOAD_DIR.exists():
+        # Find all image files
+        for ext in ['*.png', '*.jpg', '*.jpeg']:
+            for file in ADMIN_UPLOAD_DIR.rglob(ext):
+                rel_path = file.relative_to(ADMIN_UPLOAD_DIR)
+                upload_files.append(str(rel_path))
+                if len(upload_files) >= 10:  # Limit to 10 files
+                    break
+        
+        upload_info["sample_files"] = upload_files[:10]
+        upload_info["total_files_found"] = len(upload_files)
+    
+    return upload_info
+
+@app.get("/api/debug/find-uploads")
+async def debug_find_uploads():
+    """Debug endpoint to find where uploads might be"""
+    current_dir = Path(__file__).resolve().parent
+    results = {
+        "current_file": str(Path(__file__).resolve()),
+        "current_dir": str(current_dir),
+        "parent_dirs": {},
+        "found_uploads": []
+    }
+    
+    # Check various parent directories
+    check_dir = current_dir
+    for i in range(5):  # Check up to 5 levels up
+        results["parent_dirs"][f"level_{i}"] = {
+            "path": str(check_dir),
+            "contents": [d.name for d in check_dir.iterdir() if d.is_dir()][:10]
+        }
+        
+        # Check for uploads in this directory
+        uploads_path = check_dir / "uploads"
+        if uploads_path.exists():
+            results["found_uploads"].append(str(uploads_path))
+        
+        # Check for admin-portal
+        admin_path = check_dir / "admin-portal" / "backend" / "uploads"
+        if admin_path.exists():
+            results["found_uploads"].append(str(admin_path))
+        
+        check_dir = check_dir.parent
+    
+    # Also check the explicit path
+    explicit_path = Path("/opt/render/project/src")
+    if explicit_path.exists():
+        results["render_src_contents"] = [d.name for d in explicit_path.iterdir() if d.is_dir()]
+        
+        # Check for uploads in admin-portal
+        admin_uploads = explicit_path / "admin-portal" / "backend" / "uploads"
+        if admin_uploads.exists():
+            results["admin_uploads_found"] = True
+            results["admin_uploads_path"] = str(admin_uploads)
+            # List some files
+            sample_files = []
+            for f in admin_uploads.rglob("*"):
+                if f.is_file():
+                    sample_files.append(str(f.relative_to(admin_uploads)))
+                if len(sample_files) >= 5:
+                    break
+            results["admin_uploads_samples"] = sample_files
+    
+    return results
 
 @app.get("/")
 async def root():
     return {
         "message": "Literature Review Public API",
         "docs": "/docs",
-        "health": "/api/health"
+        "health": "/api/health",
+        "debug": "/api/debug/find-uploads"
     }
