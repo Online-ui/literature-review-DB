@@ -39,47 +39,59 @@ import {
   ChevronRight as ChevronRightIcon,
   Image as ImageIcon
 } from '@mui/icons-material';
-import { apiService, Project } from '../services/api';
+import { apiService } from '../services/api';
 import DocumentViewer from '../components/DocumentViewer';
 import SEOHead from '../components/SEOHead';
 import StructuredData from '../components/StructuredData';
 
-// Add this helper function at the top of the file
-const getImageUrl = (imagePath: string) => {
-  if (!imagePath) return '';
-  
-  // If the path already starts with http, return as is
-  if (imagePath.startsWith('http')) return imagePath;
-  
-  // Remove any leading slashes
-  let cleanPath = imagePath;
-  if (cleanPath.startsWith('/')) {
-    cleanPath = cleanPath.substring(1);
-  }
-  
-  // If it already starts with 'uploads/', use it directly
-  if (cleanPath.startsWith('uploads/')) {
-    return `${process.env.REACT_APP_API_URL}/${cleanPath}`;
-  }
-  
-  // Otherwise, prepend 'uploads/'
-  return `${process.env.REACT_APP_API_URL}/uploads/${cleanPath}`;
-};
+// Update the Project interface
+interface Project {
+  id: number;
+  title: string;
+  slug: string;
+  author_name: string;
+  institution?: string;
+  department?: string;
+  supervisor?: string;
+  abstract?: string;
+  keywords?: string;
+  research_area?: string;
+  degree_type?: string;
+  academic_year?: string;
+  publication_date: string;
+  document_filename?: string;
+  document_size?: number;
+  view_count: number;
+  download_count: number;
+  created_at?: string;
+  updated_at?: string;
+  featured_image_index?: number;
+  image_records?: Array<{
+    id: number;
+    filename: string;
+    content_type: string;
+    image_size?: number;
+    order_index: number;
+    is_featured: boolean;
+  }>;
+}
 
-// Image Gallery Component
+// Updated Image Gallery Component
 const ImageGallery: React.FC<{ 
-  images: string[]; 
-  featuredIndex?: number;
+  imageRecords: any[];
+  projectId: number;
   projectTitle: string;
-}> = ({ images, featuredIndex = 0, projectTitle }) => {
+}> = ({ imageRecords, projectId, projectTitle }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [imageErrors, setImageErrors] = useState<{ [key: number]: boolean }>({});
 
+  // Sort images by order_index
+  const sortedImages = [...imageRecords].sort((a, b) => a.order_index - b.order_index);
+
   const handleImageError = (index: number) => {
-    console.error(`Failed to load image: ${images[index]}`);
-    console.error(`Attempted URL: ${getImageUrl(images[index])}`);
+    console.error(`Failed to load image: ${sortedImages[index].filename}`);
     setImageErrors(prev => ({ ...prev, [index]: true }));
   };
 
@@ -90,7 +102,7 @@ const ImageGallery: React.FC<{
   };
 
   const handleNext = () => {
-    if (selectedImage !== null && selectedImage < images.length - 1) {
+    if (selectedImage !== null && selectedImage < sortedImages.length - 1) {
       setSelectedImage(selectedImage + 1);
     }
   };
@@ -104,13 +116,6 @@ const ImageGallery: React.FC<{
       setSelectedImage(null);
     }
   };
-
-  // Sort images to put featured image first
-  const sortedImages = [...images];
-  if (featuredIndex > 0 && featuredIndex < images.length) {
-    const featured = sortedImages.splice(featuredIndex, 1);
-    sortedImages.unshift(featured[0]);
-  }
 
   return (
     <>
@@ -130,7 +135,7 @@ const ImageGallery: React.FC<{
             Research Images
           </Typography>
           <Chip 
-            label={`${images.length} ${images.length === 1 ? 'image' : 'images'}`}
+            label={`${sortedImages.length} ${sortedImages.length === 1 ? 'image' : 'images'}`}
             size="small"
             sx={{
               bgcolor: '#e8f5e9',
@@ -154,7 +159,7 @@ const ImageGallery: React.FC<{
         >
           {sortedImages.map((image, index) => (
             <ImageListItem 
-              key={index}
+              key={image.id}
               sx={{
                 cursor: 'pointer',
                 borderRadius: 2,
@@ -185,8 +190,8 @@ const ImageGallery: React.FC<{
                 </Box>
               ) : (
                 <img
-                  src={getImageUrl(image)}
-                  alt={`${projectTitle} - Image ${index + 1}`}
+                  src={`${process.env.REACT_APP_API_URL}/api/projects/${projectId}/images/${image.id}`}
+                  alt={image.filename}
                   loading="lazy"
                   onError={() => handleImageError(index)}
                   style={{
@@ -196,7 +201,7 @@ const ImageGallery: React.FC<{
                   }}
                 />
               )}
-              {index === 0 && featuredIndex === 0 && (
+              {image.is_featured && (
                 <Chip
                   label="Featured"
                   size="small"
@@ -280,7 +285,7 @@ const ImageGallery: React.FC<{
               </IconButton>
             )}
 
-            {selectedImage !== null && selectedImage < images.length - 1 && (
+            {selectedImage !== null && selectedImage < sortedImages.length - 1 && (
               <IconButton
                 onClick={handleNext}
                 sx={{
@@ -320,8 +325,8 @@ const ImageGallery: React.FC<{
                   </Box>
                 ) : (
                   <img
-                    src={getImageUrl(sortedImages[selectedImage])}
-                    alt={`${projectTitle} - Image ${selectedImage + 1}`}
+                    src={`${process.env.REACT_APP_API_URL}/api/projects/${projectId}/images/${sortedImages[selectedImage].id}`}
+                    alt={sortedImages[selectedImage].filename}
                     onError={() => handleImageError(selectedImage)}
                     style={{
                       maxWidth: '100%',
@@ -344,7 +349,7 @@ const ImageGallery: React.FC<{
                     borderRadius: 2
                   }}
                 >
-                  Image {selectedImage + 1} of {images.length}
+                  Image {selectedImage + 1} of {sortedImages.length}
                 </Typography>
               </>
             )}
@@ -384,7 +389,7 @@ const ProjectDetailPage: React.FC = () => {
     try {
       const data = await apiService.getProjectBySlug(projectSlug);
       console.log('Loaded project data:', data); // Debug log
-      console.log('Project images:', data?.images); // Debug log
+      console.log('Project image_records:', data?.image_records); // Debug log
       if (data) {
         setProject(data);
       } else {
@@ -816,11 +821,11 @@ const ProjectDetailPage: React.FC = () => {
               </Paper>
             )}
 
-            {/* Image Gallery */}
-            {project.images && project.images.length > 0 && (
+            {/* Image Gallery - Updated to use image_records */}
+            {project.image_records && project.image_records.length > 0 && (
               <ImageGallery 
-                images={project.images} 
-                featuredIndex={project.featured_image_index}
+                imageRecords={project.image_records} 
+                projectId={project.id}
                 projectTitle={project.title}
               />
             )}
@@ -1113,19 +1118,9 @@ const ProjectDetailPage: React.FC = () => {
             </Card>
           </Grid>
         </Grid>
-
-        {/* Temporarily comment this out to test */}
-        {/* {project.document_filename && viewerOpen && (
-          <DocumentViewer
-            projectSlug={project.slug}
-            documentFilename={project.document_filename || 'document.pdf'}
-            hasDocument={true}
-          />
-        )} */}
       </Container>
     </Box>
   );
 };
 
 export default ProjectDetailPage;
-    
