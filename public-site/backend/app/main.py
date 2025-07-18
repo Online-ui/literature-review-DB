@@ -1,10 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, Response
 from pathlib import Path
 import os
-import httpx
-import io
 
 from .api import projects, sitemap
 from .database import engine
@@ -13,7 +10,11 @@ from .models.base import Base
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Literature Review Public API")
+app = FastAPI(
+    title="Literature Review Public API",
+    description="Public API for accessing published research projects",
+    version="1.0.0"
+)
 
 # CORS middleware
 app.add_middleware(
@@ -24,112 +25,66 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Admin portal URL - use environment variable or default
-ADMIN_PORTAL_URL = os.getenv("ADMIN_PORTAL_URL", "https://literature-rev-admin-portal.onrender.com")
-print(f"Admin portal URL configured: {ADMIN_PORTAL_URL}")
-
-# Create async HTTP client with longer timeout
-async_client = httpx.AsyncClient(timeout=30.0)
-
-# Proxy image requests to admin portal
-async def proxy_image_from_admin(path: str):
-    """Proxy image requests to admin portal"""
-    try:
-        # Clean the path
-        clean_path = path.strip('/')
-        
-        # Request image from admin portal's public endpoint
-        url = f"{ADMIN_PORTAL_URL}/api/projects/public/images/{clean_path}"
-        print(f"Proxying image request to: {url}")
-        
-        response = await async_client.get(url)
-        
-        if response.status_code == 200:
-            # Return the image with proper headers
-            return Response(
-                content=response.content,
-                media_type=response.headers.get("content-type", "image/png"),
-                headers={
-                    "Cache-Control": "public, max-age=3600",
-                    "Access-Control-Allow-Origin": "*",
-                    "Content-Length": str(len(response.content))
-                }
-            )
-        else:
-            print(f"Admin portal returned {response.status_code} for image: {clean_path}")
-            raise HTTPException(
-                status_code=response.status_code, 
-                detail=f"Image not found: {clean_path}"
-            )
-            
-    except httpx.TimeoutException:
-        print(f"Timeout fetching image: {path}")
-        raise HTTPException(status_code=504, detail="Timeout fetching image")
-    except httpx.RequestError as e:
-        print(f"Request error fetching image: {e}")
-        raise HTTPException(status_code=502, detail="Error connecting to image server")
-    except Exception as e:
-        print(f"Unexpected error proxying image: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching image: {str(e)}")
-
-# Serve images by proxying to admin portal
-@app.get("/uploads/{path:path}")
-async def serve_upload(path: str):
-    """Proxy uploaded files from admin portal"""
-    return await proxy_image_from_admin(path)
-
-@app.get("/api/uploads/{path:path}")
-async def serve_upload_api(path: str):
-    """Proxy uploaded files from admin portal (API path)"""
-    return await proxy_image_from_admin(path)
-
-# Test endpoint to verify proxy is working
-@app.get("/api/test-proxy")
-async def test_proxy():
-    """Test the proxy connection to admin portal"""
-    try:
-        # Try to fetch a known image
-        test_path = "projects/project_7/3a9cb833-5b26-499f-af76-ce5555c9e0e6.png"
-        response = await async_client.get(
-            f"{ADMIN_PORTAL_URL}/api/projects/public/images/{test_path}"
-        )
-        
-        return {
-            "proxy_status": "working",
-            "admin_portal_url": ADMIN_PORTAL_URL,
-            "test_image_status": response.status_code,
-            "test_image_size": len(response.content) if response.status_code == 200 else 0
-        }
-    except Exception as e:
-        return {
-            "proxy_status": "error",
-            "admin_portal_url": ADMIN_PORTAL_URL,
-            "error": str(e)
-        }
-
 # Include routers
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(sitemap.router, prefix="/api", tags=["sitemap"])
 
 @app.get("/api/health")
 async def health_check():
+    """Health check endpoint"""
     return {
         "status": "healthy",
-        "admin_portal_url": ADMIN_PORTAL_URL,
-        "image_proxy": "enabled",
-        "proxy_test": "/api/test-proxy"
+        "storage": "database",
+        "description": "Images and documents are served from database"
     }
 
 @app.get("/")
 async def root():
+    """Root endpoint"""
     return {
         "message": "Literature Review Public API",
         "docs": "/docs",
         "health": "/api/health",
-        "admin_portal": ADMIN_PORTAL_URL
+        "endpoints": {
+            "projects": "/api/projects",
+            "project_detail": "/api/projects/{slug}",
+            "project_image": "/api/projects/{project_id}/images/{image_id}",
+            "project_document": "/api/projects/{slug}/download",
+            "stats": "/api/projects/stats",
+            "sitemap": "/api/sitemap.xml"
+        }
     }
 
-# Cleanup on shutdown
-@app.on_event("shutdown")
-async def shutdown_event():
-    await async_client.aclose()
+# Optional: Add startup event for logging
+@app.on_event("startup")
+async def startup_event():
+    """Log startup information"""
+    print("=" * 60)
+    print("Literature Review Public API Started")
+    print("=" * 60)
+    print("Storage: Database (images and documents)")
+    print("API Docs: /docs")
+    print("=" * 60)
+
+# Optional: Add debug endpoint to check database connection
+@app.get("/api/debug/db-check")
+async def check_database():
+    """Check database connection and table existence"""
+    from sqlalchemy import inspect
+    from .database import engine
+    
+    try:
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        
+        return {
+            "database": "connected",
+            "tables": tables,
+            "has_projects": "projects" in tables,
+            "has_project_images": "project_images" in tables
+        }
+    except Exception as e:
+        return {
+            "database": "error",
+            "error": str(e)
+        }
