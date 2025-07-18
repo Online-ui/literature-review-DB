@@ -164,7 +164,40 @@ class ApiService {
     }
   }
 
-  async downloadProject(projectId: number): Promise<void> {
+  async downloadProject(slug: string): Promise<void> {
+    try {
+      const response = await this.api.get(`/api/projects/${slug}/download`, {
+        responseType: 'blob'
+      });
+      
+      const blob = response.data;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      // Extract filename from content-disposition header
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'document.pdf';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        if (filenameMatch) {
+          filename = filenameMatch[1].replace(/"/g, '');
+        }
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Failed to download project:', error);
+      throw new Error('Failed to download project');
+    }
+  }
+
+  // Add the downloadProjectById method if needed
+  async downloadProjectById(projectId: number): Promise<void> {
     try {
       const response = await this.api.get(`/api/projects/${projectId}/download`, {
         responseType: 'blob'
@@ -177,10 +210,13 @@ class ApiService {
       
       // Extract filename from content-disposition header
       const contentDisposition = response.headers['content-disposition'];
-      const filenameMatch = contentDisposition?.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-      const filename = filenameMatch && filenameMatch[1] ? 
-        filenameMatch[1].replace(/['"]/g, '') : 
-        'document.pdf';
+      let filename = 'document.pdf';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        if (filenameMatch) {
+          filename = filenameMatch[1].replace(/"/g, '');
+        }
+      }
       
       a.download = filename;
       document.body.appendChild(a);
