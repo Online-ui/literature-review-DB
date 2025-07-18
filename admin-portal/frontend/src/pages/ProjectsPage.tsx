@@ -1741,15 +1741,18 @@ const ProjectsPage: React.FC = () => {
         <DialogContent sx={{ px: 3, py: 2 }}>
           {selectedProjectForImages && (
             <ProjectImagesTab
-              project={selectedProjectForImages}
-              onUpdate={() => {
+              projectId={selectedProjectForImages.id}
+              images={selectedProjectForImages.image_records || []}
+              onImagesUpdate={() => {
                 loadProjects();
+                // Optionally close the dialog after update
+                // setImagesDialogOpen(false);
+                // setSelectedProjectForImages(null);
               }}
+              disabled={false}
             />
           )}
-          </DialogContent>
-      </Dialog>
-
+        </DialogContent>
       {/* Snackbar for notifications */}
       <Snackbar
         open={snackbar.open}
