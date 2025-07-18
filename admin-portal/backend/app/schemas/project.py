@@ -13,7 +13,11 @@ class ProjectImageResponse(ProjectImageBase):
     project_id: int
     image_size: Optional[int] = None
     created_at: datetime
-    image_url: str  # Computed field for API URL
+    
+    @property
+    def image_url(self) -> str:
+        # Return the correct URL without double /api/
+        return f"/projects/{self.project_id}/images/{self.id}"
     
     class Config:
         from_attributes = True
