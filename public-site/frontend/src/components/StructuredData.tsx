@@ -22,7 +22,66 @@ interface StructuredDataProject {
   is_published?: boolean;
 }
 
-// ... rest of the interfaces remain the same ...
+interface StructuredDataProps {
+  project: StructuredDataProject;
+  type?: 'article' | 'dataset' | 'thesis';
+}
+
+// Define interfaces for structured data
+interface SchemaOrganization {
+  "@type": "Organization";
+  name: string;
+  url?: string;
+}
+
+interface SchemaPerson {
+  "@type": "Person";
+  name: string;
+  email?: string;
+}
+
+interface SchemaMediaObject {
+  "@type": "MediaObject";
+  contentUrl: string;
+  encodingFormat: string;
+  name: string;
+}
+
+interface SchemaArticle {
+  "@context": string;
+  "@type": "ScholarlyArticle" | "Thesis";
+  headline: string;
+  name: string;
+  description: string;
+  keywords?: string;
+  author: SchemaPerson;
+  creator: SchemaPerson;
+  publisher: SchemaOrganization;
+  provider: SchemaOrganization;
+  datePublished: string;
+  dateCreated: string;
+  inLanguage: string;
+  about: {
+    "@type": "Thing";
+    name: string;
+  };
+  educationalLevel?: string;
+  url: string;
+  identifier: {
+    "@type": "PropertyValue";
+    name: string;
+    value: string;
+  };
+  isAccessibleForFree: boolean;
+  license: string;
+  mainEntityOfPage: {
+    "@type": "WebPage";
+    "@id": string;
+  };
+  encoding?: SchemaMediaObject;
+  degreeGrantor?: SchemaOrganization;
+  advisor?: SchemaPerson;
+}
 
 const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'article' }) => {
   useEffect(() => {
@@ -64,7 +123,7 @@ const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'articl
         "url": baseUrl
       },
       "datePublished": project.publication_date,
-      "dateCreated": createdDate,  // Use the fallback date
+      "dateCreated": createdDate,
       "inLanguage": "en",
       "about": {
         "@type": "Thing",
