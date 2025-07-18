@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -367,34 +366,34 @@ const ProjectsPage: React.FC = () => {
   };
 
   
-  const handleCleanupImages = async (projectId?: number) => {
-    setCleaningUp(true);
-    try {
-      let response;
-      if (projectId) {
-        response = await adminApi.cleanupProjectImages(projectId);
-      } else {
-        response = await adminApi.cleanupAllProjectImages();
-      }
+  //const handleCleanupImages = async (projectId?: number) => {
+    //setCleaningUp(true);
+    //try {
+      //let response;
+      //if (projectId) {
+        //response = await adminApi.cleanupProjectImages(projectId);
+      //} else {
+        //response = await adminApi.cleanupAllProjectImages();
+      //}
       
-      setSnackbar({
-        open: true,
-        message: response.message,
-        severity: 'success'
-      });
+      //setSnackbar({
+        //open: true,
+        //message: response.message,
+        //severity: 'success'
+      //});
       
       // Refresh projects
-      await loadProjects();
-    } catch (error: any) {
-      setSnackbar({
-        open: true,
-        message: error.message || 'Cleanup failed',
-        severity: 'error'
-      });
-    } finally {
-      setCleaningUp(false);
-    }
-  };
+      //await loadProjects();
+    //} catch (error: any) {
+      //setSnackbar({
+        //open: true,
+        //message: error.message || 'Cleanup failed',
+        //severity: 'error'
+      //});
+    //} finally {
+      //setCleaningUp(false);
+    //}
+  //};
 
   const handleInputChange = (field: keyof ProjectFormData) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | any
