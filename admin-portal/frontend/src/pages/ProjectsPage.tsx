@@ -478,7 +478,8 @@ const ProjectsPage: React.FC = () => {
               </Typography>
             </Box>
               <Box sx={{ display: 'flex', gap: 2 }}>
-              {currentUser?.role === 'main_coordinator' && (
+              
+              {/* {currentUser?.role === 'main_coordinator' && (
                 <Tooltip title="Clean up invalid images from all projects">
                   <Button
                     variant="outlined"
@@ -498,7 +499,7 @@ const ProjectsPage: React.FC = () => {
                     Cleanup Images
                   </Button>
                 </Tooltip>
-              )}
+              )} */}
               <Button
                 variant="contained"
                 size="large"
