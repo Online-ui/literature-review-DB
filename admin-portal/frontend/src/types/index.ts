@@ -1,5 +1,3 @@
-// In admin-portal/frontend/src/types/index.ts
-
 export interface ProjectImage {
   id: number;
   project_id: number;
@@ -9,7 +7,7 @@ export interface ProjectImage {
   order_index: number;
   is_featured: boolean;
   created_at: string;
-  image_url: string;
+  image_url?: string;  // Make it optional since we'll compute it if not provided
 }
 
 export interface Project {
