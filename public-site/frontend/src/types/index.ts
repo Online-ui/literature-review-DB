@@ -34,11 +34,11 @@ export interface Project {
   images?: string[];
   featured_image_index?: number;
   
-  // New image records - ENSURE THIS IS HERE
-  image_records?: ProjectImage[];
+  // New image records
+  image_records?: ProjectImage[];  // Made optional for API compatibility
   
   // Document fields
-  document_url?: string;
+  document_url?: string;  // Keep for backward compatibility
   document_filename?: string;
   document_size?: number;
   document_content_type?: string;
@@ -60,9 +60,9 @@ export interface ProjectSummary {
   institution?: string;
   author_name: string;
   publication_date: string;
-  view_count?: number;
-  download_count?: number;
-  is_published?: boolean;
+  view_count?: number;        // Made optional for API compatibility
+  download_count?: number;    // Made optional for API compatibility
+  is_published?: boolean;     // Made optional for API compatibility
   
   // Include image records for summary views
   image_records?: ProjectImage[];
@@ -94,7 +94,6 @@ export interface SiteStats {
   total_institutions: number;
   total_research_areas: number;
   total_downloads: number;
-  total_views?: number;  // Make this optional too
 }
 
 // Additional types for better type safety
@@ -134,7 +133,7 @@ export const IMAGE_CONSTANTS = {
 // Helper function to get image URL
 export function getProjectImageUrl(projectId: number, imageId: number): string {
   const baseUrl = process.env.REACT_APP_API_URL || '';
-  return `${baseUrl}/projects/${projectId}/images/${imageId}`;  // Remove /api prefix if it's already in baseUrl
+  return `${baseUrl}/api/projects/${projectId}/images/${imageId}`;
 }
 
 // Helper function to get featured image URL
