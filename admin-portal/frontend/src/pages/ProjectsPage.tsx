@@ -1745,7 +1745,6 @@ const ProjectsPage: React.FC = () => {
               images={selectedProjectForImages.image_records || []}
               onImagesUpdate={() => {
                 loadProjects();
-                // Optionally close the dialog after update
                 // setImagesDialogOpen(false);
                 // setSelectedProjectForImages(null);
               }}
@@ -1753,6 +1752,8 @@ const ProjectsPage: React.FC = () => {
             />
           )}
         </DialogContent>
+      </Dialog>
+
       {/* Snackbar for notifications */}
       <Snackbar
         open={snackbar.open}
