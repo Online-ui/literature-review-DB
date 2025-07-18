@@ -133,7 +133,17 @@ export const IMAGE_CONSTANTS = {
 // Helper function to get image URL
 export function getProjectImageUrl(projectId: number, imageId: number): string {
   const baseUrl = process.env.REACT_APP_API_URL || '';
-  return `${baseUrl}/api/projects/${projectId}/images/${imageId}`;
+  
+  // Remove trailing slash if present
+  const cleanBaseUrl = baseUrl.replace(/\/$/, '');
+  
+  // Check if baseUrl already contains /api
+  if (cleanBaseUrl.includes('/api')) {
+    return `${cleanBaseUrl}/projects/${projectId}/images/${imageId}`;
+  }
+  
+  // Otherwise add /api
+  return `${cleanBaseUrl}/api/projects/${projectId}/images/${imageId}`;
 }
 
 // Helper function to get featured image URL
@@ -151,7 +161,23 @@ export function getFeaturedImageUrl(project: Project | ProjectSummary): string |
   // Fallback to legacy images array
   if (project.images && project.images.length > 0) {
     const index = project.featured_image_index || 0;
-    return project.images[index] || project.images[0];
+    const imageUrl = project.images[index] || project.images[0];
+    
+    // If it's already a full URL, return it
+    if (imageUrl.startsWith('http')) {
+      return imageUrl;
+    }
+    
+    // Otherwise, prepend the base URL
+    const baseUrl = process.env.REACT_APP_API_URL || '';
+    const cleanBaseUrl = baseUrl.replace(/\/$/, '');
+    
+    // If the image URL already starts with /api, don't add base URL's /api
+    if (imageUrl.startsWith('/api') && cleanBaseUrl.includes('/api')) {
+      return cleanBaseUrl.replace('/api', '') + imageUrl;
+    }
+    
+    return cleanBaseUrl + imageUrl;
   }
   
   return null;
