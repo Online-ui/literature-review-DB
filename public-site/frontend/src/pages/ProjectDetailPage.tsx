@@ -82,7 +82,7 @@ interface Project {
 
 // Add helper function for image URLs
 const getImageUrl = (projectId: number, imageId: number): string => {
-  return `${process.env.REACT_APP_API_URL}/api/projects/${projectId}/images/${imageId}`;
+  return `${process.env.REACT_APP_API_URL}/projects/${projectId}/images/${imageId}`;
 };
 
 // Updated Image Gallery Component
