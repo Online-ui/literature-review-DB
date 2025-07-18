@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 
-// Define a more flexible interface that doesn't require all Project fields
+// Define a more flexible interface that matches the actual Project type
 interface StructuredDataProject {
   id: number;
   title: string;
@@ -16,72 +16,13 @@ interface StructuredDataProject {
   author_name: string;
   author_email?: string;
   publication_date: string;
-  created_at: string;
+  created_at?: string;  // Make this optional to match Project type
   document_filename?: string;
   document_content_type?: string;
-  is_published?: boolean; // Make it optional
+  is_published?: boolean;
 }
 
-interface StructuredDataProps {
-  project: StructuredDataProject;
-  type?: 'article' | 'dataset' | 'thesis';
-}
-
-// Define interfaces for structured data
-interface SchemaOrganization {
-  "@type": "Organization";
-  name: string;
-  url?: string;
-}
-
-interface SchemaPerson {
-  "@type": "Person";
-  name: string;
-  email?: string;
-}
-
-interface SchemaMediaObject {
-  "@type": "MediaObject";
-  contentUrl: string;
-  encodingFormat: string;
-  name: string;
-}
-
-interface SchemaArticle {
-  "@context": string;
-  "@type": "ScholarlyArticle" | "Thesis";
-  headline: string;
-  name: string;
-  description: string;
-  keywords?: string;
-  author: SchemaPerson;
-  creator: SchemaPerson;
-  publisher: SchemaOrganization;
-  provider: SchemaOrganization;
-  datePublished: string;
-  dateCreated: string;
-  inLanguage: string;
-  about: {
-    "@type": "Thing";
-    name: string;
-  };
-  educationalLevel?: string;
-  url: string;
-  identifier: {
-    "@type": "PropertyValue";
-    name: string;
-    value: string;
-  };
-  isAccessibleForFree: boolean;
-  license: string;
-  mainEntityOfPage: {
-    "@type": "WebPage";
-    "@id": string;
-  };
-  encoding?: SchemaMediaObject;
-  degreeGrantor?: SchemaOrganization;
-  advisor?: SchemaPerson;
-}
+// ... rest of the interfaces remain the same ...
 
 const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'article' }) => {
   useEffect(() => {
@@ -90,6 +31,9 @@ const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'articl
 
     const baseUrl = window.location.origin;
     const currentUrl = window.location.href;
+    
+    // Use publication_date as fallback for created_at if it's undefined
+    const createdDate = project.created_at || project.publication_date;
     
     // Main structured data for the project
     const structuredData: SchemaArticle = {
@@ -120,7 +64,7 @@ const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'articl
         "url": baseUrl
       },
       "datePublished": project.publication_date,
-      "dateCreated": project.created_at,
+      "dateCreated": createdDate,  // Use the fallback date
       "inLanguage": "en",
       "about": {
         "@type": "Thing",
