@@ -922,7 +922,7 @@ const ProjectsPage: React.FC = () => {
                               </IconButton>
                             </Tooltip>
                           </Badge>
-                          {currentUser?.role === 'main_coordinator' && project.images && project.images.length > 0 && (
+                          {/*currentUser?.role === 'main_coordinator' && project.images && project.images.length > 0 && (
                             <Tooltip title="Cleanup invalid images">
                               <IconButton
                                 size="small"
@@ -939,7 +939,7 @@ const ProjectsPage: React.FC = () => {
                                 <CleanupIcon sx={{ fontSize: 16 }} />
                               </IconButton>
                             </Tooltip>
-                          )}
+                          )*/}
                         </Box>
                       </TableCell>
                       
