@@ -1,8 +1,29 @@
 import React, { useEffect } from 'react';
-import { Project } from '../services/api';
+
+// Define a more flexible interface that doesn't require all Project fields
+interface StructuredDataProject {
+  id: number;
+  title: string;
+  slug: string;
+  abstract?: string;
+  keywords?: string;
+  research_area?: string;
+  degree_type?: string;
+  academic_year?: string;
+  institution?: string;
+  department?: string;
+  supervisor?: string;
+  author_name: string;
+  author_email?: string;
+  publication_date: string;
+  created_at: string;
+  document_filename?: string;
+  document_content_type?: string;
+  is_published?: boolean; // Make it optional
+}
 
 interface StructuredDataProps {
-  project: Project;
+  project: StructuredDataProject;
   type?: 'article' | 'dataset' | 'thesis';
 }
 
@@ -64,7 +85,11 @@ interface SchemaArticle {
 
 const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'article' }) => {
   useEffect(() => {
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    // Ensure we're in the browser environment
+    if (typeof window === 'undefined') return;
+
+    const baseUrl = window.location.origin;
+    const currentUrl = window.location.href;
     
     // Main structured data for the project
     const structuredData: SchemaArticle = {
@@ -73,7 +98,7 @@ const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'articl
       "headline": project.title,
       "name": project.title,
       "description": project.abstract || `Academic research project: ${project.title}`,
-      "keywords": project.keywords || project.research_area,
+      "keywords": project.keywords || project.research_area || undefined,
       "author": {
         "@type": "Person",
         "name": project.author_name,
@@ -81,7 +106,8 @@ const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'articl
       },
       "creator": {
         "@type": "Person", 
-        "name": project.author_name
+        "name": project.author_name,
+        ...(project.author_email && { "email": project.author_email })
       },
       "publisher": {
         "@type": "Organization",
@@ -100,8 +126,8 @@ const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'articl
         "@type": "Thing",
         "name": project.research_area || "Academic Research"
       },
-      "educationalLevel": project.degree_type,
-      "url": typeof window !== 'undefined' ? window.location.href : '',
+      ...(project.degree_type && { "educationalLevel": project.degree_type }),
+      "url": currentUrl,
       "identifier": {
         "@type": "PropertyValue",
         "name": "Project ID",
@@ -111,24 +137,28 @@ const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'articl
       "license": "https://creativecommons.org/licenses/by/4.0/",
       "mainEntityOfPage": {
         "@type": "WebPage",
-        "@id": typeof window !== 'undefined' ? window.location.href : ''
+        "@id": currentUrl
       }
     };
 
+    // Add document encoding if available
     if (project.document_filename) {
-    structuredData.encoding = {
-      "@type": "MediaObject",
-      "contentUrl": `${baseUrl}/api/projects/${project.slug}/download`,
-      "encodingFormat": project.document_content_type || "application/pdf",
-      "name": project.document_filename
-    };
-  }
+      structuredData.encoding = {
+        "@type": "MediaObject",
+        "contentUrl": `${baseUrl}/api/projects/${project.slug}/download`,
+        "encodingFormat": project.document_content_type || "application/pdf",
+        "name": project.document_filename
+      };
+    }
+
     // Add thesis-specific fields
     if (type === 'thesis') {
-      structuredData.degreeGrantor = {
-        "@type": "Organization",
-        "name": project.institution || "Academic Institution"
-      };
+      if (project.institution) {
+        structuredData.degreeGrantor = {
+          "@type": "Organization",
+          "name": project.institution
+        };
+      }
       
       if (project.supervisor) {
         structuredData.advisor = {
@@ -138,7 +168,7 @@ const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'articl
       }
     }
 
-    // Rest of the component remains the same...
+    // Website structured data
     const websiteData = {
       "@context": "https://schema.org",
       "@type": "WebSite",
@@ -155,6 +185,7 @@ const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'articl
       }
     };
 
+    // Breadcrumb structured data
     const breadcrumbData = {
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",
@@ -175,30 +206,36 @@ const StructuredData: React.FC<StructuredDataProps> = ({ project, type = 'articl
           "@type": "ListItem",
           "position": 3,
           "name": project.title,
-          "item": typeof window !== 'undefined' ? window.location.href : ''
+          "item": currentUrl
         }
       ]
     };
 
+    // Combine all structured data
     const combinedData = {
       "@context": "https://schema.org",
       "@graph": [structuredData, websiteData, breadcrumbData]
     };
 
-    // Remove existing structured data script
-    const existingScript = document.querySelector('script[type="application/ld+json"]');
+    // Create a unique ID for this script
+    const scriptId = 'structured-data-script';
+
+    // Remove existing structured data script with the same ID
+    const existingScript = document.getElementById(scriptId);
     if (existingScript) {
       existingScript.remove();
     }
 
     // Add new structured data script
     const script = document.createElement('script');
+    script.id = scriptId;
     script.type = 'application/ld+json';
     script.textContent = JSON.stringify(combinedData, null, 2);
     document.head.appendChild(script);
 
+    // Cleanup function
     return () => {
-      const scriptToRemove = document.querySelector('script[type="application/ld+json"]');
+      const scriptToRemove = document.getElementById(scriptId);
       if (scriptToRemove) {
         scriptToRemove.remove();
       }
