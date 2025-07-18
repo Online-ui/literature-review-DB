@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 
 from ..database import get_db
-from ..models.project import Project
+from ..models.project import Project, ProjectImage  # Added ProjectImage import
 from ..schemas.project import ProjectResponse, ProjectStats, ProjectFileInfo
 from ..core.config import settings
 
@@ -133,6 +133,44 @@ async def debug_project_images(slug: str, db: Session = Depends(get_db)):
         "admin_upload_exists": admin_upload_dir.exists()
     }
 
+# Add endpoint to serve images (NEW)
+@router.get("/{project_id}/images/{image_id}")
+async def get_project_image(
+    project_id: int,
+    image_id: int,
+    db: Session = Depends(get_db)
+):
+    """Serve image from database"""
+    from fastapi.responses import Response
+    
+    # Get image from database
+    image = db.query(ProjectImage).filter(
+        ProjectImage.id == image_id,
+        ProjectImage.project_id == project_id
+    ).first()
+    
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    # Check if project is published
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.is_published == True
+    ).first()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found or not published")
+    
+    return Response(
+        content=image.image_data,
+        media_type=image.content_type,
+        headers={
+            "Cache-Control": "public, max-age=86400",
+            "Content-Disposition": f'inline; filename="{image.filename}"'
+        }
+    )
+
+# Update get_project to include image URLs (UPDATED)
 @router.get("/{slug}", response_model=ProjectResponse)
 async def get_project(slug: str, db: Session = Depends(get_db)):
     project = db.query(Project).filter(
@@ -150,8 +188,9 @@ async def get_project(slug: str, db: Session = Depends(get_db)):
     project.view_count = (project.view_count or 0) + 1
     db.commit()
     
-    # Log to verify images are included
-    logger.info(f"Project {slug} - Images: {project.images}, Featured index: {project.featured_image_index}")
+    # Add image URLs (NEW)
+    for img in project.image_records:
+        img.image_url = f"/api/projects/{project.id}/images/{img.id}"
     
     return project
 
