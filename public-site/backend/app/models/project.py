@@ -1,9 +1,16 @@
 from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, LargeBinary, JSON, ForeignKey
 from sqlalchemy.orm import relationship
-from . import Base
+from .base import Base  # Import from base.py, not from __init__.py
 
-class Project(BaseModel):
+class Project(Base):  # Changed from BaseModel to Base
     __tablename__ = "projects"
+    
+    # Primary key (added)
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Timestamps (added updated_at)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Basic Info
     title = Column(String, nullable=False, index=True)
@@ -50,11 +57,11 @@ class Project(BaseModel):
     created_by_id = Column(Integer, ForeignKey("users.id"))
     created_by_user = relationship("User", back_populates="created_projects")
     
-    # Relationship to images stored in database
+    # Relationship to images (updated to match correction)
     image_records = relationship("ProjectImage", back_populates="project", cascade="all, delete-orphan", order_by="ProjectImage.order_index")
 
 
-class ProjectImage(BaseModel):
+class ProjectImage(Base):  # Changed from BaseModel to Base
     __tablename__ = "project_images"
     
     # Primary key
