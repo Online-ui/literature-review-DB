@@ -21,7 +21,9 @@ import {
   Modal,
   Backdrop,
   Fade,
-  IconButton
+  IconButton,
+  Dialog,
+  DialogContent
 } from '@mui/material';
 import {
   Download as DownloadIcon,
@@ -45,6 +47,15 @@ import SEOHead from '../components/SEOHead';
 import StructuredData from '../components/StructuredData';
 
 // Update the Project interface
+interface ProjectImage {
+  id: number;
+  filename: string;
+  content_type: string;
+  image_size?: number;
+  order_index: number;
+  is_featured: boolean;
+}
+
 interface Project {
   id: number;
   title: string;
@@ -66,44 +77,57 @@ interface Project {
   created_at?: string;
   updated_at?: string;
   featured_image_index?: number;
-  image_records?: Array<{
-    id: number;
-    filename: string;
-    content_type: string;
-    image_size?: number;
-    order_index: number;
-    is_featured: boolean;
-  }>;
+  image_records?: ProjectImage[];
 }
+
+// Add helper function for image URLs
+const getImageUrl = (projectId: number, imageId: number): string => {
+  return `${process.env.REACT_APP_API_URL}/api/projects/${projectId}/images/${imageId}`;
+};
 
 // Updated Image Gallery Component
 const ImageGallery: React.FC<{ 
-  imageRecords: any[];
+  imageRecords: ProjectImage[];
   projectId: number;
   projectTitle: string;
 }> = ({ imageRecords, projectId, projectTitle }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const [selectedImage, setSelectedImage] = useState<number | null>(null);
+  const [selectedImage, setSelectedImage] = useState<ProjectImage | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [imageErrors, setImageErrors] = useState<{ [key: number]: boolean }>({});
 
   // Sort images by order_index
   const sortedImages = [...imageRecords].sort((a, b) => a.order_index - b.order_index);
 
-  const handleImageError = (index: number) => {
-    console.error(`Failed to load image: ${sortedImages[index].filename}`);
-    setImageErrors(prev => ({ ...prev, [index]: true }));
+  const handleImageClick = (image: ProjectImage, index: number) => {
+    setSelectedImage(image);
+    setSelectedImageIndex(index);
+  };
+
+  const handleCloseImageDialog = () => {
+    setSelectedImage(null);
+    setSelectedImageIndex(null);
+  };
+
+  const handleImageError = (imageId: number) => {
+    console.error(`Failed to load image with id: ${imageId}`);
+    setImageErrors(prev => ({ ...prev, [imageId]: true }));
   };
 
   const handlePrevious = () => {
-    if (selectedImage !== null && selectedImage > 0) {
-      setSelectedImage(selectedImage - 1);
+    if (selectedImageIndex !== null && selectedImageIndex > 0) {
+      const newIndex = selectedImageIndex - 1;
+      setSelectedImageIndex(newIndex);
+      setSelectedImage(sortedImages[newIndex]);
     }
   };
 
   const handleNext = () => {
-    if (selectedImage !== null && selectedImage < sortedImages.length - 1) {
-      setSelectedImage(selectedImage + 1);
+    if (selectedImageIndex !== null && selectedImageIndex < sortedImages.length - 1) {
+      const newIndex = selectedImageIndex + 1;
+      setSelectedImageIndex(newIndex);
+      setSelectedImage(sortedImages[newIndex]);
     }
   };
 
@@ -113,68 +137,24 @@ const ImageGallery: React.FC<{
     } else if (event.key === 'ArrowRight') {
       handleNext();
     } else if (event.key === 'Escape') {
-      setSelectedImage(null);
+      handleCloseImageDialog();
     }
   };
 
   return (
     <>
-      <Paper sx={{ 
-        p: { xs: 2, sm: 4 }, 
-        mb: { xs: 2, sm: 4 }, 
-        borderRadius: 4,
-        border: '2px solid #c8e6c9',
-        boxShadow: '0 4px 16px rgba(27, 94, 32, 0.1)',
-        background: 'linear-gradient(135deg, #ffffff 0%, #f1f8e9 100%)'
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: { xs: 2, sm: 3 } }}>
-          <Avatar sx={{ bgcolor: '#2e7d32', width: { xs: 32, sm: 40 }, height: { xs: 32, sm: 40 } }}>
-            <ImageIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
-          </Avatar>
-          <Typography variant={isMobile ? "h6" : "h5"} sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
-            Research Images
-          </Typography>
-          <Chip 
-            label={`${sortedImages.length} ${sortedImages.length === 1 ? 'image' : 'images'}`}
-            size="small"
-            sx={{
-              bgcolor: '#e8f5e9',
-              color: '#1b5e20',
-              fontWeight: 600,
-              ml: 'auto'
-            }}
-          />
-        </Box>
-
-        <ImageList 
-          sx={{ 
-            width: '100%', 
-            height: isMobile ? 300 : 450,
-            borderRadius: 2,
-            overflow: 'hidden'
-          }} 
-          cols={isMobile ? 2 : 3} 
-          rowHeight={isMobile ? 150 : 200}
-          gap={isMobile ? 8 : 16}
-        >
+      <Paper elevation={0} sx={{ p: 4, mb: 3, borderRadius: 2 }}>
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+          Figures & Images
+        </Typography>
+        <ImageList sx={{ width: '100%', height: 450 }} cols={3} rowHeight={164}>
           {sortedImages.map((image, index) => (
             <ImageListItem 
               key={image.id}
-              sx={{
-                cursor: 'pointer',
-                borderRadius: 2,
-                overflow: 'hidden',
-                border: '2px solid transparent',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  transform: 'scale(1.05)',
-                  borderColor: '#2e7d32',
-                  boxShadow: '0 8px 24px rgba(27, 94, 32, 0.3)'
-                }
-              }}
-              onClick={() => setSelectedImage(index)}
+              sx={{ cursor: 'pointer' }}
+              onClick={() => handleImageClick(image, index)}
             >
-              {imageErrors[index] ? (
+              {imageErrors[image.id] ? (
                 <Box
                   sx={{
                     width: '100%',
@@ -190,30 +170,15 @@ const ImageGallery: React.FC<{
                 </Box>
               ) : (
                 <img
-                  src={`${process.env.REACT_APP_API_URL}/api/projects/${projectId}/images/${image.id}`}
+                  src={getImageUrl(projectId, image.id)}
                   alt={image.filename}
                   loading="lazy"
-                  onError={() => handleImageError(index)}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
+                  style={{ 
+                    height: '100%', 
+                    objectFit: 'cover',
+                    border: image.is_featured ? '3px solid #1976d2' : 'none'
                   }}
-                />
-              )}
-              {image.is_featured && (
-                <Chip
-                  label="Featured"
-                  size="small"
-                  sx={{
-                    position: 'absolute',
-                    top: 8,
-                    right: 8,
-                    bgcolor: '#1b5e20',
-                    color: 'white',
-                    fontWeight: 'bold',
-                    fontSize: '0.7rem'
-                  }}
+                  onError={() => handleImageError(image.id)}
                 />
               )}
             </ImageListItem>
@@ -221,163 +186,125 @@ const ImageGallery: React.FC<{
         </ImageList>
       </Paper>
 
-      {/* Lightbox Modal */}
-      <Modal
+      {/* Image Dialog */}
+      <Dialog
         open={selectedImage !== null}
-        onClose={() => setSelectedImage(null)}
-        closeAfterTransition
-        BackdropComponent={Backdrop}
-        BackdropProps={{
-          timeout: 500,
-          sx: { bgcolor: 'rgba(0, 0, 0, 0.9)' }
-        }}
+        onClose={handleCloseImageDialog}
+        maxWidth="lg"
+        fullWidth
         onKeyDown={handleKeyDown}
       >
-        <Fade in={selectedImage !== null}>
-          <Box sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: { xs: '95vw', sm: '90vw', md: '80vw' },
-            maxWidth: 1200,
-            maxHeight: '90vh',
-            bgcolor: 'transparent',
-            outline: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center'
-          }}>
-            {/* Close button */}
+        <DialogContent sx={{ position: 'relative', p: 0 }}>
+          <IconButton
+            onClick={handleCloseImageDialog}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+              bgcolor: 'background.paper',
+              zIndex: 1,
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+          
+          {/* Navigation buttons */}
+          {selectedImageIndex !== null && selectedImageIndex > 0 && (
             <IconButton
-              onClick={() => setSelectedImage(null)}
+              onClick={handlePrevious}
               sx={{
                 position: 'absolute',
-                top: { xs: -40, sm: -50 },
-                right: { xs: -10, sm: 0 },
-                color: 'white',
+                left: 8,
+                top: '50%',
+                transform: 'translateY(-50%)',
                 bgcolor: 'rgba(0, 0, 0, 0.5)',
+                color: 'white',
                 '&:hover': {
                   bgcolor: 'rgba(0, 0, 0, 0.7)'
                 }
               }}
             >
-              <CloseIcon />
+              <ChevronLeftIcon />
             </IconButton>
+          )}
 
-            {/* Navigation buttons */}
-            {selectedImage !== null && selectedImage > 0 && (
-              <IconButton
-                onClick={handlePrevious}
-                sx={{
-                  position: 'absolute',
-                  left: { xs: 10, sm: -60 },
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'white',
-                  bgcolor: 'rgba(0, 0, 0, 0.5)',
-                  '&:hover': {
-                    bgcolor: 'rgba(0, 0, 0, 0.7)'
-                  }
-                }}
-              >
-                <ChevronLeftIcon sx={{ fontSize: { xs: 30, sm: 40 } }} />
-              </IconButton>
-            )}
+          {selectedImageIndex !== null && selectedImageIndex < sortedImages.length - 1 && (
+            <IconButton
+              onClick={handleNext}
+              sx={{
+                position: 'absolute',
+                right: 8,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                bgcolor: 'rgba(0, 0, 0, 0.5)',
+                color: 'white',
+                '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.7)'
+                }
+              }}
+            >
+              <ChevronRightIcon />
+            </IconButton>
+          )}
 
-            {selectedImage !== null && selectedImage < sortedImages.length - 1 && (
-              <IconButton
-                onClick={handleNext}
-                sx={{
-                  position: 'absolute',
-                  right: { xs: 10, sm: -60 },
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'white',
-                  bgcolor: 'rgba(0, 0, 0, 0.5)',
-                  '&:hover': {
-                    bgcolor: 'rgba(0, 0, 0, 0.7)'
-                  }
-                }}
-              >
-                <ChevronRightIcon sx={{ fontSize: { xs: 30, sm: 40 } }} />
-              </IconButton>
-            )}
-
-            {/* Image */}
-            {selectedImage !== null && (
-              <>
-                {imageErrors[selectedImage] ? (
-                  <Box
-                    sx={{
-                      width: '100%',
-                      maxWidth: 600,
-                      height: 400,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      bgcolor: '#f5f5f5',
-                      borderRadius: 2,
-                      color: '#666'
-                    }}
-                  >
-                    <Typography variant="h6">Image unavailable</Typography>
-                  </Box>
-                ) : (
-                  <img
-                    src={`${process.env.REACT_APP_API_URL}/api/projects/${projectId}/images/${sortedImages[selectedImage].id}`}
-                    alt={sortedImages[selectedImage].filename}
-                    onError={() => handleImageError(selectedImage)}
-                    style={{
-                      maxWidth: '100%',
-                      maxHeight: '80vh',
-                      objectFit: 'contain',
-                      borderRadius: 8,
-                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
-                    }}
-                  />
-                )}
-                <Typography
-                  variant="body1"
+          {selectedImage && (
+            <>
+              {imageErrors[selectedImage.id] ? (
+                <Box
                   sx={{
-                    color: 'white',
-                    mt: 2,
-                    textAlign: 'center',
-                    bgcolor: 'rgba(0, 0, 0, 0.7)',
-                    px: 3,
-                    py: 1,
-                    borderRadius: 2
+                    width: '100%',
+                    height: 400,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: '#f5f5f5',
+                    color: '#666'
                   }}
                 >
-                  Image {selectedImage + 1} of {sortedImages.length}
-                </Typography>
-              </>
-            )}
-          </Box>
-        </Fade>
-      </Modal>
+                  <Typography variant="h6">Image unavailable</Typography>
+                </Box>
+              ) : (
+                <img
+                  src={getImageUrl(projectId, selectedImage.id)}
+                  alt={selectedImage.filename}
+                  style={{ width: '100%', height: 'auto' }}
+                  onError={() => handleImageError(selectedImage.id)}
+                />
+              )}
+              <Typography
+                variant="body2"
+                sx={{
+                  position: 'absolute',
+                  bottom: 8,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  bgcolor: 'rgba(0, 0, 0, 0.7)',
+                  color: 'white',
+                  px: 2,
+                  py: 1,
+                  borderRadius: 1
+                }}
+              >
+                {selectedImageIndex !== null && `Image ${selectedImageIndex + 1} of ${sortedImages.length}`}
+              </Typography>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
 
 const ProjectDetailPage: React.FC = () => {
-  // Add this at the very top
-  console.log('ProjectDetailPage render', new Date().toISOString());
-  
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
-  const [viewerOpen, setViewerOpen] = useState(false);
-
-  // Add this near the top of your component
-  const buttonId = React.useRef(`btn-${Date.now()}-${Math.random()}`);
 
   useEffect(() => {
     if (slug) {
@@ -388,15 +315,15 @@ const ProjectDetailPage: React.FC = () => {
   const loadProject = async (projectSlug: string) => {
     try {
       const data = await apiService.getProjectBySlug(projectSlug);
-      console.log('Loaded project data:', data); // Debug log
-      console.log('Project image_records:', data?.image_records); // Debug log
+      console.log('Loaded project data:', data);
+      console.log('Project image_records:', data?.image_records);
       if (data) {
         setProject(data);
       } else {
         setError('Research project not found');
       }
     } catch (err) {
-      console.error('Error loading project:', err); // Debug log
+      console.error('Error loading project:', err);
       setError('Failed to load research project');
     } finally {
       setLoading(false);
@@ -417,7 +344,7 @@ const ProjectDetailPage: React.FC = () => {
   };
 
   const handleViewDocument = () => {
-    if (!project) return; // Add this null check
+    if (!project) return;
     
     const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
     const cleanBaseUrl = API_BASE_URL.endsWith('/api') 
@@ -427,9 +354,6 @@ const ProjectDetailPage: React.FC = () => {
     const viewUrl = `${cleanBaseUrl}/api/projects/${project.slug}/view-document`;
     window.open(viewUrl, '_blank');
   };
-
-  // Also log when buttons are rendered
-  console.log('Rendering buttons', project?.document_filename);
 
   if (loading) {
     return (
@@ -686,7 +610,6 @@ const ProjectDetailPage: React.FC = () => {
                   variant="contained"
                   startIcon={<ViewIcon />}
                   onClick={handleViewDocument}
-                  data-button-id={`view-${buttonId.current}`}
                   size={isMobile ? "medium" : "large"}
                   fullWidth={isMobile}
                   sx={{
@@ -712,7 +635,6 @@ const ProjectDetailPage: React.FC = () => {
                   variant="outlined"
                   startIcon={<DownloadIcon />}
                   onClick={handleDownload}
-                  data-button-id={`download-${buttonId.current}`}
                   disabled={downloading}
                   size={isMobile ? "medium" : "large"}
                   fullWidth={isMobile}
