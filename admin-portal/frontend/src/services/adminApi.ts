@@ -23,7 +23,7 @@ class AdminApiService {
   // Create a separate axios instance for long-running operations
   private apiLongRunning = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 120000, // 60 seconds for file uploads and processing
+    timeout: 120000, // 120 seconds for file uploads and processing
   });
 
   constructor() {
@@ -213,6 +213,11 @@ class AdminApiService {
     return response.data;
   }
 
+  async getProject(projectId: number): Promise<Project> {
+    const response = await this.api.get(`/projects/${projectId}`);
+    return response.data;
+  }
+
   async createProject(projectData: FormData): Promise<Project> {
     try {
       // Use long-running API instance for project creation with file upload
@@ -285,12 +290,11 @@ class AdminApiService {
     await this.api.delete(`/projects/${projectId}/file`);
   }
 
-  // Project Image Methods
-  async uploadImages(projectId: number, files: File[]): Promise<any> {
+  // Project Image Methods (Updated for database storage)
+  async uploadProjectImages(projectId: number, files: File[]): Promise<any> {
     const formData = new FormData();
     files.forEach(file => formData.append('files', file));
     
-    // Use long-running instance for image uploads
     const response = await this.apiLongRunning.post(`/projects/${projectId}/images`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -300,24 +304,25 @@ class AdminApiService {
     return response.data;
   }
 
-  async deleteImage(projectId: number, index: number): Promise<any> {
-    const response = await this.api.delete(`/projects/${projectId}/images/${index}`);
+  async deleteProjectImage(projectId: number, imageId: number): Promise<any> {
+    const response = await this.api.delete(`/projects/${projectId}/images/${imageId}`);
     return response.data;
   }
 
-  async setFeaturedImage(projectId: number, index: number): Promise<any> {
-    const response = await this.api.put(`/projects/${projectId}/featured-image`, { index });
-    return response.data;
-  }
-
-  async reorderImages(projectId: number, newOrder: number[]): Promise<any> {
-    const response = await this.api.put(`/projects/${projectId}/images/reorder`, { 
-      new_order: newOrder 
+  async setFeaturedImage(projectId: number, imageId: number): Promise<any> {
+    const response = await this.api.put(`/projects/${projectId}/featured-image`, { 
+      image_id: imageId 
     });
     return response.data;
   }
 
-  // Extract images from project PDF - use long timeout
+  async reorderProjectImages(projectId: number, imageIds: number[]): Promise<any> {
+    const response = await this.api.put(`/projects/${projectId}/images/reorder`, { 
+      image_ids: imageIds 
+    });
+    return response.data;
+  }
+
   async extractProjectImages(projectId: number): Promise<any> {
     const response = await this.apiLongRunning.post(`/projects/${projectId}/extract-images`);
     return response.data;
@@ -385,53 +390,61 @@ class AdminApiService {
     return response.data;
   }
 
-  // In adminApi.ts, add these methods to the AdminApiService class:
-
-  async cleanupProjectImages(projectId: number): Promise<any> {
-    const response = await this.api.post(`/projects/${projectId}/cleanup-images`);
-    return response.data;
-  }
-  
-  async cleanupAllProjectImages(): Promise<any> {
-    const response = await this.api.post('/projects/cleanup-all-images');
+  // Project statistics
+  async getProjectStats(projectId: number): Promise<any> {
+    const response = await this.api.get(`/projects/${projectId}/stats`);
     return response.data;
   }
 
-  // Project Image Methods
-  async uploadProjectImages(projectId: number, files: File[]): Promise<any> {
-    const formData = new FormData();
-    files.forEach(file => formData.append('files', file));
-    
-    const response = await this.apiLongRunning.post(`/projects/${projectId}/images`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    
+  async getProjectsSummary(): Promise<any> {
+    const response = await this.api.get('/projects/stats/summary');
     return response.data;
   }
-  
-  async deleteProjectImage(projectId: number, imageId: number): Promise<any> {
-    const response = await this.api.delete(`/projects/${projectId}/images/${imageId}`);
+
+  // Batch operations
+  async batchPublishProjects(projectIds: number[]): Promise<any> {
+    const response = await this.api.post('/projects/batch/publish', projectIds);
     return response.data;
   }
-  
-  async setFeaturedImage(projectId: number, imageId: number): Promise<any> {
-    const response = await this.api.put(`/projects/${projectId}/featured-image`, { 
-      image_id: imageId 
-    });
+
+  async batchUnpublishProjects(projectIds: number[]): Promise<any> {
+    const response = await this.api.post('/projects/batch/unpublish', projectIds);
     return response.data;
   }
-  
-  async reorderProjectImages(projectId: number, imageIds: number[]): Promise<any> {
-    const response = await this.api.put(`/projects/${projectId}/images/reorder`, { 
-      image_ids: imageIds 
+
+  async batchDeleteProjects(projectIds: number[]): Promise<any> {
+    const response = await this.api.post('/projects/batch/delete', projectIds);
+    return response.data;
+  }
+
+  // Export
+  async exportProjectsCSV(): Promise<Blob> {
+    const response = await this.api.get('/projects/export/csv', {
+      responseType: 'blob'
     });
     return response.data;
   }
-  
-  async extractProjectImages(projectId: number): Promise<any> {
-    const response = await this.apiLongRunning.post(`/projects/${projectId}/extract-images`);
+
+  // Advanced search
+  async advancedSearchProjects(params: {
+    title?: string;
+    author?: string;
+    supervisor?: string;
+    institution?: string;
+    department?: string;
+    research_area?: string;
+    degree_type?: string;
+    academic_year?: string;
+    keywords?: string;
+    has_document?: boolean;
+    has_images?: boolean;
+    is_published?: boolean;
+    created_after?: string;
+    created_before?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<{ total: number; projects: Project[] }> {
+    const response = await this.api.get('/projects/search/advanced', { params });
     return response.data;
   }
 }
