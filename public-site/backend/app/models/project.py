@@ -1,17 +1,9 @@
-from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, LargeBinary, JSON
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, LargeBinary, JSON, ForeignKey
+from sqlalchemy.orm import relationship
+from . import Base
 
-Base = declarative_base()
-
-class Project(Base):
+class Project(BaseModel):
     __tablename__ = "projects"
-    
-    # Primary key
-    id = Column(Integer, primary_key=True, index=True)
-    
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Basic Info
     title = Column(String, nullable=False, index=True)
@@ -46,13 +38,45 @@ class Project(Base):
     document_content_type = Column(String, nullable=True)
     document_storage = Column(String, default="database")
     
+    # Image Gallery Fields (DEPRECATED - kept for migration)
+    images = Column(JSON, default=list, nullable=True)
+    featured_image_index = Column(Integer, default=0, nullable=True)
+    
     # Stats
     view_count = Column(Integer, default=0)
     download_count = Column(Integer, default=0)
     
-    # Image fields
-    images = Column(JSON, nullable=True, default=list)
-    featured_image_index = Column(Integer, default=0)
+    # User Relationship
+    created_by_id = Column(Integer, ForeignKey("users.id"))
+    created_by_user = relationship("User", back_populates="created_projects")
     
-    # User Relationship (simplified for public site)
-    created_by_id = Column(Integer, nullable=True)
+    # Relationship to images stored in database
+    image_records = relationship("ProjectImage", back_populates="project", cascade="all, delete-orphan", order_by="ProjectImage.order_index")
+
+
+class ProjectImage(BaseModel):
+    __tablename__ = "project_images"
+    
+    # Primary key
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Foreign key to project
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Image metadata
+    filename = Column(String, nullable=False)
+    content_type = Column(String, default="image/png")
+    image_size = Column(Integer, nullable=True)
+    
+    # Image data stored in database
+    image_data = Column(LargeBinary, nullable=False)
+    
+    # Order and featured status
+    order_index = Column(Integer, default=0)
+    is_featured = Column(Boolean, default=False, index=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationship back to project
+    project = relationship("Project", back_populates="image_records")
