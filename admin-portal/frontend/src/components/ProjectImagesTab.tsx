@@ -51,21 +51,13 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   // Helper function to get image URL
-  const getImageUrl = (image: ProjectImage): string => {
-    if (image.image_url) {
-      // If image_url is provided, use it (it might already include /api prefix)
-      if (image.image_url.startsWith('/api/')) {
-        return `${process.env.REACT_APP_API_URL}${image.image_url}`;
-      }
-      // If it doesn't have /api prefix, add it
-      return `${process.env.REACT_APP_API_URL}/api${image.image_url}`;
-    }
-    // Fallback: construct URL from image data
-    return `${process.env.REACT_APP_API_URL}/api/projects/${image.project_id || projectId}/images/${image.id}`;
-  };
-
-  const handleExtractImages = async () => {
-    if (disabled) return;
+const getImageUrl = (image: ProjectImage): string => {
+  // Don't add /api prefix since it's already in REACT_APP_API_URL
+  return `${process.env.REACT_APP_API_URL}/projects/${projectId}/images/${image.id}`;
+};
+  
+const handleExtractImages = async () => {
+  if (disabled) return;
     
     setExtracting(true);
     setError('');
@@ -333,7 +325,6 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
                             }}
                             onClick={() => setSelectedImage(getImageUrl(image))}
                           />
-
                           {/* Actions */}
                           <CardActions sx={{ justifyContent: 'space-between' }}>
                             <Tooltip title={image.is_featured ? 'Featured image' : 'Set as featured'}>
