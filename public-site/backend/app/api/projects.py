@@ -1,15 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from typing import List, Optional
 import io
-import base64
 import logging
-from pathlib import Path
 
 from ..database import get_db
-from ..models.project import Project, ProjectImage  # Added ProjectImage import
+from ..models.project import Project, ProjectImage
 from ..schemas.project import ProjectResponse, ProjectStats, ProjectFileInfo
 from ..core.config import settings
 
@@ -95,45 +93,7 @@ async def get_institutions(db: Session = Depends(get_db)):
     ).distinct().all()
     return [inst[0] for inst in institutions if inst[0]]
 
-@router.get("/debug/{slug}/images")
-async def debug_project_images(slug: str, db: Session = Depends(get_db)):
-    """Debug endpoint to check project images"""
-    project = db.query(Project).filter(
-        Project.slug == slug,
-        Project.is_published == True
-    ).first()
-    
-    if not project:
-        return {"error": "Project not found"}
-    
-    # Check if admin uploads directory exists
-    admin_upload_dir = Path(__file__).resolve().parent.parent.parent.parent.parent / "admin-portal" / "backend" / "uploads"
-    
-    images_info = []
-    if project.images:
-        for img_path in project.images:
-            # Clean the path
-            clean_path = img_path.replace('/uploads/', '') if img_path.startswith('/uploads/') else img_path
-            full_path = admin_upload_dir / clean_path
-            
-            images_info.append({
-                "stored_path": img_path,
-                "clean_path": clean_path,
-                "full_path": str(full_path),
-                "exists": full_path.exists() if full_path else False
-            })
-    
-    return {
-        "project_slug": slug,
-        "project_title": project.title,
-        "images_count": len(project.images) if project.images else 0,
-        "featured_index": project.featured_image_index,
-        "images": images_info,
-        "admin_upload_dir": str(admin_upload_dir),
-        "admin_upload_exists": admin_upload_dir.exists()
-    }
-
-# Add endpoint to serve images (NEW)
+# Add endpoint to serve images
 @router.get("/{project_id}/images/{image_id}")
 async def get_project_image(
     project_id: int,
@@ -141,8 +101,6 @@ async def get_project_image(
     db: Session = Depends(get_db)
 ):
     """Serve image from database"""
-    from fastapi.responses import Response
-    
     # Get image from database
     image = db.query(ProjectImage).filter(
         ProjectImage.id == image_id,
@@ -170,7 +128,6 @@ async def get_project_image(
         }
     )
 
-# Update get_project to include image URLs (UPDATED)
 @router.get("/{slug}", response_model=ProjectResponse)
 async def get_project(slug: str, db: Session = Depends(get_db)):
     project = db.query(Project).filter(
@@ -188,9 +145,8 @@ async def get_project(slug: str, db: Session = Depends(get_db)):
     project.view_count = (project.view_count or 0) + 1
     db.commit()
     
-    # Add image URLs (NEW)
-    for img in project.image_records:
-        img.image_url = f"/api/projects/{project.id}/images/{img.id}"
+    # Log to verify images are included
+    logger.info(f"Project {slug} - Image records: {len(project.image_records) if project.image_records else 0}")
     
     return project
 
