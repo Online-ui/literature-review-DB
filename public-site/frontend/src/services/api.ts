@@ -6,6 +6,17 @@ const cleanBaseUrl = API_BASE_URL.endsWith('/api')
   ? API_BASE_URL.slice(0, -4) 
   : API_BASE_URL.replace(/\/$/, ''); // Also remove trailing slash
 
+export interface ProjectImage {
+  id: number;
+  project_id: number;
+  filename: string;
+  content_type: string;
+  image_size?: number;
+  order_index: number;
+  is_featured: boolean;
+  created_at: string;
+}
+
 export interface Project {
   id: number;
   title: string;
@@ -30,9 +41,14 @@ export interface Project {
   document_storage?: string;
   created_by_id?: number;
   created_at: string;
-  updated_at?: string;  
+  updated_at?: string;
+  
+  // Legacy image fields
   images?: string[];
   featured_image_index?: number;
+  
+  // New database image records
+  image_records?: ProjectImage[];
 }
 
 export interface ProjectSummary {
@@ -48,6 +64,11 @@ export interface ProjectSummary {
   view_count?: number;
   download_count?: number;
   is_published?: boolean;
+  
+  // Include image fields for summary views
+  images?: string[];
+  featured_image_index?: number;
+  image_records?: ProjectImage[];
 }
 
 export interface SearchFilters {
@@ -73,6 +94,37 @@ export interface SiteStats {
   total_research_areas: number;
   total_downloads: number;
   total_views?: number;
+}
+
+// Helper function to get image URL
+export function getProjectImageUrl(projectId: number, imageId: number): string {
+  return `${cleanBaseUrl}/api/projects/${projectId}/images/${imageId}`;
+}
+
+// Helper function to get featured image URL
+export function getFeaturedImageUrl(project: Project | ProjectSummary): string | null {
+  // Check new image_records first
+  if (project.image_records && project.image_records.length > 0) {
+    const featuredImage = project.image_records.find(img => img.is_featured);
+    if (featuredImage) {
+      return getProjectImageUrl(project.id, featuredImage.id);
+    }
+    // If no featured image, return first image
+    return getProjectImageUrl(project.id, project.image_records[0].id);
+  }
+  
+  // Fallback to legacy images array
+  if (project.images && project.images.length > 0) {
+    const index = project.featured_image_index || 0;
+    const imageUrl = project.images[index] || project.images[0];
+    // If it's already a full URL, return it; otherwise prepend base URL
+    if (imageUrl.startsWith('http')) {
+      return imageUrl;
+    }
+    return `${cleanBaseUrl}${imageUrl}`;
+  }
+  
+  return null;
 }
 
 class ApiService {
@@ -157,7 +209,16 @@ class ApiService {
   async getProjectBySlug(slug: string): Promise<Project | null> {
     try {
       const response = await this.api.get(`/api/projects/${slug}`);
-      return response.data;
+      const project = response.data;
+      
+      // Log the response to debug
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Project API response:', project);
+        console.log('Has image_records:', !!project.image_records);
+        console.log('Image records count:', project.image_records?.length || 0);
+      }
+      
+      return project;
     } catch (error) {
       console.error('Failed to fetch project:', error);
       return null;
