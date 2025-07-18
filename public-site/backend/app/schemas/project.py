@@ -2,6 +2,19 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
+class ProjectImageResponse(BaseModel):
+    id: int
+    project_id: int
+    filename: str
+    content_type: str
+    order_index: int
+    is_featured: bool
+    image_size: Optional[int] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
 class ProjectBase(BaseModel):
     title: str
     abstract: Optional[str] = None
@@ -25,9 +38,12 @@ class ProjectResponse(ProjectBase):
     view_count: int
     download_count: int
     
-    # Image fields
+    # Legacy image fields
     images: Optional[List[str]] = []
     featured_image_index: Optional[int] = 0
+    
+    # New image records
+    image_records: List[ProjectImageResponse] = []
     
     # Database Storage Fields
     document_filename: Optional[str] = None
@@ -41,7 +57,7 @@ class ProjectResponse(ProjectBase):
     
     class Config:
         from_attributes = True
-        orm_mode = True  # Added for compatibility
+        orm_mode = True
 
 class ProjectStats(BaseModel):
     """Schema for project statistics"""
