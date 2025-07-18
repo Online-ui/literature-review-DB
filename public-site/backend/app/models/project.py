@@ -1,14 +1,14 @@
 from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, LargeBinary, JSON, ForeignKey
 from sqlalchemy.orm import relationship
-from .base import Base  # Import from base.py, not from __init__.py
+from .base import Base
 
-class Project(Base):  # Changed from BaseModel to Base
+class Project(Base):
     __tablename__ = "projects"
     
-    # Primary key (added)
+    # Primary key
     id = Column(Integer, primary_key=True, index=True)
     
-    # Timestamps (added updated_at)
+    # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
@@ -45,23 +45,22 @@ class Project(Base):  # Changed from BaseModel to Base
     document_content_type = Column(String, nullable=True)
     document_storage = Column(String, default="database")
     
-    # Image Gallery Fields (DEPRECATED - kept for migration)
-    images = Column(JSON, default=list, nullable=True)
-    featured_image_index = Column(Integer, default=0, nullable=True)
-    
     # Stats
     view_count = Column(Integer, default=0)
     download_count = Column(Integer, default=0)
     
-    # User Relationship
-    created_by_id = Column(Integer, ForeignKey("users.id"))
-    created_by_user = relationship("User", back_populates="created_projects")
+    # Image fields (legacy)
+    images = Column(JSON, nullable=True, default=list)
+    featured_image_index = Column(Integer, default=0)
     
-    # Relationship to images (updated to match correction)
-    image_records = relationship("ProjectImage", back_populates="project", cascade="all, delete-orphan", order_by="ProjectImage.order_index")
+    # User Relationship (simplified for public site)
+    created_by_id = Column(Integer, nullable=True)
+    
+    # Relationship to images
+    image_records = relationship("ProjectImage", back_populates="project", order_by="ProjectImage.order_index")
 
 
-class ProjectImage(Base):  # Changed from BaseModel to Base
+class ProjectImage(Base):
     __tablename__ = "project_images"
     
     # Primary key
