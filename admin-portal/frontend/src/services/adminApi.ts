@@ -323,8 +323,15 @@ class AdminApiService {
     return response.data;
   }
 
-  async extractProjectImages(projectId: number): Promise<any> {
-    const response = await this.apiLongRunning.post(`/projects/${projectId}/extract-images`);
+  // Updated extractProjectImages method with table extraction parameter
+  async extractProjectImages(projectId: number, extractTables: boolean = true): Promise<any> {
+    const response = await this.apiLongRunning.post(
+      `/projects/${projectId}/extract-images`,
+      null,
+      {
+        params: { extract_tables: extractTables }
+      }
+    );
     return response.data;
   }
 
