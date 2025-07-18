@@ -29,14 +29,7 @@ import {
 } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { adminApi } from '../services/adminApi';
-
-interface ProjectImage {
-  id: number;
-  filename: string;
-  image_url: string;
-  is_featured: boolean;
-  order_index: number;
-}
+import { ProjectImage } from '../types';
 
 interface ProjectImagesTabProps {
   projectId: number;
@@ -56,6 +49,20 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // Helper function to get image URL
+  const getImageUrl = (image: ProjectImage): string => {
+    if (image.image_url) {
+      // If image_url is provided, use it (it might already include /api prefix)
+      if (image.image_url.startsWith('/api/')) {
+        return `${process.env.REACT_APP_API_URL}${image.image_url}`;
+      }
+      // If it doesn't have /api prefix, add it
+      return `${process.env.REACT_APP_API_URL}/api${image.image_url}`;
+    }
+    // Fallback: construct URL from image data
+    return `${process.env.REACT_APP_API_URL}/api/projects/${image.project_id || projectId}/images/${image.id}`;
+  };
 
   const handleExtractImages = async () => {
     if (disabled) return;
@@ -318,13 +325,13 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
                           <CardMedia
                             component="img"
                             height="200"
-                            image={`${process.env.REACT_APP_API_URL}${image.image_url}`}
+                            image={getImageUrl(image)}
                             alt={image.filename}
                             sx={{
                               cursor: 'pointer',
                               objectFit: 'cover'
                             }}
-                            onClick={() => setSelectedImage(image.image_url)}
+                            onClick={() => setSelectedImage(getImageUrl(image))}
                           />
 
                           {/* Actions */}
@@ -381,7 +388,7 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
         <DialogContent>
           {selectedImage && (
             <img
-              src={`${process.env.REACT_APP_API_URL}${selectedImage}`}
+              src={selectedImage}
               alt="Preview"
               style={{ width: '100%', height: 'auto' }}
             />
