@@ -18,6 +18,8 @@ import {
   Chip,
   Paper,
   alpha,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -49,24 +51,25 @@ export const ProjectImagesTab: React.FC<ProjectImagesTabProps> = ({
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [extractTables, setExtractTables] = useState(true);
 
   // Helper function to get image URL
-const getImageUrl = (image: ProjectImage): string => {
-  // Don't add /api prefix since it's already in REACT_APP_API_URL
-  return `${process.env.REACT_APP_API_URL}/projects/${projectId}/images/${image.id}`;
-};
+  const getImageUrl = (image: ProjectImage): string => {
+    // Don't add /api prefix since it's already in REACT_APP_API_URL
+    return `${process.env.REACT_APP_API_URL}/projects/${projectId}/images/${image.id}`;
+  };
   
-const handleExtractImages = async () => {
-  if (disabled) return;
+  const handleExtractImages = async () => {
+    if (disabled) return;
     
     setExtracting(true);
     setError('');
     
     try {
-      const result = await adminApi.extractProjectImages(projectId);
+      const result = await adminApi.extractProjectImages(projectId, extractTables);
       
       if (result.message) {
-        alert(result.message);
+        alert(`${result.message}\n\nFigures: ${result.figures}\nTables: ${result.tables}`);
         onImagesUpdate();
       }
     } catch (err: any) {
@@ -173,7 +176,18 @@ const handleExtractImages = async () => {
             </Typography>
           </Box>
           
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={extractTables}
+                  onChange={(e) => setExtractTables(e.target.checked)}
+                  disabled={disabled || extracting}
+                />
+              }
+              label="Extract tables"
+            />
+            
             <Button
               variant="outlined"
               startIcon={extracting ? <CircularProgress size={20} /> : <ExtractIcon />}
@@ -297,6 +311,23 @@ const handleExtractImages = async () => {
                             <DragIcon />
                           </Box>
 
+                          {/* Type Badge for Tables */}
+                          {image.filename.startsWith('table_') && (
+                            <Chip
+                              label="Table"
+                              size="small"
+                              sx={{
+                                position: 'absolute',
+                                top: 8,
+                                left: 48,
+                                bgcolor: '#1976d2',
+                                color: 'white',
+                                fontWeight: 600,
+                                fontSize: '0.7rem'
+                              }}
+                            />
+                          )}
+
                           {/* Featured Badge */}
                           {image.is_featured && (
                             <Chip
@@ -325,6 +356,7 @@ const handleExtractImages = async () => {
                             }}
                             onClick={() => setSelectedImage(getImageUrl(image))}
                           />
+                          
                           {/* Actions */}
                           <CardActions sx={{ justifyContent: 'space-between' }}>
                             <Tooltip title={image.is_featured ? 'Featured image' : 'Set as featured'}>
