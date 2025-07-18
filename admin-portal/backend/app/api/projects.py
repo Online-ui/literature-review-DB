@@ -38,7 +38,8 @@ def create_slug(title: str) -> str:
 async def extract_images_background(
     document_data: bytes,
     document_filename: str,
-    project_id: int
+    project_id: int,
+    extract_tables: bool = True
 ):
     """Extract images in the background after project creation"""
     from ..database import SessionLocal
@@ -49,7 +50,8 @@ async def extract_images_background(
             document_data,
             document_filename,
             project_id,
-            db
+            db,
+            extract_tables=extract_tables
         )
         print(f"✅ Background extraction completed: {extracted_count} images for project {project_id}")
     except Exception as e:
@@ -145,6 +147,7 @@ async def create_project(
     meta_keywords: Optional[str] = Form(None),
     is_published: bool = Form(True),
     file: Optional[UploadFile] = File(None),
+    extract_tables: bool = Form(True),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
@@ -247,7 +250,8 @@ async def create_project(
                 extract_images_background,
                 document_data,
                 document_filename,
-                db_project.id
+                db_project.id,
+                extract_tables
             )
             print(f"📋 Scheduled background image extraction for project {db_project.id}")
         
@@ -286,6 +290,7 @@ async def update_project(
     file: Optional[UploadFile] = File(None),
     remove_file: Optional[bool] = Form(False),
     extract_images: Optional[bool] = Form(False),
+    extract_tables: Optional[bool] = Form(True),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
@@ -389,7 +394,8 @@ async def update_project(
                     extract_images_background,
                     file_result["data"],
                     file_result["filename"],
-                    project.id
+                    project.id,
+                    extract_tables
                 )
                 print(f"📋 Scheduled background image extraction for updated document")
                 
@@ -508,6 +514,7 @@ async def update_project_document(
     project_id: int,
     file: UploadFile = File(...),
     extract_images: bool = Form(False),
+    extract_tables: bool = Form(True),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
@@ -537,7 +544,8 @@ async def update_project_document(
                 extract_images_background,
                 file_result["data"],
                 file_result["filename"],
-                project.id
+                project.id,
+                extract_tables
             )
         
         db.commit()
@@ -545,7 +553,8 @@ async def update_project_document(
         
         return {
             "message": "Document updated successfully",
-            "extract_images_scheduled": extract_images
+            "extract_images_scheduled": extract_images,
+            "extract_tables": extract_tables
         }
     except Exception as e:
         db.rollback()
@@ -760,10 +769,11 @@ async def reorder_images(
 @router.post("/{project_id}/extract-images")
 async def extract_images_from_project_document(
     project_id: int,
+    extract_tables: bool = True,  # Add parameter to control table extraction
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Manually extract images from project document"""
+    """Manually extract images and tables from an already uploaded document"""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -775,17 +785,26 @@ async def extract_images_from_project_document(
     if not project.document_data:
         raise HTTPException(status_code=400, detail="No document uploaded")
     
-    # Extract images
+    # Extract images and tables
     extracted_count = await document_extractor.extract_images_from_document(
         project.document_data,
         project.document_filename,
         project_id,
-        db
+        db,
+        extract_tables=extract_tables
     )
     
+    # Get breakdown of extracted items
+    all_images = db.query(ProjectImage).filter(ProjectImage.project_id == project_id).all()
+    table_count = sum(1 for img in all_images if img.filename.startswith('table_'))
+    figure_count = sum(1 for img in all_images if img.filename.startswith('figure_'))
+    
     return {
-        "message": f"Extracted {extracted_count} images",
-        "total_images": db.query(ProjectImage).filter(ProjectImage.project_id == project_id).count()
+        "message": f"Extracted {extracted_count} items",
+        "total_images": len(all_images),
+        "figures": figure_count,
+        "tables": table_count,
+        "extract_tables": extract_tables
     }
 
 # Project status endpoints
