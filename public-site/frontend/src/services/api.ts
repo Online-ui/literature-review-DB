@@ -1,70 +1,21 @@
 import axios from 'axios';
-import { Project, ProjectSummary, SiteStats } from '../types';
+// Import ALL types from the central types file
+import { 
+  Project, 
+  ProjectSummary, 
+  SiteStats, 
+  ProjectImage,
+  SearchFilters,
+  SearchResponse,
+  getProjectImageUrl,
+  getFeaturedImageUrl
+} from '../types';
 
 // Remove /api if it's already included in the environment variable
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const cleanBaseUrl = API_BASE_URL.endsWith('/api') 
   ? API_BASE_URL.slice(0, -4) 
   : API_BASE_URL.replace(/\/$/, ''); // Also remove trailing slash
-
-export interface ProjectImage {
-  id: number;
-  project_id: number;
-  filename: string;
-  content_type: string;
-  image_size?: number;
-  order_index: number;
-  is_featured: boolean;
-  created_at: string;
-}
-
-export interface SearchFilters {
-  query?: string;
-  research_area?: string;
-  degree_type?: string;
-  institution?: string;
-  academic_year?: string;
-}
-
-export interface SearchResponse {
-  projects: ProjectSummary[];
-  total: number;
-  page: number;
-  per_page: number;
-  total_pages: number;
-  filters: SearchFilters;
-}
-
-// Helper function to get image URL
-export function getProjectImageUrl(projectId: number, imageId: number): string {
-  return `${cleanBaseUrl}/api/projects/${projectId}/images/${imageId}`;
-}
-
-// Helper function to get featured image URL
-export function getFeaturedImageUrl(project: Project | ProjectSummary): string | null {
-  // Check new image_records first
-  if (project.image_records && project.image_records.length > 0) {
-    const featuredImage = project.image_records.find(img => img.is_featured);
-    if (featuredImage) {
-      return getProjectImageUrl(project.id, featuredImage.id);
-    }
-    // If no featured image, return first image
-    return getProjectImageUrl(project.id, project.image_records[0].id);
-  }
-  
-  // Fallback to legacy images array
-  if (project.images && project.images.length > 0) {
-    const index = project.featured_image_index || 0;
-    const imageUrl = project.images[index] || project.images[0];
-    // If it's already a full URL, return it; otherwise prepend base URL
-    if (imageUrl.startsWith('http')) {
-      return imageUrl;
-    }
-    return `${cleanBaseUrl}${imageUrl}`;
-  }
-  
-  return null;
-}
 
 class ApiService {
   private api = axios.create({
@@ -298,5 +249,8 @@ class ApiService {
 export const apiService = new ApiService();
 export default apiService;
 
-// Re-export types from '../types' for convenience
-export type { Project, ProjectSummary, SiteStats } from '../types';
+// Export the clean base URL for use in other components
+export { cleanBaseUrl };
+
+// Re-export the helper functions from types
+export { getProjectImageUrl, getFeaturedImageUrl };
