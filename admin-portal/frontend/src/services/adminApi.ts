@@ -155,11 +155,12 @@ class AdminApiService {
   }
 
   async verifyResetToken(token: string): Promise<TokenVerificationResponse> {
-    const response = await this.api.get('/auth/verify-reset-token', {
-      params: { token }
-    });
-    return response.data;
-  }
+  const response = await this.api.get('/auth/verify-reset-token', {
+    params: { token },
+    timeout: 30000 // 30 second timeout for this specific request
+  });
+  return response.data;
+}
 
   // Dashboard
   async getDashboardStats(): Promise<DashboardStats> {
