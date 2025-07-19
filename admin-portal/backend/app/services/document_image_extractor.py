@@ -381,7 +381,7 @@ class DocumentImageExtractor:
                                 image_data = docx_zip.read(file_info.filename)
                                 
                                 # Skip small images
-                                    if len(image_data) < self.min_image_size:
+                                if len(image_data) < self.min_image_size:
                                     continue
                                 
                                 # Get filename
