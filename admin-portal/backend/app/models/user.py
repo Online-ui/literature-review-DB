@@ -21,7 +21,7 @@ class User(BaseModel):
     is_active = Column(Boolean, default=True)
     
     # Password Reset
-    reset_token = Column(String(255), nullable=True, index=True)
+    reset_token = Column(String, index=True)
     reset_token_expires = Column(DateTime, nullable=True)
     
     # Relationships
