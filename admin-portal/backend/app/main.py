@@ -69,7 +69,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # CORS middleware - MUST come before routes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for now
+    allow_origins=["https://literature-rev-admin-portal.onrender.com"],  # Allow all origins for now
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
