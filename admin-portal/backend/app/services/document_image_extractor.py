@@ -11,6 +11,7 @@ matplotlib.use('Agg')  # Use non-interactive backend
 import pandas as pd
 from PIL import Image
 import numpy as np
+import cv2
 
 from .database_image_service import DatabaseImageService
 
@@ -20,6 +21,8 @@ class DocumentImageExtractor:
         self.min_image_size = 5000  # Minimum 5KB to filter out tiny images
         self.min_table_rows = 2  # Minimum rows for a valid table
         self.min_table_cols = 2  # Minimum columns for a valid table
+        self.min_table_area = 10000  # Minimum area for CV table detection
+        self.min_lines = 3  # Minimum lines for CV table detection
     
     async def extract_images_from_document(
         self, 
@@ -46,7 +49,7 @@ class DocumentImageExtractor:
         try:
             import fitz  # PyMuPDF
             
-            # Save PDF temporarily for camelot
+            # Save PDF temporarily for table extraction
             with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
                 tmp_file.write(pdf_data)
                 tmp_path = tmp_file.name
@@ -103,13 +106,39 @@ class DocumentImageExtractor:
                 
                 # Extract tables if requested
                 if extract_tables:
-                    print(f"Starting table extraction from PDF using Camelot...")
-                    tables_extracted = await self._extract_tables_with_camelot(
-                        tmp_path, 
-                        project_id, 
-                        db, 
-                        current_count + extracted_count
-                    )
+                    print(f"Starting table extraction from PDF...")
+                    
+                    # Try multiple methods in order of preference
+                    tables_extracted = 0
+                    
+                    # Method 1: Try CV-based detection
+                    try:
+                        tables_extracted = await self._extract_tables_with_cv(
+                            tmp_path, 
+                            project_id, 
+                            db, 
+                            current_count + extracted_count
+                        )
+                        print(f"CV method extracted {tables_extracted} tables")
+                    except Exception as e:
+                        print(f"CV table extraction failed: {e}")
+                    
+                    # Method 2: If CV fails or finds no tables, try pdfplumber
+                    if tables_extracted == 0:
+                        try:
+                            import pdfplumber
+                            tables_extracted = await self._extract_tables_with_pdfplumber(
+                                tmp_path, 
+                                project_id, 
+                                db, 
+                                current_count + extracted_count
+                            )
+                            print(f"pdfplumber extracted {tables_extracted} tables")
+                        except ImportError:
+                            print("pdfplumber not available")
+                        except Exception as e:
+                            print(f"pdfplumber extraction failed: {e}")
+                    
                     extracted_count += tables_extracted
                 
             finally:
@@ -121,7 +150,7 @@ class DocumentImageExtractor:
             
         except ImportError as e:
             print(f"Missing required library: {e}")
-            print("Please install: pip install PyMuPDF camelot-py[cv] pandas matplotlib")
+            print("Please install: pip install PyMuPDF opencv-python pdf2image pdfplumber")
         except Exception as e:
             print(f"Error extracting from PDF: {e}")
             import traceback
@@ -129,176 +158,272 @@ class DocumentImageExtractor:
         
         return extracted_count
     
-    async def _extract_tables_with_camelot(self, pdf_path: str, project_id: int, db: Session, start_index: int) -> int:
-        """Extract tables from PDF using Camelot and convert to images"""
+    async def _extract_tables_with_cv(self, pdf_path: str, project_id: int, db: Session, start_index: int) -> int:
+        """Extract tables using computer vision (line detection)"""
         tables_count = 0
         
         try:
-            import camelot
+            import pdf2image
+            import fitz
             
             # Get number of pages
-            import fitz
             pdf_doc = fitz.open(pdf_path)
             num_pages = len(pdf_doc)
             pdf_doc.close()
             
-            print(f"Searching for tables in {num_pages} pages using Camelot...")
+            print(f"Searching for tables in {num_pages} pages using CV detection...")
             
-            all_tables = []
+            # Convert PDF pages to images
+            pages = pdf2image.convert_from_path(pdf_path, dpi=200)
             
-            # Process each page
-            for page_num in range(1, num_pages + 1):  # Camelot uses 1-based page numbers
-                try:
-                    # Try lattice method first (for tables with borders)
-                    tables_lattice = camelot.read_pdf(
-                        pdf_path,
-                        pages=str(page_num),
-                        flavor='lattice',
-                        line_scale=50,  # Helps detect faint lines
-                        split_text=True,
-                        flag_size=True,
-                        strip_text='\n'
-                    )
-                    
-                    if tables_lattice.n > 0:
-                        print(f"Found {tables_lattice.n} tables on page {page_num} using lattice method")
-                        for table in tables_lattice:
-                            if self._is_valid_camelot_table(table):
-                                all_tables.append((table.df, f'page_{page_num}_lattice', table.accuracy))
-                    
-                    # Try stream method (for tables without borders)
-                    tables_stream = camelot.read_pdf(
-                        pdf_path,
-                        pages=str(page_num),
-                        flavor='stream',
-                        edge_tol=50,
-                        row_tol=2,
-                        column_tol=2
-                    )
-                    
-                    if tables_stream.n > 0:
-                        print(f"Found {tables_stream.n} tables on page {page_num} using stream method")
-                        for table in tables_stream:
-                            if self._is_valid_camelot_table(table):
-                                # Check if it's not a duplicate of lattice table
-                                is_duplicate = False
-                                for existing_table, _, _ in all_tables:
-                                    if self._tables_are_similar(table.df, existing_table):
-                                        is_duplicate = True
-                                        break
-                                
-                                if not is_duplicate:
-                                    all_tables.append((table.df, f'page_{page_num}_stream', table.accuracy))
-                    
-                except Exception as e:
-                    print(f"Error processing page {page_num}: {e}")
-                    continue
-            
-            print(f"Total tables found: {len(all_tables)}")
-            
-            # Sort tables by accuracy and process them
-            all_tables.sort(key=lambda x: x[2], reverse=True)
-            
-            # Convert tables to images
-            for idx, (table_df, source, accuracy) in enumerate(all_tables):
-                try:
-                    print(f"Processing table {idx + 1} from {source} (accuracy: {accuracy:.2f})")
-                    
-                    # Clean the table
-                    table_df = self._clean_table(table_df)
-                    
-                    # Convert table to image with better formatting
-                    table_image_bytes = await self._table_to_image_enhanced(
-                        table_df, 
-                        idx + 1,
-                        source=source,
-                        accuracy=accuracy
-                    )
-                    
-                    if table_image_bytes:
-                        filename = f"table_{idx + 1}.png"
+            for page_num, page_image in enumerate(pages):
+                print(f"Processing page {page_num + 1}/{num_pages}")
+                
+                # Detect tables in this page
+                table_regions = self._detect_table_regions_cv(page_image)
+                
+                for table_idx, (table_image, confidence) in enumerate(table_regions):
+                    try:
+                        # Try to extract structured data using OCR
+                        df = self._extract_table_data_ocr(table_image)
                         
-                        # Save to database
-                        await self.db_image_service.save_image_bytes_to_db(
-                            image_bytes=table_image_bytes,
-                            filename=filename,
-                            project_id=project_id,
-                            db=db,
-                            order_index=start_index + tables_count,
-                            is_featured=False
-                        )
+                        if df is not None and self._is_valid_table(df):
+                            # Clean and convert to image
+                            df = self._clean_table(df)
+                            table_image_bytes = await self._table_to_image_enhanced(
+                                df,
+                                tables_count + 1,
+                                source=f"CV_page_{page_num + 1}",
+                                accuracy=confidence * 100
+                            )
+                        else:
+                            # If OCR fails, save the raw table image
+                            print(f"OCR failed for table on page {page_num + 1}, saving raw image")
+                            buf = io.BytesIO()
+                            table_image.save(buf, format='PNG')
+                            table_image_bytes = buf.getvalue()
                         
-                        tables_count += 1
-                        print(f"Saved table {idx + 1} as image")
-                        
-                except Exception as e:
-                    print(f"Failed to convert table {idx + 1} to image: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    continue
+                        if table_image_bytes:
+                            filename = f"table_{tables_count + 1}.png"
+                            
+                            # Save to database
+                            await self.db_image_service.save_image_bytes_to_db(
+                                image_bytes=table_image_bytes,
+                                filename=filename,
+                                project_id=project_id,
+                                db=db,
+                                order_index=start_index + tables_count,
+                                is_featured=False
+                            )
+                            
+                            tables_count += 1
+                            print(f"Saved table {tables_count} from page {page_num + 1}")
                     
+                    except Exception as e:
+                        print(f"Failed to process table on page {page_num + 1}: {e}")
+                        continue
+                        
         except ImportError as e:
-            print(f"Camelot not installed: {e}")
-            print("Please install: pip install camelot-py[cv]")
+            print(f"Missing required library for CV detection: {e}")
+            print("Please install: pip install pdf2image opencv-python")
         except Exception as e:
-            print(f"Error extracting tables with Camelot: {e}")
+            print(f"Error in CV table extraction: {e}")
             import traceback
             traceback.print_exc()
         
         return tables_count
     
-    def _is_valid_camelot_table(self, table) -> bool:
-        """Check if Camelot table is valid"""
-        if table is None or table.df.empty:
+    def _detect_table_regions_cv(self, page_image: Image.Image) -> List[Tuple[Image.Image, float]]:
+        """Detect table regions using computer vision"""
+        detected_tables = []
+        
+        try:
+            # Convert PIL to OpenCV format
+            img_array = np.array(page_image)
+            gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+            
+            # Apply threshold
+            _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+            
+            # Detect horizontal and vertical lines
+            horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40, 1))
+            vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 40))
+            
+            horizontal_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel)
+            vertical_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, vertical_kernel)
+            
+            # Combine lines
+            table_mask = cv2.add(horizontal_lines, vertical_lines)
+            
+            # Find contours
+            contours, _ = cv2.findContours(table_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            for contour in contours:
+                x, y, w, h = cv2.boundingRect(contour)
+                area = w * h
+                
+                # Filter by area and aspect ratio
+                if area > self.min_table_area and w > 100 and h > 50:
+                    # Check if region has enough lines
+                    region = table_mask[y:y+h, x:x+w]
+                    line_count = self._count_lines(region)
+                    
+                    if line_count >= self.min_lines:
+                        # Crop table region with some padding
+                        padding = 10
+                        x_start = max(0, x - padding)
+                        y_start = max(0, y - padding)
+                        x_end = min(page_image.width, x + w + padding)
+                        y_end = min(page_image.height, y + h + padding)
+                        
+                        table_image = page_image.crop((x_start, y_start, x_end, y_end))
+                        confidence = min(0.9, line_count / 10.0)  # Simple confidence based on line count
+                        
+                        detected_tables.append((table_image, confidence))
+                        print(f"Detected table region: {w}x{h} pixels, {line_count} lines")
+        
+        except Exception as e:
+            print(f"Error detecting table regions: {e}")
+        
+        return detected_tables
+    
+    def _count_lines(self, region: np.ndarray) -> int:
+        """Count horizontal and vertical lines in region"""
+        try:
+            # Count horizontal lines
+            horizontal_projection = np.sum(region, axis=1)
+            horizontal_lines = np.sum(horizontal_projection > region.shape[1] * 0.3)
+            
+            # Count vertical lines
+            vertical_projection = np.sum(region, axis=0)
+            vertical_lines = np.sum(vertical_projection > region.shape[0] * 0.3)
+            
+            return min(horizontal_lines, vertical_lines)
+        except:
+            return 0
+    
+    def _extract_table_data_ocr(self, table_image: Image.Image) -> Optional[pd.DataFrame]:
+        """Extract table data using OCR (optional - requires pytesseract)"""
+        try:
+            import pytesseract
+            
+            # Preprocess image for better OCR
+            # Convert to grayscale
+            gray_image = table_image.convert('L')
+            
+            # Enhance contrast
+            from PIL import ImageEnhance
+            enhancer = ImageEnhance.Contrast(gray_image)
+            enhanced_image = enhancer.enhance(2.0)
+            
+            # OCR with table structure preservation
+            custom_config = r'--oem 3 --psm 6'
+            text = pytesseract.image_to_string(enhanced_image, config=custom_config)
+            
+            # Parse text into table structure
+            lines = text.strip().split('\n')
+            data = []
+            
+            for line in lines:
+                if line.strip():
+                    # Split by multiple spaces or tabs
+                    cells = [cell.strip() for cell in line.split() if cell.strip()]
+                    if cells:
+                        data.append(cells)
+            
+            if len(data) >= self.min_table_rows:
+                # Create DataFrame
+                max_cols = max(len(row) for row in data)
+                for row in data:
+                    while len(row) < max_cols:
+                        row.append('')
+                
+                df = pd.DataFrame(data)
+                return df
+                
+        except ImportError:
+            print("pytesseract not available for OCR")
+        except Exception as e:
+            print(f"OCR extraction failed: {e}")
+        
+        return None
+    
+    async def _extract_tables_with_pdfplumber(self, pdf_path: str, project_id: int, db: Session, start_index: int) -> int:
+        """Fallback table extraction using pdfplumber"""
+        tables_count = 0
+        
+        try:
+            import pdfplumber
+            
+            with pdfplumber.open(pdf_path) as pdf:
+                for page_num, page in enumerate(pdf.pages):
+                    tables = page.extract_tables()
+                    
+                    for table_idx, table in enumerate(tables):
+                        if table and len(table) >= self.min_table_rows:
+                            try:
+                                # Convert to DataFrame
+                                df = pd.DataFrame(table)
+                                df = self._clean_table(df)
+                                
+                                if self._is_valid_table(df):
+                                    # Convert to image
+                                    table_image_bytes = await self._table_to_image_enhanced(
+                                        df, 
+                                        tables_count + 1,
+                                        source=f"pdfplumber_page_{page_num + 1}"
+                                    )
+                                    
+                                    if table_image_bytes:
+                                        filename = f"table_{tables_count + 1}.png"
+                                        
+                                        await self.db_image_service.save_image_bytes_to_db(
+                                            image_bytes=table_image_bytes,
+                                            filename=filename,
+                                            project_id=project_id,
+                                            db=db,
+                                            order_index=start_index + tables_count,
+                                            is_featured=False
+                                        )
+                                        
+                                        tables_count += 1
+                                        print(f"Extracted table {tables_count} using pdfplumber")
+                            
+                            except Exception as e:
+                                print(f"Failed to process table {table_idx} on page {page_num}: {e}")
+                                continue
+        
+        except Exception as e:
+            print(f"Error extracting tables with pdfplumber: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return tables_count
+    
+    def _is_valid_table(self, df: pd.DataFrame) -> bool:
+        """Check if DataFrame is a valid table"""
+        if df is None or df.empty:
             return False
         
         # Check minimum dimensions
-        if table.shape[0] < self.min_table_rows or table.shape[1] < self.min_table_cols:
-            return False
-        
-        # Check accuracy (Camelot provides accuracy metric)
-        if hasattr(table, 'accuracy') and table.accuracy < 30:  # 30% minimum accuracy
+        if df.shape[0] < self.min_table_rows or df.shape[1] < self.min_table_cols:
             return False
         
         # Check if table has meaningful content
         non_empty_cells = 0
-        total_cells = table.shape[0] * table.shape[1]
+        total_cells = df.shape[0] * df.shape[1]
         
-        for i in range(table.shape[0]):
-            for j in range(table.shape[1]):
-                cell_value = str(table.df.iloc[i, j]).strip()
+        for i in range(df.shape[0]):
+            for j in range(df.shape[1]):
+                cell_value = str(df.iloc[i, j]).strip()
                 if cell_value and cell_value not in ['', 'nan', 'None']:
                     non_empty_cells += 1
         
-        if non_empty_cells / total_cells < 0.2:  # At least 20% non-empty cells
+        # At least 30% non-empty cells
+        if total_cells > 0 and non_empty_cells / total_cells < 0.3:
             return False
         
         return True
-    
-    def _tables_are_similar(self, table1: pd.DataFrame, table2: pd.DataFrame) -> bool:
-        """Check if two tables are similar (to avoid duplicates)"""
-        if table1.shape != table2.shape:
-            return False
-        
-        try:
-            # Compare first and last cells
-            if (str(table1.iloc[0, 0]) == str(table2.iloc[0, 0]) and 
-                str(table1.iloc[-1, -1]) == str(table2.iloc[-1, -1])):
-                # Compare a few more cells to be sure
-                sample_matches = 0
-                samples_to_check = min(5, table1.shape[0] * table1.shape[1])
-                
-                for _ in range(samples_to_check):
-                    i = np.random.randint(0, table1.shape[0])
-                    j = np.random.randint(0, table1.shape[1])
-                    if str(table1.iloc[i, j]) == str(table2.iloc[i, j]):
-                        sample_matches += 1
-                
-                return sample_matches >= samples_to_check * 0.8
-        except:
-            pass
-        
-        return False
     
     def _clean_table(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and format table data"""
@@ -329,7 +454,7 @@ class DocumentImageExtractor:
             # Calculate figure size based on table dimensions
             n_rows, n_cols = df.shape
             
-            # Dynamic sizing
+            # Dynamic sizing with limits
             cell_width = max(1.5, min(3, 20 / n_cols))
             cell_height = 0.6
             fig_width = max(8, min(20, n_cols * cell_width))
@@ -340,7 +465,7 @@ class DocumentImageExtractor:
             ax.axis('tight')
             ax.axis('off')
             
-            # Add title with metadata
+            # Add title
             title = f"Table {table_number}"
             if source:
                 title += f" ({source.replace('_', ' ')})"
@@ -348,14 +473,14 @@ class DocumentImageExtractor:
             fig.text(0.5, 0.98, title, ha='center', va='top', 
                     fontsize=14, fontweight='bold')
             
-            # Add accuracy indicator if available
+            # Add extraction info if available
             if accuracy > 0:
                 accuracy_color = 'green' if accuracy > 80 else 'orange' if accuracy > 50 else 'red'
-                fig.text(0.5, 0.94, f"Extraction confidence: {accuracy:.0f}%", 
+                fig.text(0.5, 0.94, f"Confidence: {accuracy:.0f}%", 
                         ha='center', va='top', fontsize=10, 
                         color=accuracy_color, style='italic')
             
-            # Create table with better formatting
+            # Create table
             table = ax.table(
                 cellText=df.values,
                 cellLoc='left',
@@ -545,30 +670,3 @@ class DocumentImageExtractor:
             traceback.print_exc()
         
         return extracted_count
-    
-    def _is_valid_table(self, df: pd.DataFrame) -> bool:
-        """Check if DataFrame is a valid table"""
-        if df is None or df.empty:
-            return False
-        
-        # Check minimum dimensions
-        if df.shape[0] < self.min_table_rows or df.shape[1] < self.min_table_cols:
-            return False
-        
-        # Check if table has meaningful content (not all empty)
-        non_empty_cells = 0
-        total_cells = df.shape[0] * df.shape[1]
-        
-        for i in range(df.shape[0]):
-            for j in range(df.shape[1]):
-                cell_value = str(df.iloc[i, j]).strip()
-                if cell_value and cell_value not in ['', 'nan', 'None']:
-                    non_empty_cells += 1
-        
-        # At least 30% non-empty cells
-        if non_empty_cells / total_cells < 0.3:
-            return False
-        
-        return True
-
-            
