@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Literature Review Database - Admin Portal"
     VERSION: str = "1.0.0"
     DESCRIPTION: str = "Admin portal for managing literature review database"
-    ADMIN_SITE_URL: str = "https://literature-review-admin-backend.onrender.com"
+    ADMIN_SITE_URL: str = "https://literature-rev-admin-portal.onrender.com"
     
     # Frontend URL for password reset links
     FRONTEND_URL: str = "https://literature-rev-admin-portal.onrender.com"
