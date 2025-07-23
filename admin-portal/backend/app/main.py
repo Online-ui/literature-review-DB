@@ -82,6 +82,7 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"]
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(utils.router, prefix="/api/utils", tags=["utilities"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
+app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Serve static files manually since the automatic mount isn't working
 @app.get("/uploads/{path:path}")
