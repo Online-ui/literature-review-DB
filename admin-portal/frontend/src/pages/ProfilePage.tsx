@@ -106,7 +106,7 @@ const ProfilePage: React.FC = () => {
         email: profileData.email,
         institution: profileData.institution,
         department: profileData.department,
-        phone: profileData.phone
+        phone: profileData.phone,
         about: profileData.about,          // Add this line
         disciplines: profileData.disciplines
       });
