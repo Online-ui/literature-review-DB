@@ -19,6 +19,8 @@ class User(BaseModel):
     # Role & Status
     role = Column(String(50), default="faculty")  # "main_coordinator", "faculty"
     is_active = Column(Boolean, default=True)
+    about = Column(Text, nullable=True)
+    disciplines = Column(Text, nullable=True)
     
     # Password Reset
     reset_token = Column(String, index=True)
