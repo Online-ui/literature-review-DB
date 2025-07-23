@@ -49,7 +49,7 @@ const ProfilePage: React.FC = () => {
     email: user?.email || '',
     institution: user?.institution || '',
     department: user?.department || '',
-    phone: user?.phone || ''
+    phone: user?.phone || '',
     about: user?.about || '',              // Add this line
     disciplines: user?.disciplines || ''
   });
@@ -96,7 +96,7 @@ const ProfilePage: React.FC = () => {
       email: user?.email || '',
       institution: user?.institution || '',
       department: user?.department || '',
-      phone: user?.phone || ''
+      phone: user?.phone || '',
       about: user?.about || '',              // Add this line
       disciplines: user?.disciplines || ''
     });
