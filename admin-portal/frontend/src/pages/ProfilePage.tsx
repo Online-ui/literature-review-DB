@@ -107,6 +107,8 @@ const ProfilePage: React.FC = () => {
         institution: profileData.institution,
         department: profileData.department,
         phone: profileData.phone
+        about: profileData.about,          // Add this line
+        disciplines: profileData.disciplines
       });
       
       // Update the user context if you have an updateUser function
