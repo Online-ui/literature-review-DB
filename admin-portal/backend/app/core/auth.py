@@ -123,7 +123,13 @@ async def login(
             "full_name": user.full_name,
             "role": user.role,
             "institution": user.institution,
-            "department": user.department
+            "department": user.department,
+            "phone": user.phone,
+            "about": user.about,                    # Added
+            "disciplines": user.disciplines,        # Added
+            "profile_image": user.profile_image,    # Added
+            "is_active": user.is_active,
+            "created_at": user.created_at.isoformat() if user.created_at else None
         }
     }
 
@@ -266,8 +272,12 @@ async def get_current_user_info(
         "role": current_user.role,
         "institution": current_user.institution,
         "department": current_user.department,
+        "phone": current_user.phone,
+        "about": current_user.about,                    # Added
+        "disciplines": current_user.disciplines,        # Added
+        "profile_image": current_user.profile_image,    # Added
         "is_active": current_user.is_active,
-        "created_at": current_user.created_at
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
     }
 
 @router.post("/logout")
