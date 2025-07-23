@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import Dict, Any
@@ -46,7 +45,11 @@ async def upload_profile_image(
         current_user.profile_image = path
         db.commit()
         
-        return {"image_url": f"/uploads/profile_images/{path}"}
+        # Return the correct URL format
+        return {
+            "image_url": f"/api/uploads/profile_images/{path}",  # Full API path
+            "path": path  # Raw path for database storage
+        }
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
