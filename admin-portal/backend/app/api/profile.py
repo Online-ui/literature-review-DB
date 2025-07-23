@@ -25,7 +25,7 @@ class ProfileUpdate(BaseModel):
     about: Optional[str] = None
     disciplines: Optional[str] = None
 
-@router.post("/profile/image")
+@router.post("/image")
 async def upload_profile_image(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
@@ -51,7 +51,7 @@ async def upload_profile_image(
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.delete("/profile/image")
+@router.delete("/image")
 async def delete_profile_image(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -68,7 +68,7 @@ async def delete_profile_image(
     
     return {"message": "Profile image deleted successfully"}
 
-@router.put("/profile")
+@router.put("")
 async def update_profile(
     profile_data: ProfileUpdate,
     current_user: User = Depends(get_current_user),
@@ -108,7 +108,7 @@ async def update_profile(
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/profile")
+@router.get("")
 async def get_profile(
     current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
