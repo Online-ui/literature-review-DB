@@ -3,39 +3,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-import os
 from pathlib import Path
+import os
 
-from .core.config import settings
-from .database import engine
-from .models import Base
-from .api import auth, users, dashboard, projects, utils, profile
+from app.api import auth, users, projects, dashboard, profile, utils
+from app.database import engine
+from app.models import Base
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+# Create FastAPI app
+app = FastAPI(title="Literature Review Database - Admin Portal")
 
-app = FastAPI(
-    title=settings.PROJECT_NAME,
-    version=settings.VERSION,
-    description=settings.DESCRIPTION,
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
-
-# Get the absolute path to the backend directory
+# Get the base directory
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
-
-# Create upload directories if they don't exist
-UPLOAD_DIR.mkdir(exist_ok=True)
-(UPLOAD_DIR / "projects").mkdir(exist_ok=True)
-(UPLOAD_DIR / "profile_images").mkdir(exist_ok=True)
-
-# Create static directory for React build if it doesn't exist
 STATIC_DIR = BASE_DIR / "static"
+
+# Create directories if they don't exist
+UPLOAD_DIR.mkdir(exist_ok=True)
 STATIC_DIR.mkdir(exist_ok=True)
 
-print(f"🚀 Starting {settings.PROJECT_NAME}")
+# Create subdirectories for uploads
+(UPLOAD_DIR / "profile_images").mkdir(exist_ok=True)
+(UPLOAD_DIR / "projects").mkdir(exist_ok=True)
+
+print("🚀 Starting Literature Review Database - Admin Portal")
 print(f"📁 Base directory: {BASE_DIR}")
 print(f"📁 Upload directory: {UPLOAD_DIR}")
 print(f"📁 Upload directory exists: {UPLOAD_DIR.exists()}")
@@ -66,40 +57,30 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
     )
 
-# CORS middleware - MUST come before routes
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://literature-rev-admin-portal.onrender.com"],  # Allow all origins for now
+    allow_origins=["https://literature-rev-admin-portal.onrender.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include routers with /api prefix
-app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
+# Include routers
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
-app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-app.include_router(utils.router, prefix="/api/utils", tags=["utilities"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
-app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.include_router(utils.router, prefix="/api/utils", tags=["utils"])
 
-# Serve static files manually since the automatic mount isn't working
+# Mount static files - use the absolute path
+app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+
+# Serve static files manually as backup
 @app.get("/uploads/{path:path}")
 async def serve_upload(path: str):
     """Manually serve uploaded files"""
-    file_path = UPLOAD_DIR / path
-    if file_path.exists() and file_path.is_file():
-        return FileResponse(file_path)
-    return JSONResponse(
-        status_code=404,
-        content={"error": "File not found", "path": str(file_path)}
-    )
-
-# Also handle the /api/uploads path that frontend is using
-@app.get("/api/uploads/{path:path}")
-async def serve_upload_api(path: str):
-    """Serve uploaded files from /api/uploads path"""
     file_path = UPLOAD_DIR / path
     if file_path.exists() and file_path.is_file():
         return FileResponse(file_path)
@@ -113,12 +94,8 @@ async def serve_upload_api(path: str):
 async def startup_event():
     """Initialize services on startup"""
     print(f"\n{'='*60}")
-    print(f"🚀 {settings.PROJECT_NAME} v{settings.VERSION}")
+    print(f"🚀 Literature Review Database - Admin Portal v1.0.0")
     print(f"{'='*60}")
-    print(f"📦 Storage Backend: {settings.STORAGE_BACKEND}")
-    print(f"📁 Max file size: {settings.MAX_FILE_SIZE / 1024 / 1024:.1f}MB")
-    print(f"📄 Allowed file types: {', '.join(settings.ALLOWED_FILE_TYPES)}")
-    print(f"✅ Database Storage configured")
     
     # Verify directories
     print(f"\n📁 Directory Status:")
@@ -142,26 +119,41 @@ async def startup_event():
             print(f"   {methods:8} {route.path}")
     print(f"{'='*60}\n")
 
+# Root endpoint
+@app.get("/")
+async def root():
+    return {
+        "message": "Literature Review Database - Admin Portal API",
+        "version": "1.0.0",
+        "docs": "/docs"
+    }
+
 # API root endpoint
 @app.get("/api")
 async def api_root():
     return {
         "message": "Literature Review Database - Admin Portal API",
-        "version": settings.VERSION,
-        "storage_backend": settings.STORAGE_BACKEND,
+        "version": "1.0.0",
         "docs": "/docs",
         "health": "/api/health"
     }
 
-@app.get("/api/health")
+# Health check endpoint
+@app.get("/health")
 async def health_check():
+    return {
+        "status": "healthy",
+        "service": "admin-portal-api"
+    }
+
+# API health check endpoint
+@app.get("/api/health")
+async def api_health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": settings.VERSION,
-        "storage_backend": settings.STORAGE_BACKEND,
+        "version": "1.0.0",
         "database": "connected",
-        "max_file_size_mb": settings.MAX_FILE_SIZE / 1024 / 1024,
         "upload_dirs": {
             "uploads": UPLOAD_DIR.exists(),
             "projects": (UPLOAD_DIR / "projects").exists(),
@@ -173,18 +165,6 @@ async def health_check():
             "upload_dir": str(UPLOAD_DIR),
             "static_dir": str(STATIC_DIR)
         }
-    }
-
-@app.get("/api/config")
-async def get_config():
-    """Get public configuration for frontend"""
-    return {
-        "project_name": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "storage_backend": settings.STORAGE_BACKEND,
-        "max_file_size": settings.MAX_FILE_SIZE,
-        "allowed_file_types": settings.ALLOWED_FILE_TYPES,
-        "cors_origins": settings.CORS_ORIGINS
     }
 
 # Debug endpoint to list files
@@ -234,9 +214,9 @@ if STATIC_DIR.exists() and any(STATIC_DIR.iterdir()):
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     print(f"✅ React static files mounted at /static")
 
-# Root route - serve React app
-@app.get("/")
-async def serve_root():
+# Serve React app root
+@app.get("/app")
+async def serve_app_root():
     """Serve the React app root"""
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
@@ -248,9 +228,7 @@ async def serve_root():
                 "message": "Literature Review Admin Portal API",
                 "docs": "/docs",
                 "api": "/api",
-                "note": "Frontend not deployed. Please build and deploy the React app.",
-                "test_uploads": "/test-static",
-                "debug_uploads": "/api/debug/list-uploads"
+                "note": "Frontend not deployed. Please build and deploy the React app."
             }
         )
 
@@ -265,7 +243,8 @@ async def serve_spa(request: Request, full_path: str):
         full_path.startswith("redoc") or
         full_path.startswith("openapi.json") or
         full_path.startswith("static/") or
-        full_path.startswith("test-static")):
+        full_path.startswith("test-static") or
+        full_path.startswith("health")):
         # Let FastAPI handle 404 for these routes
         return JSONResponse(
             status_code=404,
@@ -287,6 +266,9 @@ async def serve_spa(request: Request, full_path: str):
                 "api_root": "/api"
             }
         )
+
+# Create tables
+Base.metadata.create_all(bind=engine)
 
 if __name__ == "__main__":
     import uvicorn
