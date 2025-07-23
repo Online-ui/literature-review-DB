@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -41,24 +41,47 @@ import { useAuth } from '../contexts/AuthContext';
 import { adminApi } from '../services/adminApi';
 
 const ProfilePage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const theme = useTheme();
   const [editing, setEditing] = useState(false);
+  
+  // Initialize profile data with all fields
   const [profileData, setProfileData] = useState({
     full_name: user?.full_name || '',
     email: user?.email || '',
     institution: user?.institution || '',
     department: user?.department || '',
     phone: user?.phone || '',
-    about: user?.about || '',              // Add this line
+    about: user?.about || '',
     disciplines: user?.disciplines || ''
   });
 
-  // Add state for image handling
-  const [profileImage, setProfileImage] = useState<string | null>(user?.profile_image || null);
+  // Initialize profile image with proper URL
+  const [profileImage, setProfileImage] = useState<string | null>(() => {
+    if (user?.profile_image) {
+      // If it's already a full URL, use it; otherwise, construct it
+      return user.profile_image.startsWith('http') || user.profile_image.startsWith('/api') 
+        ? user.profile_image 
+        : `/api/uploads/profile_images/${user.profile_image}`;
+    }
+    return null;
+  });
+  
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Add image upload handler
+  // Update profile image when user changes
+  useEffect(() => {
+    if (user?.profile_image) {
+      const imageUrl = user.profile_image.startsWith('http') || user.profile_image.startsWith('/api')
+        ? user.profile_image
+        : `/api/uploads/profile_images/${user.profile_image}`;
+      setProfileImage(imageUrl);
+    } else {
+      setProfileImage(null);
+    }
+  }, [user?.profile_image]);
+
+  // Update the handleImageUpload function
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -66,8 +89,10 @@ const ProfilePage: React.FC = () => {
     setUploadingImage(true);
     try {
       const response = await adminApi.uploadProfileImage(file);
-      setProfileImage(response.image_url);
-      // Update user context if you have one
+      setProfileImage(response.image_url); // Use the full URL from response
+      
+      // Update the user context
+      updateUser({ profile_image: response.path }); // Store the path in user data
     } catch (error) {
       console.error('Failed to upload image:', error);
     } finally {
@@ -80,6 +105,7 @@ const ProfilePage: React.FC = () => {
     try {
       await adminApi.deleteProfileImage();
       setProfileImage(null);
+      updateUser({ profile_image: null });
     } catch (error) {
       console.error('Failed to delete image:', error);
     }
@@ -97,7 +123,7 @@ const ProfilePage: React.FC = () => {
       institution: user?.institution || '',
       department: user?.department || '',
       phone: user?.phone || '',
-      about: user?.about || '',              // Add this line
+      about: user?.about || '',
       disciplines: user?.disciplines || ''
     });
   };
@@ -111,10 +137,12 @@ const ProfilePage: React.FC = () => {
         institution: profileData.institution,
         department: profileData.department,
         phone: profileData.phone,
-        about: profileData.about,          // Add this line
+        about: profileData.about,
         disciplines: profileData.disciplines
       });
       
+      // Update the user context
+      updateUser(profileData);
          
       setEditing(false);
       // Show success message (you might want to add a snackbar/toast component)
@@ -836,7 +864,6 @@ const ProfilePage: React.FC = () => {
                         }) : 'N/A'}
                       </Typography>
                     </Box>
-                    
                     <Box
                       sx={{
                         p: 2.5,
