@@ -34,13 +34,19 @@ def upgrade() -> None:
             sa.Column('institution', sa.String(), nullable=True),
             sa.Column('department', sa.String(), nullable=True),
             sa.Column('phone', sa.String(), nullable=True),
+            sa.Column('profile_image', sa.String(), nullable=True),
+            sa.Column('about', sa.Text(), nullable=True),
+            sa.Column('disciplines', sa.Text(), nullable=True),
             sa.Column('role', sa.String(), nullable=True),
             sa.Column('is_active', sa.Boolean(), nullable=True),
+            sa.Column('reset_token', sa.String(), nullable=True),
+            sa.Column('reset_token_expires', sa.DateTime(), nullable=True),
             sa.PrimaryKeyConstraint('id')
         )
         op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
         op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
         op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
+        op.create_index(op.f('ix_users_reset_token'), 'users', ['reset_token'], unique=False)
     else:
         # Check if indexes exist and create them if they don't
         existing_indexes = [idx['name'] for idx in inspector.get_indexes('users')]
@@ -50,6 +56,26 @@ def upgrade() -> None:
             op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
         if 'ix_users_username' not in existing_indexes:
             op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
+        if 'ix_users_reset_token' not in existing_indexes:
+            op.create_index(op.f('ix_users_reset_token'), 'users', ['reset_token'], unique=False)
+        
+        # Check for missing columns and add them
+        existing_columns = [col['name'] for col in inspector.get_columns('users')]
+        
+        if 'profile_image' not in existing_columns:
+            op.add_column('users', sa.Column('profile_image', sa.String(), nullable=True))
+        
+        if 'about' not in existing_columns:
+            op.add_column('users', sa.Column('about', sa.Text(), nullable=True))
+        
+        if 'disciplines' not in existing_columns:
+            op.add_column('users', sa.Column('disciplines', sa.Text(), nullable=True))
+        
+        if 'reset_token' not in existing_columns:
+            op.add_column('users', sa.Column('reset_token', sa.String(), nullable=True))
+        
+        if 'reset_token_expires' not in existing_columns:
+            op.add_column('users', sa.Column('reset_token_expires', sa.DateTime(), nullable=True))
     
     # Handle projects table
     if 'projects' in existing_tables:
@@ -153,6 +179,8 @@ def downgrade() -> None:
     # Drop users table and its indexes if they exist
     if 'users' in existing_tables:
         existing_indexes = [idx['name'] for idx in inspector.get_indexes('users')]
+        if 'ix_users_reset_token' in existing_indexes:
+            op.drop_index(op.f('ix_users_reset_token'), table_name='users')
         if 'ix_users_username' in existing_indexes:
             op.drop_index(op.f('ix_users_username'), table_name='users')
         if 'ix_users_id' in existing_indexes:
