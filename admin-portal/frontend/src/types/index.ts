@@ -87,6 +87,8 @@ export interface User {
   institution?: string;
   department?: string;
   phone?: string;
+  about?: string;        // Added
+  disciplines?: string;  // Added
   role: string;
   is_active: boolean;
   created_at: string;
@@ -131,6 +133,8 @@ export interface AuthResponse {
     role: string;
     institution?: string;
     department?: string;
+    about?: string;        // Added
+    disciplines?: string;  // Added
   };
 }
 
