@@ -1,6 +1,9 @@
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import Dict, Any  # Add Any import
+from typing import Dict, Any
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 
 from app.database import get_db
 from app.models.user import User
@@ -11,6 +14,16 @@ router = APIRouter()
 
 # Initialize the image upload service for profiles
 profile_image_service = ImageUploadService(upload_dir="uploads/profile_images")
+
+# Profile update schema
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    institution: Optional[str] = None
+    department: Optional[str] = None
+    phone: Optional[str] = None
+    about: Optional[str] = None
+    disciplines: Optional[str] = None
 
 @router.post("/profile/image")
 async def upload_profile_image(
@@ -57,18 +70,19 @@ async def delete_profile_image(
 
 @router.put("/profile")
 async def update_profile(
-    profile_data: dict,
+    profile_data: ProfileUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-) -> Dict[str, Any]:  # Changed from 'any' to 'Any'
+) -> Dict[str, Any]:
     """Update user profile information"""
-    allowed_fields = ['full_name', 'institution', 'department', 'phone']
-    
-    for field, value in profile_data.items():
-        if field in allowed_fields and hasattr(current_user, field):
-            setattr(current_user, field, value)
-    
     try:
+        # Update only provided fields
+        update_data = profile_data.dict(exclude_unset=True)
+        
+        for field, value in update_data.items():
+            if hasattr(current_user, field):
+                setattr(current_user, field, value)
+        
         db.commit()
         db.refresh(current_user)
         
@@ -82,11 +96,35 @@ async def update_profile(
                 "institution": current_user.institution,
                 "department": current_user.department,
                 "phone": current_user.phone,
+                "about": current_user.about,
+                "disciplines": current_user.disciplines,
                 "profile_image": current_user.profile_image,
                 "role": current_user.role,
-                "is_active": current_user.is_active
+                "is_active": current_user.is_active,
+                "created_at": current_user.created_at.isoformat() if current_user.created_at else None
             }
         }
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/profile")
+async def get_profile(
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """Get current user's profile"""
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "institution": current_user.institution,
+        "department": current_user.department,
+        "phone": current_user.phone,
+        "about": current_user.about,
+        "disciplines": current_user.disciplines,
+        "profile_image": current_user.profile_image,
+        "role": current_user.role,
+        "is_active": current_user.is_active,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+    }
