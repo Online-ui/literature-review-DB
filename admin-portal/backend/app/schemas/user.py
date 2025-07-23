@@ -9,6 +9,8 @@ class UserBase(BaseModel):
     institution: Optional[str] = None
     department: Optional[str] = None
     phone: Optional[str] = None
+    about: Optional[str] = None
+    disciplines: Optional[str] = None
     role: str = "faculty"
     profile_image: Optional[str] = None
     
@@ -24,6 +26,18 @@ class UserBase(BaseModel):
     def role_must_be_valid(cls, v):
         if v not in ['faculty', 'main_coordinator']:
             raise ValueError('Role must be either "faculty" or "main_coordinator"')
+        return v
+    
+    @validator('about')
+    def about_length_check(cls, v):
+        if v and len(v) > 5000:
+            raise ValueError('About section must be less than 5000 characters')
+        return v
+    
+    @validator('disciplines')
+    def disciplines_length_check(cls, v):
+        if v and len(v) > 2000:
+            raise ValueError('Disciplines must be less than 2000 characters')
         return v
 
 class UserCreate(UserBase):
@@ -41,6 +55,8 @@ class UserUpdate(BaseModel):
     institution: Optional[str] = None
     department: Optional[str] = None
     phone: Optional[str] = None
+    about: Optional[str] = None
+    disciplines: Optional[str] = None
     is_active: Optional[bool] = None
     role: Optional[str] = None
     profile_image: Optional[str] = None
@@ -49,6 +65,18 @@ class UserUpdate(BaseModel):
     def role_must_be_valid(cls, v):
         if v is not None and v not in ['faculty', 'main_coordinator']:
             raise ValueError('Role must be either "faculty" or "main_coordinator"')
+        return v
+    
+    @validator('about')
+    def about_length_check(cls, v):
+        if v and len(v) > 5000:
+            raise ValueError('About section must be less than 5000 characters')
+        return v
+    
+    @validator('disciplines')
+    def disciplines_length_check(cls, v):
+        if v and len(v) > 2000:
+            raise ValueError('Disciplines must be less than 2000 characters')
         return v
 
 class UserResponse(UserBase):
@@ -96,3 +124,25 @@ class UserStats(BaseModel):
     faculty_count: int
     coordinator_count: int
     recent_registrations: int
+
+class ProfileUpdate(BaseModel):
+    """Schema specifically for profile updates via the profile endpoint"""
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    institution: Optional[str] = None
+    department: Optional[str] = None
+    phone: Optional[str] = None
+    about: Optional[str] = None
+    disciplines: Optional[str] = None
+    
+    @validator('about')
+    def about_length_check(cls, v):
+        if v and len(v) > 5000:
+            raise ValueError('About section must be less than 5000 characters')
+        return v
+    
+    @validator('disciplines')
+    def disciplines_length_check(cls, v):
+        if v and len(v) > 2000:
+            raise ValueError('Disciplines must be less than 2000 characters')
+        return v
