@@ -82,16 +82,16 @@ const ProfilePage: React.FC = () => {
   }, [user?.profile_image]);
 
   // Update the handleImageUpload function
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
     setUploadingImage(true);
     try {
       const response = await adminApi.uploadProfileImage(file);
-      setProfileImage(response.image_url); // Use the full URL from response
+      setProfileImage(response.image_url); 
       
-      // Update the user context
+      // Update the user context with the path
       updateUser({ profile_image: response.path }); // Store the path in user data
     } catch (error) {
       console.error('Failed to upload image:', error);
@@ -101,11 +101,11 @@ const ProfilePage: React.FC = () => {
   };
 
   // Add image delete handler
-  const handleImageDelete = async () => {
+    const handleImageDelete = async () => {
     try {
       await adminApi.deleteProfileImage();
       setProfileImage(null);
-      updateUser({ profile_image: null });
+      updateUser({ profile_image: undefined }); 
     } catch (error) {
       console.error('Failed to delete image:', error);
     }
