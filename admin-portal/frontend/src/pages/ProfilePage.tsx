@@ -98,11 +98,27 @@ const ProfilePage: React.FC = () => {
     });
   };
 
-  const handleSave = () => {
-    // TODO: Implement profile update API call
-    setEditing(false);
-    // For now, just show a message
-    alert('Profile update functionality will be implemented soon');
+  const handleSave = async () => {
+    try {
+      // Update the profile via API
+      await adminApi.updateProfile({
+        full_name: profileData.full_name,
+        email: profileData.email,
+        institution: profileData.institution,
+        department: profileData.department,
+        phone: profileData.phone
+      });
+      
+      // Update the user context if you have an updateUser function
+      // updateUser({ ...user, ...profileData });
+      
+      setEditing(false);
+      // Show success message (you might want to add a snackbar/toast component)
+      alert('Profile updated successfully!');
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      alert('Failed to update profile. Please try again.');
+    }
   };
 
   const handleInputChange = (field: string) => (
@@ -424,7 +440,7 @@ const ProfilePage: React.FC = () => {
               sx={{
                 borderRadius: 4,
                 border: '1px solid rgba(0,0,0,0.08)',
-                                overflow: 'hidden'
+                overflow: 'hidden'
               }}
             >
               <Box
@@ -669,6 +685,57 @@ const ProfilePage: React.FC = () => {
                       }}
                     />
                   </Grid>
+
+                  {/* About Section */}
+                  <Grid item xs={12}>
+                    <TextField
+                      label="About"
+                      fullWidth
+                      multiline
+                      rows={4}
+                      value={profileData.about || ''}
+                      onChange={handleInputChange('about')}
+                      disabled={!editing}
+                      placeholder="Tell us about yourself, your research interests, and professional background..."
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 3,
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#0a4f3c',
+                          },
+                        },
+                        '& .MuiInputLabel-root.Mui-focused': {
+                          color: '#0a4f3c',
+                        },
+                      }}
+                    />
+                  </Grid>
+
+                  {/* Disciplines Section */}
+                  <Grid item xs={12}>
+                    <TextField
+                      label="Disciplines"
+                      fullWidth
+                      multiline
+                      rows={3}
+                      value={profileData.disciplines || ''}
+                      onChange={handleInputChange('disciplines')}
+                      disabled={!editing}
+                      placeholder="List your areas of expertise and research disciplines (e.g., Computer Science, Machine Learning, Data Science)..."
+                      helperText="Separate multiple disciplines with commas"
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 3,
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#0a4f3c',
+                          },
+                        },
+                        '& .MuiInputLabel-root.Mui-focused': {
+                          color: '#0a4f3c',
+                        },
+                      }}
+                    />
+                  </Grid>
                 </Grid>
 
                 <AnimatePresence>
@@ -688,9 +755,9 @@ const ProfilePage: React.FC = () => {
                         }}
                       >
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          Profile Update Notice
+                          Save Your Changes
                         </Typography>
-                        Profile update functionality is coming soon. Contact your administrator for urgent changes.
+                        Don't forget to click "Save Changes" to update your profile information.
                       </Alert>
                     </motion.div>
                   )}
@@ -840,7 +907,7 @@ const ProfilePage: React.FC = () => {
                   </Box>
                 </CardContent>
               </Card>
-                        </motion.div>
+            </motion.div>
 
             {/* Quick Actions */}
             <motion.div
