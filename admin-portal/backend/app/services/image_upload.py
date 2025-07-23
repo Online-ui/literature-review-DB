@@ -20,7 +20,7 @@ class ImageUploadService:
         
         print(f"ImageUploadService initialized with upload_dir: {self.upload_dir}")
 
-    async def save_image(self, file: UploadFile, subfolder: Optional[str] = None) -> str:
+    async def save_image(self, file: UploadFile, prefix: str = "") -> str:
         """Save uploaded image and return the path"""
         # Validate file
         await self._validate_image(file)
@@ -29,15 +29,14 @@ class ImageUploadService:
         ext = Path(file.filename).suffix.lower()
         filename = f"{uuid.uuid4()}{ext}"
         
-        # Create subfolder if specified
-        if subfolder:
-            save_dir = self.upload_dir / "projects" / subfolder
+        # Create user-specific directory (without "projects")
+        if prefix:
+            save_dir = self.upload_dir / prefix
             save_dir.mkdir(parents=True, exist_ok=True)
-            relative_path = f"projects/{subfolder}/{filename}"
+            relative_path = f"{prefix}/{filename}"
         else:
-            save_dir = self.upload_dir / "projects"
-            save_dir.mkdir(parents=True, exist_ok=True)
-            relative_path = f"projects/{filename}"
+            save_dir = self.upload_dir
+            relative_path = filename
             
         filepath = save_dir / filename
         
@@ -81,11 +80,6 @@ class ImageUploadService:
             print(f"Deleted successfully")
         else:
             print(f"File not found: {filepath}")
-            # Also check without the projects prefix in case of path issues
-            alt_path = self.upload_dir / clean_path.replace('projects/', '')
-            if alt_path.exists() and alt_path.is_file():
-                alt_path.unlink()
-                print(f"Deleted from alternate path: {alt_path}")
 
     async def _validate_image(self, file: UploadFile) -> None:
         """Validate uploaded image"""
