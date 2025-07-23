@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -16,11 +16,12 @@ class User(BaseModel):
     department = Column(String(255))
     phone = Column(String(20))
     profile_image = Column(String, nullable=True)
+    about = Column(Text, nullable=True)        # Added
+    disciplines = Column(Text, nullable=True)  # Added
+    
     # Role & Status
     role = Column(String(50), default="faculty")  # "main_coordinator", "faculty"
     is_active = Column(Boolean, default=True)
-    about = Column(Text, nullable=True)
-    disciplines = Column(Text, nullable=True)
     
     # Password Reset
     reset_token = Column(String, index=True)
