@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  updateUser: (userData: Partial<User>) => void;  // Added
   loading: boolean;
   isAuthenticated: boolean;
 }
@@ -52,7 +53,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await adminApi.login({ username, password });
       localStorage.setItem('admin_token', response.access_token);
       
-      const userData = await adminApi.getCurrentUser();
+      // The login response now includes complete user data
+      const userData = response.user as User;
       setUser(userData);
       localStorage.setItem('admin_user', JSON.stringify(userData));
     } catch (error) {
@@ -67,10 +69,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.removeItem('admin_user');
   };
 
+  const updateUser = (userData: Partial<User>) => {
+    setUser(prevUser => {
+      if (!prevUser) return null;
+      const updatedUser = { ...prevUser, ...userData };
+      localStorage.setItem('admin_user', JSON.stringify(updatedUser));
+      return updatedUser;
+    });
+  };
+
   const value = {
     user,
     login,
     logout,
+    updateUser,  // Added
     loading,
     isAuthenticated: !!user,
   };
