@@ -14,6 +14,17 @@ interface TokenVerificationResponse {
   username: string;
 }
 
+// Profile Update Interface
+interface ProfileUpdateData {
+  full_name: string;
+  email: string;
+  institution: string;
+  department: string;
+  phone: string;
+  about: string;
+  disciplines: string;
+}
+
 class AdminApiService {
   private api = axios.create({
     baseURL: API_BASE_URL,
@@ -155,12 +166,12 @@ class AdminApiService {
   }
 
   async verifyResetToken(token: string): Promise<TokenVerificationResponse> {
-  const response = await this.api.get('/auth/verify-reset-token', {
-    params: { token },
-    timeout: 1200000 // 30 second timeout for this specific request
-  });
-  return response.data;
-}
+    const response = await this.api.get('/auth/verify-reset-token', {
+      params: { token },
+      timeout: 1200000 // 30 second timeout for this specific request
+    });
+    return response.data;
+  }
 
   // Dashboard
   async getDashboardStats(): Promise<DashboardStats> {
@@ -355,7 +366,7 @@ class AdminApiService {
     return response.data;
   }
 
-  async updateProfile(data: any): Promise<any> {
+  async updateProfile(data: ProfileUpdateData): Promise<User> {
     const response = await this.api.put('/profile', data);
     return response.data;
   }
@@ -395,7 +406,7 @@ class AdminApiService {
   // Health check method
   async healthCheck(): Promise<{ status: string; version: string }> {
     const response = await this.api.get('/health');
-    return response.data;
+    return response.data
   }
 
   // Project statistics
@@ -460,4 +471,4 @@ class AdminApiService {
 export const adminApi = new AdminApiService();
 
 // Export types for use in components
-export type { PasswordResetResponse, TokenVerificationResponse };
+export type { PasswordResetResponse, TokenVerificationResponse, ProfileUpdateData };
