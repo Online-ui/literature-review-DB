@@ -50,6 +50,8 @@ const ProfilePage: React.FC = () => {
     institution: user?.institution || '',
     department: user?.department || '',
     phone: user?.phone || ''
+    about: user?.about || '',              // Add this line
+    disciplines: user?.disciplines || ''
   });
 
   // Add state for image handling
@@ -95,6 +97,8 @@ const ProfilePage: React.FC = () => {
       institution: user?.institution || '',
       department: user?.department || '',
       phone: user?.phone || ''
+      about: user?.about || '',              // Add this line
+      disciplines: user?.disciplines || ''
     });
   };
 
@@ -111,9 +115,7 @@ const ProfilePage: React.FC = () => {
         disciplines: profileData.disciplines
       });
       
-      // Update the user context if you have an updateUser function
-      // updateUser({ ...user, ...profileData });
-      
+         
       setEditing(false);
       // Show success message (you might want to add a snackbar/toast component)
       alert('Profile updated successfully!');
