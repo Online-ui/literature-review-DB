@@ -73,10 +73,10 @@ const FilterForm: React.FC<{
   isMobile,
   isTablet
 }) => {
-  const [expandedSections, setExpandedSections] = useState({
-    advanced: !isMobile // Auto-expand on desktop
-  });
-
+  const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({
+  advanced: !isMobile
+});
+  
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({
       ...prev,
