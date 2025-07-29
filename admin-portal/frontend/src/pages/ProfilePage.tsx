@@ -72,8 +72,9 @@ const ProfilePage: React.FC = () => {
   // Update profile image when user changes
   useEffect(() => {
     if (user?.profile_image) {
-      const imageUrl = user.profile_image.startsWith('http') || user.profile_image.startsWith('/api')
-        ? user.profile_image
+      // Check if it's a filename or already a full path
+      const imageUrl = user.profile_image.includes('/') 
+        ? user.profile_image 
         : `/api/uploads/profile_images/${user.profile_image}`;
       setProfileImage(imageUrl);
     } else {
@@ -82,26 +83,34 @@ const ProfilePage: React.FC = () => {
   }, [user?.profile_image]);
 
   // Update the handleImageUpload function
-    const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
     setUploadingImage(true);
     try {
       const response = await adminApi.uploadProfileImage(file);
-      setProfileImage(response.image_url); 
       
-      // Update the user context with the path
-      updateUser({ profile_image: response.path }); // Store the path in user data
+      // Set the display URL
+      setProfileImage(response.image_url);
+      
+      // Update the user context with just the filename/path
+      updateUser({ profile_image: response.path });
+      
+      // Also update the profile data if in edit mode
+      if (editing) {
+        setProfileData(prev => ({ ...prev }));
+      }
     } catch (error) {
       console.error('Failed to upload image:', error);
+      alert('Failed to upload image. Please try again.');
     } finally {
       setUploadingImage(false);
     }
   };
 
   // Add image delete handler
-    const handleImageDelete = async () => {
+  const handleImageDelete = async () => {
     try {
       await adminApi.deleteProfileImage();
       setProfileImage(null);
@@ -131,7 +140,7 @@ const ProfilePage: React.FC = () => {
   const handleSave = async () => {
     try {
       // Update the profile via API
-      await adminApi.updateProfile({
+      const updatedUser = await adminApi.updateProfile({
         full_name: profileData.full_name,
         email: profileData.email,
         institution: profileData.institution,
@@ -141,11 +150,22 @@ const ProfilePage: React.FC = () => {
         disciplines: profileData.disciplines
       });
       
-      // Update the user context
-      updateUser(profileData);
+      // Update the user context with the returned user data
+      updateUser(updatedUser);
+      
+      // Update local state to reflect saved changes
+      setProfileData({
+        full_name: updatedUser.full_name || '',
+        email: updatedUser.email || '',
+        institution: updatedUser.institution || '',
+        department: updatedUser.department || '',
+        phone: updatedUser.phone || '',
+        about: updatedUser.about || '',
+        disciplines: updatedUser.disciplines || ''
+      });
          
       setEditing(false);
-      // Show success message (you might want to add a snackbar/toast component)
+      // Show success message
       alert('Profile updated successfully!');
     } catch (error) {
       console.error('Failed to update profile:', error);
