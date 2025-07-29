@@ -89,23 +89,21 @@ async def update_profile(
         db.commit()
         db.refresh(current_user)
         
+        # Return the user object directly (not nested) - this is the key fix
         return {
-            "message": "Profile updated successfully",
-            "user": {
-                "id": current_user.id,
-                "username": current_user.username,
-                "email": current_user.email,
-                "full_name": current_user.full_name,
-                "institution": current_user.institution,
-                "department": current_user.department,
-                "phone": current_user.phone,
-                "about": current_user.about,
-                "disciplines": current_user.disciplines,
-                "profile_image": current_user.profile_image,
-                "role": current_user.role,
-                "is_active": current_user.is_active,
-                "created_at": current_user.created_at.isoformat() if current_user.created_at else None
-            }
+            "id": current_user.id,
+            "username": current_user.username,
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "institution": current_user.institution,
+            "department": current_user.department,
+            "phone": current_user.phone,
+            "about": current_user.about,
+            "disciplines": current_user.disciplines,
+            "profile_image": current_user.profile_image,
+            "role": current_user.role,
+            "is_active": current_user.is_active,
+            "created_at": current_user.created_at.isoformat() if current_user.created_at else None
         }
     except Exception as e:
         db.rollback()
