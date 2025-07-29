@@ -60,7 +60,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://literature-rev-admin-portal.onrender.com"],
+    allow_origins=[
+        "https://literature-rev-admin-portal.onrender.com",
+        "http://localhost:3000",  # Add for local development
+        "http://localhost:3001"   # Add for local development
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,7 +78,7 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"]
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
 app.include_router(utils.router, prefix="/api/utils", tags=["utils"])
 
-# Mount static files - use the absolute path
+# Mount static files for uploads - IMPORTANT: This must be before catch-all routes
 app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 # Serve static files manually as backup
