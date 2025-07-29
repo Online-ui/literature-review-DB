@@ -6,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
-  updateUser: (userData: Partial<User>) => void;  // Added
+  updateUser: (userData: Partial<User>) => void;
   loading: boolean;
   isAuthenticated: boolean;
 }
@@ -39,8 +39,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (token) {
         const userData = await adminApi.getCurrentUser();
         setUser(userData);
+        // Update localStorage with fresh user data
+        localStorage.setItem('admin_user', JSON.stringify(userData));
       }
     } catch (error) {
+      console.error('Auth check failed:', error);
       localStorage.removeItem('admin_token');
       localStorage.removeItem('admin_user');
     } finally {
@@ -63,7 +66,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
-    adminApi.logout();
+    adminApi.logout().catch(console.error); // Don't wait for logout API call
     setUser(null);
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
@@ -72,8 +75,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const updateUser = (userData: Partial<User>) => {
     setUser(prevUser => {
       if (!prevUser) return null;
+      
+      // Merge the new data with existing user data
       const updatedUser = { ...prevUser, ...userData };
+      
+      // Update localStorage with the new user data
       localStorage.setItem('admin_user', JSON.stringify(updatedUser));
+      
+      // Return the updated user
       return updatedUser;
     });
   };
@@ -82,7 +91,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     login,
     logout,
-    updateUser,  // Added
+    updateUser,
     loading,
     isAuthenticated: !!user,
   };
