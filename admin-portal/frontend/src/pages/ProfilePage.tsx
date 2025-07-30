@@ -56,27 +56,28 @@ const ProfilePage: React.FC = () => {
     disciplines: user?.disciplines || ''
   });
 
-  // Initialize profile image with proper URL
+  // Update the profile image initialization
   const [profileImage, setProfileImage] = useState<string | null>(() => {
     if (user?.profile_image) {
-      // If it's already a full URL, use it; otherwise, construct it
-      return user.profile_image.startsWith('http') || user.profile_image.startsWith('/api') 
-        ? user.profile_image 
-        : `/api/uploads/profile_images/${user.profile_image}`;
+      // Always construct the full URL
+      return `/api/uploads/profile_images/${user.profile_image}`;
     }
     return null;
   });
   
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Update profile image when user changes
+  // Update the useEffect
   useEffect(() => {
     if (user?.profile_image) {
-      // Check if it's a filename or already a full path
-      const imageUrl = user.profile_image.includes('/') 
-        ? user.profile_image 
-        : `/api/uploads/profile_images/${user.profile_image}`;
+      const imageUrl = `/api/uploads/profile_images/${user.profile_image}`;
       setProfileImage(imageUrl);
+      
+      // Debug: Check if image loads
+      const img = new Image();
+      img.onload = () => console.log('Profile image loaded successfully');
+      img.onerror = () => console.error('Failed to load profile image:', imageUrl);
+      img.src = imageUrl;
     } else {
       setProfileImage(null);
     }
@@ -84,27 +85,27 @@ const ProfilePage: React.FC = () => {
 
   // Update the handleImageUpload function
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  
-  console.log('Uploading image:', file.name);
-  setUploadingImage(true);
-  
-  try {
-    const response = await adminApi.uploadProfileImage(file);
-    console.log('Image upload response:', response);
+    const file = event.target.files?.[0];
+    if (!file) return;
     
-    setProfileImage(response.image_url);
-    updateUser({ profile_image: response.path });
+    console.log('Uploading image:', file.name);
+    setUploadingImage(true);
     
-    console.log('User after image update:', user);
-  } catch (error) {
-    console.error('Failed to upload image:', error);
-    alert('Failed to upload image. Please try again.');
-  } finally {
-    setUploadingImage(false);
-  }
-};
+    try {
+      const response = await adminApi.uploadProfileImage(file);
+      console.log('Image upload response:', response);
+      
+      setProfileImage(response.image_url);
+      updateUser({ profile_image: response.path });
+      
+      console.log('User after image update:', user);
+    } catch (error) {
+      console.error('Failed to upload image:', error);
+      alert('Failed to upload image. Please try again.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
   
   // Add image delete handler
   const handleImageDelete = async () => {
@@ -135,46 +136,46 @@ const ProfilePage: React.FC = () => {
   };
 
   const handleSave = async () => {
-  try {
-    console.log('Saving profile with data:', profileData);
-    
-    // Update the profile via API
-    const response = await adminApi.updateProfile({
-      full_name: profileData.full_name,
-      email: profileData.email,
-      institution: profileData.institution,
-      department: profileData.department,
-      phone: profileData.phone,
-      about: profileData.about,
-      disciplines: profileData.disciplines
-    });
-    
-    console.log('API Response:', response);
-    
-    // Update the user context with the returned user data
-    updateUser(response);
-    
-    // Check if update worked
-    console.log('User after update:', user);
-    
-    // Update local state to reflect saved changes
-    setProfileData({
-      full_name: response.full_name || '',
-      email: response.email || '',
-      institution: response.institution || '',
-      department: response.department || '',
-      phone: response.phone || '',
-      about: response.about || '',
-      disciplines: response.disciplines || ''
-    });
-       
-    setEditing(false);
-    alert('Profile updated successfully!');
-  } catch (error) {
-    console.error('Failed to update profile:', error);
-    alert('Failed to update profile. Please try again.');
-  }
-};
+    try {
+      console.log('Saving profile with data:', profileData);
+      
+      // Update the profile via API
+      const response = await adminApi.updateProfile({
+        full_name: profileData.full_name,
+        email: profileData.email,
+        institution: profileData.institution,
+        department: profileData.department,
+        phone: profileData.phone,
+        about: profileData.about,
+        disciplines: profileData.disciplines
+      });
+      
+      console.log('API Response:', response);
+      
+      // Update the user context with the returned user data
+      updateUser(response);
+      
+      // Check if update worked
+      console.log('User after update:', user);
+      
+      // Update local state to reflect saved changes
+      setProfileData({
+        full_name: response.full_name || '',
+        email: response.email || '',
+        institution: response.institution || '',
+        department: response.department || '',
+        phone: response.phone || '',
+        about: response.about || '',
+        disciplines: response.disciplines || ''
+      });
+         
+      setEditing(false);
+      alert('Profile updated successfully!');
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      alert('Failed to update profile. Please try again.');
+    }
+  };
   
   const handleInputChange = (field: string) => (
     event: React.ChangeEvent<HTMLInputElement>
@@ -875,7 +876,7 @@ const ProfilePage: React.FC = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
                         <CalendarIcon sx={{ color: '#0a4f3c', fontSize: 20 }} />
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#0a4f3c' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#0a4f3c' }}>
                           Member Since
                         </Typography>
                       </Box>
@@ -1041,4 +1042,4 @@ const ProfilePage: React.FC = () => {
   );
 };
 
-export default ProfilePage;
+export default ProfilePage;                    
