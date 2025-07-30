@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
-  Paper,
   Grid,
   TextField,
   Button,
@@ -10,14 +9,9 @@ import {
   Avatar,
   Card,
   CardContent,
-  Divider,
   Chip,
   alpha,
-  useTheme,
-  IconButton,
-  Tooltip,
-  LinearProgress,
-  CircularProgress
+  LinearProgress
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -30,11 +24,7 @@ import {
   Badge as BadgeIcon,
   CalendarToday as CalendarIcon,
   Security as SecurityIcon,
-  Verified as VerifiedIcon,
-  Settings as SettingsIcon,
-  PhotoCamera as PhotoCameraIcon,
-  CloudUpload as UploadIcon,
-  Delete as DeleteIcon
+  Verified as VerifiedIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
@@ -42,10 +32,8 @@ import { adminApi } from '../services/adminApi';
 
 const ProfilePage: React.FC = () => {
   const { user, updateUser } = useAuth();
-  const theme = useTheme();
   const [editing, setEditing] = useState(false);
   
-  // Initialize profile data with all fields
   const [profileData, setProfileData] = useState({
     full_name: user?.full_name || '',
     email: user?.email || '',
@@ -55,68 +43,6 @@ const ProfilePage: React.FC = () => {
     about: user?.about || '',
     disciplines: user?.disciplines || ''
   });
-
-  // Update the profile image initialization
-  const [profileImage, setProfileImage] = useState<string | null>(() => {
-    if (user?.profile_image) {
-      // Always construct the full URL
-      return `/api/uploads/profile_images/${user.profile_image}`;
-    }
-    return null;
-  });
-  
-  const [uploadingImage, setUploadingImage] = useState(false);
-
-  // Update the useEffect
-  useEffect(() => {
-    if (user?.profile_image) {
-      const imageUrl = `/api/uploads/profile_images/${user.profile_image}`;
-      setProfileImage(imageUrl);
-      
-      // Debug: Check if image loads
-      const img = new Image();
-      img.onload = () => console.log('Profile image loaded successfully');
-      img.onerror = () => console.error('Failed to load profile image:', imageUrl);
-      img.src = imageUrl;
-    } else {
-      setProfileImage(null);
-    }
-  }, [user?.profile_image]);
-
-  // Update the handleImageUpload function
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    
-    console.log('Uploading image:', file.name);
-    setUploadingImage(true);
-    
-    try {
-      const response = await adminApi.uploadProfileImage(file);
-      console.log('Image upload response:', response);
-      
-      setProfileImage(response.image_url);
-      updateUser({ profile_image: response.path });
-      
-      console.log('User after image update:', user);
-    } catch (error) {
-      console.error('Failed to upload image:', error);
-      alert('Failed to upload image. Please try again.');
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-  
-  // Add image delete handler
-  const handleImageDelete = async () => {
-    try {
-      await adminApi.deleteProfileImage();
-      setProfileImage(null);
-      updateUser({ profile_image: undefined }); 
-    } catch (error) {
-      console.error('Failed to delete image:', error);
-    }
-  };
 
   const handleEdit = () => {
     setEditing(true);
@@ -137,9 +63,6 @@ const ProfilePage: React.FC = () => {
 
   const handleSave = async () => {
     try {
-      console.log('Saving profile with data:', profileData);
-      
-      // Update the profile via API
       const response = await adminApi.updateProfile({
         full_name: profileData.full_name,
         email: profileData.email,
@@ -150,15 +73,8 @@ const ProfilePage: React.FC = () => {
         disciplines: profileData.disciplines
       });
       
-      console.log('API Response:', response);
-      
-      // Update the user context with the returned user data
       updateUser(response);
       
-      // Check if update worked
-      console.log('User after update:', user);
-      
-      // Update local state to reflect saved changes
       setProfileData({
         full_name: response.full_name || '',
         email: response.email || '',
@@ -219,7 +135,7 @@ const ProfilePage: React.FC = () => {
               fontSize: '1.1rem'
             }}
           >
-            Manage your account information and preferences
+            Manage your account information
           </Typography>
         </Box>
       </motion.div>
@@ -237,81 +153,24 @@ const ProfilePage: React.FC = () => {
               sx={{
                 borderRadius: 4,
                 border: '1px solid rgba(0,0,0,0.08)',
-                overflow: 'hidden',
-                background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)'
+                overflow: 'hidden'
               }}
             >
               <CardContent sx={{ p: 4 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
-                  {/* Profile Avatar with Upload */}
-                  <Box sx={{ position: 'relative' }}>
-                    <Avatar
-                      src={profileImage || undefined}
-                      sx={{
-                        width: 120,
-                        height: 120,
-                        background: !profileImage ? 'linear-gradient(135deg, #0a4f3c 0%, #2a9d7f 100%)' : 'none',
-                        fontSize: '3rem',
-                        fontWeight: 700,
-                        boxShadow: '0 8px 32px rgba(10,79,60,0.3)',
-                        border: '4px solid white'
-                      }}
-                    >
-                      {!profileImage && (user?.full_name?.charAt(0) || 'U')}
-                    </Avatar>
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        bottom: -10,
-                        right: -10,
-                        display: 'flex',
-                        gap: 0.5
-                      }}
-                    >
-                      <IconButton
-                        component="label"
-                        sx={{
-                          bgcolor: 'white',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                          '&:hover': {
-                            bgcolor: '#f5f5f5'
-                          }
-                        }}
-                        size="small"
-                        disabled={uploadingImage}
-                      >
-                        {uploadingImage ? (
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20 }}>
-                            <CircularProgress size={16} sx={{ color: '#0a4f3c' }} />
-                          </Box>
-                        ) : (
-                          <PhotoCameraIcon sx={{ fontSize: 20, color: '#0a4f3c' }} />
-                        )}
-                        <input
-                          type="file"
-                          hidden
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          disabled={uploadingImage}
-                        />
-                      </IconButton>
-                      {profileImage && (
-                        <IconButton
-                          onClick={handleImageDelete}
-                          sx={{
-                            bgcolor: 'white',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                            '&:hover': {
-                              bgcolor: '#ffebee'
-                            }
-                          }}
-                          size="small"
-                        >
-                          <DeleteIcon sx={{ fontSize: 20, color: '#f44336' }} />
-                        </IconButton>
-                      )}
-                    </Box>
-                  </Box>
+                  {/* Profile Avatar */}
+                  <Avatar
+                    sx={{
+                      width: 100,
+                      height: 100,
+                      background: 'linear-gradient(135deg, #0a4f3c 0%, #2a9d7f 100%)',
+                      fontSize: '2.5rem',
+                      fontWeight: 700,
+                      boxShadow: '0 8px 32px rgba(10,79,60,0.3)'
+                    }}
+                  >
+                    {user?.full_name?.charAt(0) || 'U'}
+                  </Avatar>
 
                   {/* Profile Info */}
                   <Box sx={{ flexGrow: 1, minWidth: 0 }}>
@@ -396,7 +255,7 @@ const ProfilePage: React.FC = () => {
                   </Box>
 
                   {/* Action Buttons */}
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box>
                     <AnimatePresence mode="wait">
                       {!editing ? (
                         <motion.div
@@ -528,68 +387,6 @@ const ProfilePage: React.FC = () => {
               </Box>
 
               <CardContent sx={{ p: 4 }}>
-                {/* Profile Picture Section */}
-                <Box sx={{ mb: 4 }}>
-                  <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: '#0a4f3c' }}>
-                    Profile Picture
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <Avatar
-                      src={profileImage || undefined}
-                      sx={{ 
-                        width: 100, 
-                        height: 100,
-                        bgcolor: !profileImage ? '#0a4f3c' : 'transparent',
-                        fontSize: '2.5rem',
-                        fontWeight: 600,
-                        border: '3px solid',
-                        borderColor: alpha('#0a4f3c', 0.1)
-                      }}
-                    >
-                      {!profileImage && user?.full_name?.[0]}
-                    </Avatar>
-                    <Box>
-                      <Button
-                        variant="contained"
-                        component="label"
-                        startIcon={<UploadIcon />}
-                        disabled={uploadingImage}
-                        sx={{
-                          borderRadius: 2,
-                          textTransform: 'none',
-                          bgcolor: '#0a4f3c',
-                          '&:hover': {
-                            bgcolor: '#063d2f'
-                          }
-                        }}
-                      >
-                        {uploadingImage ? 'Uploading...' : 'Upload Photo'}
-                        <input
-                          type="file"
-                          hidden
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          disabled={uploadingImage}
-                        />
-                      </Button>
-                      {profileImage && (
-                        <IconButton
-                          onClick={handleImageDelete}
-                          color="error"
-                          sx={{ ml: 1 }}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      )}
-                      <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
-                        Recommended: Square image, at least 400x400px
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Box>
-
-                <Divider sx={{ mb: 4 }} />
-
                 <Grid container spacing={3}>
                   <Grid item xs={12} md={6}>
                     <TextField
@@ -636,7 +433,7 @@ const ProfilePage: React.FC = () => {
                             borderColor: '#0a4f3c',
                           },
                         },
-                        '& .MuiInputLabel-root.Mui-focused': {
+                         '& .MuiInputLabel-root.Mui-focused': {
                           color: '#0a4f3c',
                         },
                       }}
@@ -823,152 +620,115 @@ const ProfilePage: React.FC = () => {
           </motion.div>
         </Grid>
 
-        {/* Account Statistics & Settings */}
+        {/* Account Statistics */}
         <Grid item xs={12} lg={4}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/* Account Statistics */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+          >
+            <Card
+              elevation={0}
+              sx={{
+                borderRadius: 4,
+                border: '1px solid rgba(0,0,0,0.08)',
+                overflow: 'hidden'
+              }}
             >
-              <Card
-                elevation={0}
+              <Box
                 sx={{
-                  borderRadius: 4,
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  overflow: 'hidden'
+                  p: 3,
+                  background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+                  borderBottom: '1px solid rgba(0,0,0,0.08)'
                 }}
               >
-                <Box
-                  sx={{
-                    p: 3,
-                    background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
-                    borderBottom: '1px solid rgba(0,0,0,0.08)'
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar
-                      sx={{
-                        bgcolor: '#2a9d7f',
-                        width: 40,
-                        height: 40
-                      }}
-                    >
-                      <SettingsIcon />
-                    </Avatar>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c' }}>
+                  Account Information
+                </Typography>
+              </Box>
+              
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <Box
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 3,
+                      bgcolor: alpha('#0a4f3c', 0.05),
+                      border: '1px solid',
+                      borderColor: alpha('#0a4f3c', 0.1)
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                      <CalendarIcon sx={{ color: '#0a4f3c', fontSize: 20 }} />
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#0a4f3c' }}>
+                        Member Since
+                      </Typography>
+                    </Box>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c' }}>
-                      Account Statistics
+                      {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      }) : 'N/A'}
+                    </Typography>
+                  </Box>
+                  
+                  <Box
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 3,
+                      bgcolor: alpha('#1a7a5e', 0.05),
+                      border: '1px solid',
+                      borderColor: alpha('#1a7a5e', 0.1)
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                      <BadgeIcon sx={{ color: '#1a7a5e', fontSize: 20 }} />
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#1a7a5e' }}>
+                        Account Role
+                      </Typography>
+                    </Box>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#1a7a5e' }}>
+                      {user?.role === 'main_coordinator' ? 'Main Coordinator' : 'Faculty Member'}
+                    </Typography>
+                  </Box>
+                  
+                  <Box
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 3,
+                      bgcolor: user?.is_active ? alpha('#4caf50', 0.05) : alpha('#f44336', 0.05),
+                      border: '1px solid',
+                      borderColor: user?.is_active ? alpha('#4caf50', 0.1) : alpha('#f44336', 0.1)
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                      <SecurityIcon sx={{ 
+                        color: user?.is_active ? '#4caf50' : '#f44336', 
+                        fontSize: 20 
+                      }} />
+                      <Typography variant="body2" sx={{ 
+                        fontWeight: 600, 
+                        color: user?.is_active ? '#4caf50' : '#f44336'
+                      }}>
+                        Account Status
+                      </Typography>
+                    </Box>
+                    <Typography variant="h6" sx={{ 
+                      fontWeight: 700, 
+                      color: user?.is_active ? '#4caf50' : '#f44336'
+                    }}>
+                      {user?.is_active ? 'Active & Verified' : 'Inactive'}
                     </Typography>
                   </Box>
                 </Box>
-                
-                <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <Box
-                      sx={{
-                        p: 2.5,
-                        borderRadius: 3,
-                        bgcolor: alpha('#0a4f3c', 0.05),
-                        border: '1px solid',
-                        borderColor: alpha('#0a4f3c', 0.1)
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                        <CalendarIcon sx={{ color: '#0a4f3c', fontSize: 20 }} />
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#0a4f3c' }}>
-                          Member Since
-                        </Typography>
-                      </Box>
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c' }}>
-                        {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        }) : 'N/A'}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        p: 2.5,
-                        borderRadius: 3,
-                        bgcolor: alpha('#1a7a5e', 0.05),
-                        border: '1px solid',
-                        borderColor: alpha('#1a7a5e', 0.1)
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                        <BadgeIcon sx={{ color: '#1a7a5e', fontSize: 20 }} />
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#1a7a5e' }}>
-                          Account Role
-                        </Typography>
-                      </Box>
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#1a7a5e' }}>
-                        {user?.role === 'main_coordinator' ? 'Main Coordinator' : 'Faculty Member'}
-                      </Typography>
-                    </Box>
-                    
-                    <Box
-                      sx={{
-                        p: 2.5,
-                        borderRadius: 3,
-                        bgcolor: user?.is_active ? alpha('#4caf50', 0.05) : alpha('#f44336', 0.05),
-                        border: '1px solid',
-                        borderColor: user?.is_active ? alpha('#4caf50', 0.1) : alpha('#f44336', 0.1)
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                        <SecurityIcon sx={{ 
-                          color: user?.is_active ? '#4caf50' : '#f44336', 
-                          fontSize: 20 
-                        }} />
-                        <Typography variant="body2" sx={{ 
-                          fontWeight: 600, 
-                          color: user?.is_active ? '#4caf50' : '#f44336'
-                        }}>
-                          Account Status
-                        </Typography>
-                      </Box>
-                      <Typography variant="h6" sx={{ 
-                        fontWeight: 700, 
-                        color: user?.is_active ? '#4caf50' : '#f44336'
-                      }}>
-                        {user?.is_active ? 'Active & Verified' : 'Inactive'}
-                      </Typography>
-                    </Box>
-                    
-                    <Box
-                      sx={{
-                        p: 2.5,
-                        borderRadius: 3,
-                        bgcolor: alpha('#2a9d7f', 0.05),
-                        border: '1px solid',
-                        borderColor: alpha('#2a9d7f', 0.1)
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                        <PersonIcon sx={{ color: '#2a9d7f', fontSize: 20 }} />
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#2a9d7f' }}>
-                          Projects Created
-                        </Typography>
-                      </Box>
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#2a9d7f' }}>
-                        Coming Soon
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Project statistics will be available soon
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-          </Box>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
       </Grid>
     </Box>
   );
 };
 
-export default ProfilePage;                    
+export default ProfilePage;
