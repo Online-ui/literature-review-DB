@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  updateUser: (userData: Partial<User>) => void;
   loading: boolean;
   isAuthenticated: boolean;
 }
@@ -38,8 +39,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (token) {
         const userData = await adminApi.getCurrentUser();
         setUser(userData);
+        // Update localStorage with fresh user data
+        localStorage.setItem('admin_user', JSON.stringify(userData));
       }
     } catch (error) {
+      console.error('Auth check failed:', error);
       localStorage.removeItem('admin_token');
       localStorage.removeItem('admin_user');
     } finally {
@@ -52,7 +56,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await adminApi.login({ username, password });
       localStorage.setItem('admin_token', response.access_token);
       
-      const userData = await adminApi.getCurrentUser();
+      // The login response now includes complete user data
+      const userData = response.user as User;
       setUser(userData);
       localStorage.setItem('admin_user', JSON.stringify(userData));
     } catch (error) {
@@ -61,16 +66,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
-    adminApi.logout();
+    adminApi.logout().catch(console.error); // Don't wait for logout API call
     setUser(null);
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
+  };
+
+  const updateUser = (userData: Partial<User>) => {
+    setUser(prevUser => {
+      if (!prevUser) return null;
+      
+      // Merge the new data with existing user data
+      const updatedUser = { ...prevUser, ...userData };
+      
+      // Update localStorage with the new user data
+      localStorage.setItem('admin_user', JSON.stringify(updatedUser));
+      
+      // Return the updated user
+      return updatedUser;
+    });
   };
 
   const value = {
     user,
     login,
     logout,
+    updateUser,
     loading,
     isAuthenticated: !!user,
   };

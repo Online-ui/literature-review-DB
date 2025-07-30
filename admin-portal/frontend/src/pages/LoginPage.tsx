@@ -40,21 +40,24 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+  // In your LoginPage component
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError('');
+  setLoading(true);
 
-    try {
-      await login(username, password);
-      navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  try {
+    await login(username, password);
+    // Navigate to dashboard on success
+    navigate('/dashboard');
+  } catch (err: any) {
+    // Stay on the same page and show error
+    setError(err.response?.data?.detail || 'Login failed. Please try again.');
+    setLoading(false);
+    // No navigation on error - stay on login page
+  }
+};
+  
   const handleTogglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };

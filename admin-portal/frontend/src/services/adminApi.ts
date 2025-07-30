@@ -14,61 +14,86 @@ interface TokenVerificationResponse {
   username: string;
 }
 
+// Profile Update Interface
+interface ProfileUpdateData {
+  full_name: string;
+  email: string;
+  institution: string;
+  department: string;
+  phone: string;
+  about: string;
+  disciplines: string;
+}
+
 class AdminApiService {
   private api = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 10000,
+    timeout: 120000, // Default timeout for most requests
+  });
+
+  // Create a separate axios instance for long-running operations
+  private apiLongRunning = axios.create({
+    baseURL: API_BASE_URL,
+    timeout: 120000, // 120 seconds for file uploads and processing
   });
 
   constructor() {
-    // Add auth token to requests
-    this.api.interceptors.request.use((config) => {
-      const token = localStorage.getItem('admin_token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      
-      // Don't override Content-Type if it's already set (like for multipart/form-data)
-      if (config.method === 'post' && !config.headers['Content-Type'] && !(config.data instanceof FormData)) {
-        config.headers['Content-Type'] = 'application/json';
-      }
-      
-      return config;
-    });
+    // Configure both axios instances
+    [this.api, this.apiLongRunning].forEach(instance => {
+      // Add auth token to requests
+      instance.interceptors.request.use((config) => {
+        const token = localStorage.getItem('admin_token');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+        
+        // Don't override Content-Type if it's already set (like for multipart/form-data)
+        if (config.method === 'post' && !config.headers['Content-Type'] && !(config.data instanceof FormData)) {
+          config.headers['Content-Type'] = 'application/json';
+        }
+        
+        return config;
+      });
 
-    // Handle auth errors and format error messages
-    this.api.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          localStorage.removeItem('admin_token');
-          localStorage.removeItem('admin_user');
-          window.location.href = '/login';
-        }
-        
-        // Format error message for better display
-        if (error.response?.data) {
-          const errorData = error.response.data;
-          
-          // Handle FastAPI validation errors
-          if (Array.isArray(errorData.detail)) {
-            const messages = errorData.detail.map((err: any) => {
-              if (typeof err === 'object' && err.msg) {
-                return `${err.loc?.join(' → ') || 'Field'}: ${err.msg}`;
-              }
-              return err.toString();
-            });
-            error.message = messages.join(', ');
-          } else if (typeof errorData.detail === 'string') {
-            error.message = errorData.detail;
-          } else if (errorData.message) {
-            error.message = errorData.message;
+      // Handle auth errors and format error messages
+      instance.interceptors.response.use(
+        (response) => response,
+        (error) => {
+          if (error.response?.status === 401) {
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_user');
+            window.location.href = '/login';
           }
+          
+          // Format error message for better display
+          if (error.response?.data) {
+            const errorData = error.response.data;
+            
+            // Handle FastAPI validation errors
+            if (Array.isArray(errorData.detail)) {
+              const messages = errorData.detail.map((err: any) => {
+                if (typeof err === 'object' && err.msg) {
+                  return `${err.loc?.join(' → ') || 'Field'}: ${err.msg}`;
+                }
+                return err.toString();
+              });
+              error.message = messages.join(', ');
+            } else if (typeof errorData.detail === 'string') {
+              error.message = errorData.detail;
+            } else if (errorData.message) {
+              error.message = errorData.message;
+            }
+          }
+          
+          // Handle timeout errors specifically
+          if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
+            error.message = 'Request timed out. The operation may still be processing in the background.';
+          }
+          
+          return Promise.reject(error);
         }
-        
-        return Promise.reject(error);
-      }
-    );
+      );
+    });
   }
 
   // Authentication
@@ -142,7 +167,8 @@ class AdminApiService {
 
   async verifyResetToken(token: string): Promise<TokenVerificationResponse> {
     const response = await this.api.get('/auth/verify-reset-token', {
-      params: { token }
+      params: { token },
+      timeout: 1200000 // 30 second timeout for this specific request
     });
     return response.data;
   }
@@ -199,22 +225,59 @@ class AdminApiService {
     return response.data;
   }
 
-  async createProject(projectData: FormData): Promise<Project> {
-    const response = await this.api.post('/projects/', projectData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+  async getProject(projectId: number): Promise<Project> {
+    const response = await this.api.get(`/projects/${projectId}`);
     return response.data;
   }
 
+  async createProject(projectData: FormData): Promise<Project> {
+    try {
+      // Use long-running API instance for project creation with file upload
+      const response = await this.apiLongRunning.post('/projects/', projectData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        // Optional: Add progress tracking
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            console.log(`Upload progress: ${percentCompleted}%`);
+          }
+        },
+      });
+      return response.data;
+    } catch (error: any) {
+      // If it's a timeout error, provide a more helpful message
+      if (error.code === 'ECONNABORTED') {
+        error.message = 'The project creation is taking longer than expected. It may still be processing. Please check the projects list in a moment.';
+      }
+      throw error;
+    }
+  }
+
   async updateProject(projectId: number, projectData: FormData): Promise<Project> {
-    const response = await this.api.put(`/projects/${projectId}`, projectData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
+    try {
+      // Use long-running API instance for project updates with file upload
+      const response = await this.apiLongRunning.put(`/projects/${projectId}`, projectData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        // Optional: Add progress tracking
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            console.log(`Update progress: ${percentCompleted}%`);
+          }
+        },
+      });
+      return response.data;
+    } catch (error: any) {
+      // If it's a timeout error, provide a more helpful message
+      if (error.code === 'ECONNABORTED') {
+        error.message = 'The project update is taking longer than expected. It may still be processing. Please check the projects list in a moment.';
+      }
+      throw error;
+    }
   }
 
   async deleteProject(projectId: number): Promise<void> {
@@ -237,6 +300,75 @@ class AdminApiService {
 
   async deleteProjectFile(projectId: number): Promise<void> {
     await this.api.delete(`/projects/${projectId}/file`);
+  }
+
+  // Project Image Methods (Updated for database storage)
+  async uploadProjectImages(projectId: number, files: File[]): Promise<any> {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    
+    const response = await this.apiLongRunning.post(`/projects/${projectId}/images`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
+    return response.data;
+  }
+
+  async deleteProjectImage(projectId: number, imageId: number): Promise<any> {
+    const response = await this.api.delete(`/projects/${projectId}/images/${imageId}`);
+    return response.data;
+  }
+
+  async setFeaturedImage(projectId: number, imageId: number): Promise<any> {
+    const response = await this.api.put(`/projects/${projectId}/featured-image`, { 
+      image_id: imageId 
+    });
+    return response.data;
+  }
+
+  async reorderProjectImages(projectId: number, imageIds: number[]): Promise<any> {
+    const response = await this.api.put(`/projects/${projectId}/images/reorder`, { 
+      image_ids: imageIds 
+    });
+    return response.data;
+  }
+
+  // Updated extractProjectImages method with table extraction parameter
+  async extractProjectImages(projectId: number, extractTables: boolean = true): Promise<any> {
+    const response = await this.apiLongRunning.post(
+      `/projects/${projectId}/extract-images`,
+      null,
+      {
+        params: { extract_tables: extractTables }
+      }
+    );
+    return response.data;
+  }
+
+  // Profile Methods
+  async uploadProfileImage(file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await this.api.post('/profile/image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
+    return response.data;
+  }
+
+  async deleteProfileImage(): Promise<any> {
+    const response = await this.api.delete('/profile/image');
+    return response.data;
+  }
+
+  async updateProfile(data: ProfileUpdateData): Promise<User> {
+    const response = await this.api.put('/profile', data);
+    return response.data;
   }
 
   // Utilities
@@ -274,6 +406,64 @@ class AdminApiService {
   // Health check method
   async healthCheck(): Promise<{ status: string; version: string }> {
     const response = await this.api.get('/health');
+    return response.data
+  }
+
+  // Project statistics
+  async getProjectStats(projectId: number): Promise<any> {
+    const response = await this.api.get(`/projects/${projectId}/stats`);
+    return response.data;
+  }
+
+  async getProjectsSummary(): Promise<any> {
+    const response = await this.api.get('/projects/stats/summary');
+    return response.data;
+  }
+
+  // Batch operations
+  async batchPublishProjects(projectIds: number[]): Promise<any> {
+    const response = await this.api.post('/projects/batch/publish', projectIds);
+    return response.data;
+  }
+
+  async batchUnpublishProjects(projectIds: number[]): Promise<any> {
+    const response = await this.api.post('/projects/batch/unpublish', projectIds);
+    return response.data;
+  }
+
+  async batchDeleteProjects(projectIds: number[]): Promise<any> {
+    const response = await this.api.post('/projects/batch/delete', projectIds);
+    return response.data;
+  }
+
+  // Export
+  async exportProjectsCSV(): Promise<Blob> {
+    const response = await this.api.get('/projects/export/csv', {
+      responseType: 'blob'
+    });
+    return response.data;
+  }
+
+  // Advanced search
+  async advancedSearchProjects(params: {
+    title?: string;
+    author?: string;
+    supervisor?: string;
+    institution?: string;
+    department?: string;
+    research_area?: string;
+    degree_type?: string;
+    academic_year?: string;
+    keywords?: string;
+    has_document?: boolean;
+    has_images?: boolean;
+    is_published?: boolean;
+    created_after?: string;
+    created_before?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<{ total: number; projects: Project[] }> {
+    const response = await this.api.get('/projects/search/advanced', { params });
     return response.data;
   }
 }
@@ -281,4 +471,4 @@ class AdminApiService {
 export const adminApi = new AdminApiService();
 
 // Export types for use in components
-export type { PasswordResetResponse, TokenVerificationResponse };
+export type { PasswordResetResponse, TokenVerificationResponse, ProfileUpdateData };

@@ -15,7 +15,15 @@ import {
   CardContent,
   Avatar,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  ImageList,
+  ImageListItem,
+  Modal,
+  Backdrop,
+  Fade,
+  IconButton,
+  Dialog,
+  DialogContent
 } from '@mui/material';
 import {
   Download as DownloadIcon,
@@ -27,31 +35,276 @@ import {
   Category as CategoryIcon,
   LocalHospital as HealthIcon,
   Science as ResearchIcon,
-  Public as PublicIcon
+  Public as PublicIcon,
+  Close as CloseIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  Image as ImageIcon
 } from '@mui/icons-material';
-import { apiService, Project } from '../services/api';
+import { apiService } from '../services/api';
 import DocumentViewer from '../components/DocumentViewer';
 import SEOHead from '../components/SEOHead';
 import StructuredData from '../components/StructuredData';
 
+// Update the Project interface
+interface ProjectImage {
+  id: number;
+  filename: string;
+  content_type: string;
+  image_size?: number;
+  order_index: number;
+  is_featured: boolean;
+}
+
+interface Project {
+  id: number;
+  title: string;
+  slug: string;
+  author_name: string;
+  institution?: string;
+  department?: string;
+  supervisor?: string;
+  abstract?: string;
+  keywords?: string;
+  research_area?: string;
+  degree_type?: string;
+  academic_year?: string;
+  publication_date: string;
+  document_filename?: string;
+  document_size?: number;
+  view_count: number;
+  download_count: number;
+  created_at?: string;
+  updated_at?: string;
+  featured_image_index?: number;
+  image_records?: ProjectImage[];
+}
+
+// Add helper function for image URLs
+const getImageUrl = (projectId: number, imageId: number): string => {
+  return `${process.env.REACT_APP_API_URL}/projects/${projectId}/images/${imageId}`;
+};
+
+// Updated Image Gallery Component
+const ImageGallery: React.FC<{ 
+  imageRecords: ProjectImage[];
+  projectId: number;
+  projectTitle: string;
+}> = ({ imageRecords, projectId, projectTitle }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [selectedImage, setSelectedImage] = useState<ProjectImage | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [imageErrors, setImageErrors] = useState<{ [key: number]: boolean }>({});
+
+  // Sort images by order_index
+  const sortedImages = [...imageRecords].sort((a, b) => a.order_index - b.order_index);
+
+  const handleImageClick = (image: ProjectImage, index: number) => {
+    setSelectedImage(image);
+    setSelectedImageIndex(index);
+  };
+
+  const handleCloseImageDialog = () => {
+    setSelectedImage(null);
+    setSelectedImageIndex(null);
+  };
+
+  const handleImageError = (imageId: number) => {
+    console.error(`Failed to load image with id: ${imageId}`);
+    setImageErrors(prev => ({ ...prev, [imageId]: true }));
+  };
+
+  const handlePrevious = () => {
+    if (selectedImageIndex !== null && selectedImageIndex > 0) {
+      const newIndex = selectedImageIndex - 1;
+      setSelectedImageIndex(newIndex);
+      setSelectedImage(sortedImages[newIndex]);
+    }
+  };
+
+  const handleNext = () => {
+    if (selectedImageIndex !== null && selectedImageIndex < sortedImages.length - 1) {
+      const newIndex = selectedImageIndex + 1;
+      setSelectedImageIndex(newIndex);
+      setSelectedImage(sortedImages[newIndex]);
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'ArrowLeft') {
+      handlePrevious();
+    } else if (event.key === 'ArrowRight') {
+      handleNext();
+    } else if (event.key === 'Escape') {
+      handleCloseImageDialog();
+    }
+  };
+
+  return (
+    <>
+      <Paper elevation={0} sx={{ p: 4, mb: 3, borderRadius: 2 }}>
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+          Figures & Images
+        </Typography>
+        <ImageList sx={{ width: '100%', height: 450 }} cols={3} rowHeight={164}>
+          {sortedImages.map((image, index) => (
+            <ImageListItem 
+              key={image.id}
+              sx={{ cursor: 'pointer' }}
+              onClick={() => handleImageClick(image, index)}
+            >
+              {imageErrors[image.id] ? (
+                <Box
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: '#f5f5f5',
+                    color: '#666'
+                  }}
+                >
+                  <Typography variant="caption">Image unavailable</Typography>
+                </Box>
+              ) : (
+                <img
+                  src={getImageUrl(projectId, image.id)}
+                  alt={image.filename}
+                  loading="lazy"
+                  style={{ 
+                    height: '100%', 
+                    objectFit: 'cover',
+                    border: image.is_featured ? '3px solid #1976d2' : 'none'
+                  }}
+                  onError={() => handleImageError(image.id)}
+                />
+              )}
+            </ImageListItem>
+          ))}
+        </ImageList>
+      </Paper>
+
+      {/* Image Dialog */}
+      <Dialog
+        open={selectedImage !== null}
+        onClose={handleCloseImageDialog}
+        maxWidth="lg"
+        fullWidth
+        onKeyDown={handleKeyDown}
+      >
+        <DialogContent sx={{ position: 'relative', p: 0 }}>
+          <IconButton
+            onClick={handleCloseImageDialog}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+              bgcolor: 'background.paper',
+              zIndex: 1,
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+          
+          {/* Navigation buttons */}
+          {selectedImageIndex !== null && selectedImageIndex > 0 && (
+            <IconButton
+              onClick={handlePrevious}
+              sx={{
+                position: 'absolute',
+                left: 8,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                bgcolor: 'rgba(0, 0, 0, 0.5)',
+                color: 'white',
+                '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.7)'
+                }
+              }}
+            >
+              <ChevronLeftIcon />
+            </IconButton>
+          )}
+
+          {selectedImageIndex !== null && selectedImageIndex < sortedImages.length - 1 && (
+            <IconButton
+              onClick={handleNext}
+              sx={{
+                position: 'absolute',
+                right: 8,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                bgcolor: 'rgba(0, 0, 0, 0.5)',
+                color: 'white',
+                '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.7)'
+                }
+              }}
+            >
+              <ChevronRightIcon />
+            </IconButton>
+          )}
+
+          {selectedImage && (
+            <>
+              {imageErrors[selectedImage.id] ? (
+                <Box
+                  sx={{
+                    width: '100%',
+                    height: 400,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: '#f5f5f5',
+                    color: '#666'
+                  }}
+                >
+                  <Typography variant="h6">Image unavailable</Typography>
+                </Box>
+              ) : (
+                <img
+                  src={getImageUrl(projectId, selectedImage.id)}
+                  alt={selectedImage.filename}
+                  style={{ width: '100%', height: 'auto' }}
+                  onError={() => handleImageError(selectedImage.id)}
+                />
+              )}
+              <Typography
+                variant="body2"
+                sx={{
+                  position: 'absolute',
+                  bottom: 8,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  bgcolor: 'rgba(0, 0, 0, 0.7)',
+                  color: 'white',
+                  px: 2,
+                  py: 1,
+                  borderRadius: 1
+                }}
+              >
+                {selectedImageIndex !== null && `Image ${selectedImageIndex + 1} of ${sortedImages.length}`}
+              </Typography>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+};
+
 const ProjectDetailPage: React.FC = () => {
-  // Add this at the very top
-  console.log('ProjectDetailPage render', new Date().toISOString());
-  
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
-  const [viewerOpen, setViewerOpen] = useState(false);
-
-  // Add this near the top of your component
-  const buttonId = React.useRef(`btn-${Date.now()}-${Math.random()}`);
 
   useEffect(() => {
     if (slug) {
@@ -62,12 +315,15 @@ const ProjectDetailPage: React.FC = () => {
   const loadProject = async (projectSlug: string) => {
     try {
       const data = await apiService.getProjectBySlug(projectSlug);
+      console.log('Loaded project data:', data);
+      console.log('Project image_records:', data?.image_records);
       if (data) {
         setProject(data);
       } else {
         setError('Research project not found');
       }
     } catch (err) {
+      console.error('Error loading project:', err);
       setError('Failed to load research project');
     } finally {
       setLoading(false);
@@ -88,18 +344,16 @@ const ProjectDetailPage: React.FC = () => {
   };
 
   const handleViewDocument = () => {
-  if (!project) return; // Add this null check
-  
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-  const cleanBaseUrl = API_BASE_URL.endsWith('/api') 
-    ? API_BASE_URL.slice(0, -4) 
-    : API_BASE_URL.replace(/\/$/, '');
-  
-  const viewUrl = `${cleanBaseUrl}/api/projects/${project.slug}/view-document`;
-  window.open(viewUrl, '_blank');
-};
-  // Also log when buttons are rendered
-  console.log('Rendering buttons', project?.document_filename);
+    if (!project) return;
+    
+    const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const cleanBaseUrl = API_BASE_URL.endsWith('/api') 
+      ? API_BASE_URL.slice(0, -4) 
+      : API_BASE_URL.replace(/\/$/, '');
+    
+    const viewUrl = `${cleanBaseUrl}/api/projects/${project.slug}/view-document`;
+    window.open(viewUrl, '_blank');
+  };
 
   if (loading) {
     return (
@@ -356,7 +610,6 @@ const ProjectDetailPage: React.FC = () => {
                   variant="contained"
                   startIcon={<ViewIcon />}
                   onClick={handleViewDocument}
-                  data-button-id={`view-${buttonId.current}`}
                   size={isMobile ? "medium" : "large"}
                   fullWidth={isMobile}
                   sx={{
@@ -382,7 +635,6 @@ const ProjectDetailPage: React.FC = () => {
                   variant="outlined"
                   startIcon={<DownloadIcon />}
                   onClick={handleDownload}
-                  data-button-id={`download-${buttonId.current}`}
                   disabled={downloading}
                   size={isMobile ? "medium" : "large"}
                   fullWidth={isMobile}
@@ -404,7 +656,7 @@ const ProjectDetailPage: React.FC = () => {
                       transform: 'translateY(-2px)',
                       boxShadow: '0 8px 24px rgba(46, 125, 50, 0.3)'
                     },
-                                        '&:disabled': {
+                    '&:disabled': {
                       borderColor: '#c8e6c9',
                       color: '#81c784'
                     }
@@ -489,6 +741,15 @@ const ProjectDetailPage: React.FC = () => {
                   {project.abstract}
                 </Typography>
               </Paper>
+            )}
+
+            {/* Image Gallery - Updated to use image_records */}
+            {project.image_records && project.image_records.length > 0 && (
+              <ImageGallery 
+                imageRecords={project.image_records} 
+                projectId={project.id}
+                projectTitle={project.title}
+              />
             )}
 
             {/* Keywords */}
@@ -702,7 +963,7 @@ const ProjectDetailPage: React.FC = () => {
                       <Typography variant={isMobile ? "body2" : "body1"} sx={{ 
                         color: '#2e7d32', 
                         fontWeight: 600, 
-                                                mb: 1,
+                        mb: 1,
                         fontSize: { xs: '0.875rem', sm: '1rem' },
                         wordBreak: 'break-word'
                       }}>
@@ -779,15 +1040,6 @@ const ProjectDetailPage: React.FC = () => {
             </Card>
           </Grid>
         </Grid>
-
-        {/* Temporarily comment this out to test */}
-        {/* {project.document_filename && viewerOpen && (
-          <DocumentViewer
-            projectSlug={project.slug}
-            documentFilename={project.document_filename || 'document.pdf'}
-            hasDocument={true}
-          />
-        )} */}
       </Container>
     </Box>
   );

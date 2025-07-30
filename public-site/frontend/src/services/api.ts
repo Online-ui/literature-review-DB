@@ -1,78 +1,21 @@
 import axios from 'axios';
+// Import ALL types from the central types file
+import { 
+  Project, 
+  ProjectSummary, 
+  SiteStats, 
+  ProjectImage,
+  SearchFilters,
+  SearchResponse,
+  getProjectImageUrl,
+  getFeaturedImageUrl
+} from '../types';
 
 // Remove /api if it's already included in the environment variable
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const cleanBaseUrl = API_BASE_URL.endsWith('/api') 
   ? API_BASE_URL.slice(0, -4) 
   : API_BASE_URL.replace(/\/$/, ''); // Also remove trailing slash
-
-export interface Project {
-  id: number;
-  title: string;
-  slug: string;
-  abstract?: string;
-  keywords?: string;
-  research_area?: string;
-  degree_type?: string;
-  academic_year?: string;
-  institution?: string;
-  department?: string;
-  supervisor?: string;
-  author_name: string;
-  author_email?: string;
-  is_published: boolean;
-  publication_date: string;
-  view_count: number;
-  download_count: number;
-  // Updated for database storage
-  document_filename?: string;
-  document_size?: number;
-  document_content_type?: string;
-  document_storage?: string;
-  created_by_id?: number;
-  created_at: string;
-  updated_at?: string;  
-}
-
-export interface ProjectSummary {
-  id: number;
-  title: string;
-  slug: string;
-  abstract?: string;
-  research_area?: string;
-  degree_type?: string;
-  institution?: string;
-  author_name: string;
-  publication_date: string;
-  view_count?: number;
-  download_count?: number;
-  is_published?: boolean;
-}
-
-export interface SearchFilters {
-  query?: string;
-  research_area?: string;
-  degree_type?: string;
-  institution?: string;
-  academic_year?: string;
-}
-
-export interface SearchResponse {
-  projects: ProjectSummary[];
-  total: number;
-  page: number;
-  per_page: number;
-  total_pages: number;
-  filters: SearchFilters;
-}
-
-export interface SiteStats {
-  total_projects: number;
-  total_institutions: number;
-  total_research_areas: number;
-  total_downloads: number;
-  total_views?: number;
-}
 
 class ApiService {
   private api = axios.create({
@@ -90,13 +33,55 @@ class ApiService {
     }
   }
 
-  async getFeaturedProjects(limit: number = 6): Promise<ProjectSummary[]> {
+  async getProjects(params?: {
+    skip?: number;
+    limit?: number;
+    search?: string;
+    research_area?: string;
+    degree_type?: string;
+  }): Promise<Project[]> {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+      if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+      if (params?.search) queryParams.append('search', params.search);
+      if (params?.research_area) queryParams.append('research_area', params.research_area);
+      if (params?.degree_type) queryParams.append('degree_type', params.degree_type);
+
+      const response = await this.api.get(`/api/projects?${queryParams}`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch projects:', error);
+      throw new Error('Failed to fetch projects');
+    }
+  }
+
+  async getProjectBySlug(slug: string): Promise<Project> {
+    try {
+      const response = await this.api.get(`/api/projects/${slug}`);
+      const project = response.data;
+      
+      // Log the response to debug
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Project API response:', project);
+        console.log('Has image_records:', !!project.image_records);
+        console.log('Image records count:', project.image_records?.length || 0);
+      }
+      
+      return project;
+    } catch (error) {
+      console.error('Failed to fetch project:', error);
+      throw new Error('Failed to fetch project');
+    }
+  }
+
+  async getFeaturedProjects(limit: number = 6): Promise<Project[]> {
     try {
       const response = await this.api.get(`/api/projects/featured?limit=${limit}`);
       return response.data;
     } catch (error) {
       console.error('Failed to fetch featured projects:', error);
-      return [];
+      throw new Error('Failed to fetch featured projects');
     }
   }
 
@@ -106,34 +91,120 @@ class ApiService {
       return response.data;
     } catch (error) {
       console.error('Failed to fetch site stats:', error);
-      return {
-        total_projects: 0,
-        total_institutions: 0,
-        total_research_areas: 0,
-        total_downloads: 0
-      };
+      throw new Error('Failed to fetch site stats');
     }
   }
 
+  async getResearchAreas(): Promise<string[]> {
+    try {
+      const response = await this.api.get('/api/projects/research-areas/list');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch research areas:', error);
+      throw new Error('Failed to fetch research areas');
+    }
+  }
+
+  async getInstitutions(): Promise<string[]> {
+    try {
+      const response = await this.api.get('/api/projects/institutions/list');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch institutions:', error);
+      throw new Error('Failed to fetch institutions');
+    }
+  }
+
+  async downloadProject(slug: string): Promise<void> {
+    try {
+      const response = await this.api.get(`/api/projects/${slug}/download`, {
+        responseType: 'blob'
+      });
+      
+      const blob = response.data;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      // Extract filename from content-disposition header
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'document.pdf';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        if (filenameMatch) {
+          filename = filenameMatch[1].replace(/"/g, '');
+        }
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Failed to download project:', error);
+      throw new Error('Failed to download project');
+    }
+  }
+
+  // Add the downloadProjectById method if needed
+  async downloadProjectById(projectId: number): Promise<void> {
+    try {
+      const response = await this.api.get(`/api/projects/${projectId}/download`, {
+        responseType: 'blob'
+      });
+      
+      const blob = response.data;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      // Extract filename from content-disposition header
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'document.pdf';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        if (filenameMatch) {
+          filename = filenameMatch[1].replace(/"/g, '');
+        }
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Failed to download project:', error);
+      throw new Error('Failed to download project');
+    }
+  }
+
+  async incrementProjectView(slug: string): Promise<void> {
+    try {
+      await this.api.patch(`/api/projects/${slug}/increment-view`);
+    } catch (error) {
+      console.error('Failed to increment view:', error);
+      throw new Error('Failed to increment view');
+    }
+  }
+
+  // Legacy methods for backward compatibility
   async searchProjects(filters: SearchFilters, page: number = 1, perPage: number = 12): Promise<SearchResponse> {
     try {
-      const params = new URLSearchParams();
-      
-      if (filters.query) params.append('search', filters.query);
-      if (filters.research_area) params.append('research_area', filters.research_area);
-      if (filters.degree_type) params.append('degree_type', filters.degree_type);
-      
-      params.append('skip', ((page - 1) * perPage).toString());
-      params.append('limit', perPage.toString());
+      const params = {
+        skip: (page - 1) * perPage,
+        limit: perPage,
+        search: filters.query,
+        research_area: filters.research_area,
+        degree_type: filters.degree_type
+      };
 
-      const response = await this.api.get(`/api/projects/?${params.toString()}`);
-      
-      // Transform response to match expected format
-      const projects = response.data;
+      const projects = await this.getProjects(params);
       const total = projects.length; // You might want to add total count from backend
       
       return {
-        projects,
+        projects: projects as ProjectSummary[],
         total,
         page,
         per_page: perPage,
@@ -153,62 +224,17 @@ class ApiService {
     }
   }
 
-  async getProjectBySlug(slug: string): Promise<Project | null> {
-    try {
-      const response = await this.api.get(`/api/projects/${slug}`);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch project:', error);
-      return null;
-    }
-  }
-
-  async getResearchAreas(): Promise<string[]> {
-    try {
-      const response = await this.api.get('/api/projects/research-areas/list');
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch research areas:', error);
-      return [];
-    }
-  }
-
-  async getInstitutions(): Promise<string[]> {
-    try {
-      const response = await this.api.get('/api/projects/institutions/list');
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch institutions:', error);
-      return [];
-    }
-  }
-
-  // Fixed download method
-  async downloadProject(slug: string): Promise<void> {
-    try {
-      // Use GET method instead of POST for download
-      const downloadUrl = `${cleanBaseUrl}/api/projects/${slug}/download`;
-      
-      // Create a temporary link and click it
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.target = '_blank';
-      link.download = ''; // This will use the filename from Content-Disposition header
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error('Failed to download project:', error);
-      throw error;
-    }
-  }
-
-  // Fixed view method
+  // Document viewing methods
   getDocumentViewUrl(slug: string): string {
     return `${cleanBaseUrl}/api/projects/${slug}/view-document`;
   }
 
-  // New method to check file availability
+  viewDocument(slug: string): void {
+    const viewUrl = this.getDocumentViewUrl(slug);
+    window.open(viewUrl, '_blank');
+  }
+
+  // File info method
   async getFileInfo(slug: string): Promise<any> {
     try {
       const response = await this.api.get(`/api/projects/${slug}/file-info`);
@@ -218,12 +244,13 @@ class ApiService {
       return { available: false };
     }
   }
-
-  // Method to view document
-  viewDocument(slug: string): void {
-    const viewUrl = this.getDocumentViewUrl(slug);
-    window.open(viewUrl, '_blank');
-  }
 }
 
 export const apiService = new ApiService();
+export default apiService;
+
+// Export the clean base URL for use in other components
+export { cleanBaseUrl };
+
+// Re-export the helper functions from types
+export { getProjectImageUrl, getFeaturedImageUrl };

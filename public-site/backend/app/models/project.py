@@ -1,5 +1,6 @@
-from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, LargeBinary
-from . import Base  # Import Base from __init__.py
+from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, LargeBinary, JSON, ForeignKey
+from sqlalchemy.orm import relationship
+from .base import Base
 
 class Project(Base):
     __tablename__ = "projects"
@@ -48,5 +49,40 @@ class Project(Base):
     view_count = Column(Integer, default=0)
     download_count = Column(Integer, default=0)
     
+    # Image fields (legacy)
+    images = Column(JSON, nullable=True, default=list)
+    featured_image_index = Column(Integer, default=0)
+    
     # User Relationship (simplified for public site)
     created_by_id = Column(Integer, nullable=True)
+    
+    # Relationship to images
+    image_records = relationship("ProjectImage", back_populates="project", order_by="ProjectImage.order_index")
+
+
+class ProjectImage(Base):
+    __tablename__ = "project_images"
+    
+    # Primary key
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Foreign key to project
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Image metadata
+    filename = Column(String, nullable=False)
+    content_type = Column(String, default="image/png")
+    image_size = Column(Integer, nullable=True)
+    
+    # Image data stored in database
+    image_data = Column(LargeBinary, nullable=False)
+    
+    # Order and featured status
+    order_index = Column(Integer, default=0)
+    is_featured = Column(Boolean, default=False, index=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationship back to project
+    project = relationship("Project", back_populates="image_records")

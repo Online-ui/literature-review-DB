@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -9,21 +9,17 @@ class User(BaseModel):
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
-    
-    # Profile
     full_name = Column(String(255), nullable=False)
     institution = Column(String(255))
     department = Column(String(255))
     phone = Column(String(20))
-    
-    # Role & Status
-    role = Column(String(50), default="faculty")  # "main_coordinator", "faculty"
+    profile_image = Column(String, nullable=True)
+    about = Column(Text, nullable=True)
+    disciplines = Column(Text, nullable=True)
+    role = Column(String(50), default="faculty")
     is_active = Column(Boolean, default=True)
-    
-    # Password Reset
-    reset_token = Column(String(255), nullable=True, index=True)
-    reset_token_expires = Column(DateTime, nullable=True)
-    
+    reset_token = Column(String, index=True)
+    reset_token_expires = Column(DateTime, nullable=True)    
     # Relationships
     created_projects = relationship("Project", back_populates="created_by_user")
     

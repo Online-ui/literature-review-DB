@@ -1,3 +1,57 @@
+export interface ProjectImage {
+  id: number;
+  project_id: number;
+  filename: string;
+  content_type: string;
+  image_size?: number;
+  order_index: number;
+  is_featured: boolean;
+  created_at: string;
+  image_url?: string;  // Make it optional since we'll compute it if not provided
+}
+
+export interface Project {
+  id: number;
+  title: string;
+  slug: string;
+  abstract?: string;
+  keywords?: string;
+  research_area?: string;
+  degree_type?: string;
+  academic_year?: string;
+  institution?: string;
+  department?: string;
+  supervisor?: string;
+  author_name: string;
+  author_email?: string;
+  meta_description?: string;
+  meta_keywords?: string;
+  is_published: boolean;
+  publication_date: string;
+  view_count: number;
+  download_count: number;
+  
+  // Legacy image fields (for backward compatibility)
+  images?: string[];
+  featured_image_index?: number;
+  
+  // New database image records
+  image_records?: ProjectImage[];
+  
+  // Document fields
+  document_url?: string;
+  document_filename?: string;
+  document_size?: number;
+  document_content_type?: string;
+  document_public_id?: string;
+  document_storage?: string;
+  
+  // Metadata
+  created_by_id?: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FormConstants {
   research_areas: string[];
   degree_types: string[];
@@ -33,38 +87,12 @@ export interface User {
   institution?: string;
   department?: string;
   phone?: string;
+  about?: string;        // Added
+  disciplines?: string;  // Added
   role: string;
   is_active: boolean;
   created_at: string;
-}
-
-export interface Project {
-  id: number;
-  title: string;
-  slug: string;
-  abstract?: string;
-  keywords?: string;
-  research_area?: string;
-  degree_type?: string;
-  academic_year?: string;
-  institution?: string;
-  department?: string;
-  supervisor?: string;
-  author_name: string;
-  author_email?: string;
-  is_published: boolean;
-  publication_date: string;
-  view_count: number;
-  download_count: number;
-  document_url?: string;
-  document_filename?: string;
-  document_size?: number;
-  document_public_id?: string;
-  document_storage?: string;
-  created_by_id?: number;
-  created_at: string;
-  meta_description?: string;
-  meta_keywords?: string;
+  profile_image?: string;
 }
 
 export interface DashboardStats {
@@ -105,6 +133,8 @@ export interface AuthResponse {
     role: string;
     institution?: string;
     department?: string;
+    about?: string;        // Added
+    disciplines?: string;  // Added
   };
 }
 

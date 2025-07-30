@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Box,
   Typography,
-  Paper,
   Grid,
   TextField,
   Button,
@@ -10,12 +9,8 @@ import {
   Avatar,
   Card,
   CardContent,
-  Divider,
   Chip,
   alpha,
-  useTheme,
-  IconButton,
-  Tooltip,
   LinearProgress
 } from '@mui/material';
 import {
@@ -29,23 +24,24 @@ import {
   Badge as BadgeIcon,
   CalendarToday as CalendarIcon,
   Security as SecurityIcon,
-  Verified as VerifiedIcon,
-  Settings as SettingsIcon,
-  PhotoCamera as PhotoCameraIcon
+  Verified as VerifiedIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import { adminApi } from '../services/adminApi';
 
 const ProfilePage: React.FC = () => {
-  const { user } = useAuth();
-  const theme = useTheme();
+  const { user, updateUser } = useAuth();
   const [editing, setEditing] = useState(false);
+  
   const [profileData, setProfileData] = useState({
     full_name: user?.full_name || '',
     email: user?.email || '',
     institution: user?.institution || '',
     department: user?.department || '',
-    phone: user?.phone || ''
+    phone: user?.phone || '',
+    about: user?.about || '',
+    disciplines: user?.disciplines || ''
   });
 
   const handleEdit = () => {
@@ -59,17 +55,44 @@ const ProfilePage: React.FC = () => {
       email: user?.email || '',
       institution: user?.institution || '',
       department: user?.department || '',
-      phone: user?.phone || ''
+      phone: user?.phone || '',
+      about: user?.about || '',
+      disciplines: user?.disciplines || ''
     });
   };
 
-  const handleSave = () => {
-    // TODO: Implement profile update API call
-    setEditing(false);
-    // For now, just show a message
-    alert('Profile update functionality will be implemented soon');
+  const handleSave = async () => {
+    try {
+      const response = await adminApi.updateProfile({
+        full_name: profileData.full_name,
+        email: profileData.email,
+        institution: profileData.institution,
+        department: profileData.department,
+        phone: profileData.phone,
+        about: profileData.about,
+        disciplines: profileData.disciplines
+      });
+      
+      updateUser(response);
+      
+      setProfileData({
+        full_name: response.full_name || '',
+        email: response.email || '',
+        institution: response.institution || '',
+        department: response.department || '',
+        phone: response.phone || '',
+        about: response.about || '',
+        disciplines: response.disciplines || ''
+      });
+         
+      setEditing(false);
+      alert('Profile updated successfully!');
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      alert('Failed to update profile. Please try again.');
+    }
   };
-
+  
   const handleInputChange = (field: string) => (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -112,7 +135,7 @@ const ProfilePage: React.FC = () => {
               fontSize: '1.1rem'
             }}
           >
-            Manage your account information and preferences
+            Manage your account information
           </Typography>
         </Box>
       </motion.div>
@@ -130,43 +153,24 @@ const ProfilePage: React.FC = () => {
               sx={{
                 borderRadius: 4,
                 border: '1px solid rgba(0,0,0,0.08)',
-                overflow: 'hidden',
-                background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)'
+                overflow: 'hidden'
               }}
             >
               <CardContent sx={{ p: 4 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
                   {/* Profile Avatar */}
-                  <Box sx={{ position: 'relative' }}>
-                    <Avatar
-                      sx={{
-                        width: 120,
-                        height: 120,
-                        background: 'linear-gradient(135deg, #0a4f3c 0%, #2a9d7f 100%)',
-                        fontSize: '3rem',
-                        fontWeight: 700,
-                        boxShadow: '0 8px 32px rgba(10,79,60,0.3)',
-                        border: '4px solid white'
-                      }}
-                    >
-                      {user?.full_name?.charAt(0) || 'U'}
-                    </Avatar>
-                    <IconButton
-                      sx={{
-                        position: 'absolute',
-                        bottom: 0,
-                        right: 0,
-                        bgcolor: 'white',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                        '&:hover': {
-                          bgcolor: '#f5f5f5'
-                        }
-                      }}
-                      size="small"
-                    >
-                      <PhotoCameraIcon sx={{ fontSize: 20, color: '#0a4f3c' }} />
-                    </IconButton>
-                  </Box>
+                  <Avatar
+                    sx={{
+                      width: 100,
+                      height: 100,
+                      background: 'linear-gradient(135deg, #0a4f3c 0%, #2a9d7f 100%)',
+                      fontSize: '2.5rem',
+                      fontWeight: 700,
+                      boxShadow: '0 8px 32px rgba(10,79,60,0.3)'
+                    }}
+                  >
+                    {user?.full_name?.charAt(0) || 'U'}
+                  </Avatar>
 
                   {/* Profile Info */}
                   <Box sx={{ flexGrow: 1, minWidth: 0 }}>
@@ -251,7 +255,7 @@ const ProfilePage: React.FC = () => {
                   </Box>
 
                   {/* Action Buttons */}
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box>
                     <AnimatePresence mode="wait">
                       {!editing ? (
                         <motion.div
@@ -425,11 +429,11 @@ const ProfilePage: React.FC = () => {
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           borderRadius: 3,
-                                                    '&.Mui-focused fieldset': {
+                          '&.Mui-focused fieldset': {
                             borderColor: '#0a4f3c',
                           },
                         },
-                        '& .MuiInputLabel-root.Mui-focused': {
+                         '& .MuiInputLabel-root.Mui-focused': {
                           color: '#0a4f3c',
                         },
                       }}
@@ -534,6 +538,57 @@ const ProfilePage: React.FC = () => {
                       }}
                     />
                   </Grid>
+
+                  {/* About Section */}
+                  <Grid item xs={12}>
+                    <TextField
+                      label="About"
+                      fullWidth
+                      multiline
+                      rows={4}
+                      value={profileData.about || ''}
+                      onChange={handleInputChange('about')}
+                      disabled={!editing}
+                      placeholder="Tell us about yourself, your research interests, and professional background..."
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 3,
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#0a4f3c',
+                          },
+                        },
+                        '& .MuiInputLabel-root.Mui-focused': {
+                          color: '#0a4f3c',
+                        },
+                      }}
+                    />
+                  </Grid>
+
+                  {/* Disciplines Section */}
+                  <Grid item xs={12}>
+                    <TextField
+                      label="Disciplines"
+                      fullWidth
+                      multiline
+                      rows={3}
+                      value={profileData.disciplines || ''}
+                      onChange={handleInputChange('disciplines')}
+                      disabled={!editing}
+                      placeholder="List your areas of expertise and research disciplines (e.g., Computer Science, Machine Learning, Data Science)..."
+                      helperText="Separate multiple disciplines with commas"
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 3,
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#0a4f3c',
+                          },
+                        },
+                        '& .MuiInputLabel-root.Mui-focused': {
+                          color: '#0a4f3c',
+                        },
+                      }}
+                    />
+                  </Grid>
                 </Grid>
 
                 <AnimatePresence>
@@ -553,9 +608,9 @@ const ProfilePage: React.FC = () => {
                         }}
                       >
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          Profile Update Notice
+                          Save Your Changes
                         </Typography>
-                        Profile update functionality is coming soon. Contact your administrator for urgent changes.
+                        Don't forget to click "Save Changes" to update your profile information.
                       </Alert>
                     </motion.div>
                   )}
@@ -565,220 +620,111 @@ const ProfilePage: React.FC = () => {
           </motion.div>
         </Grid>
 
-        {/* Account Statistics & Settings */}
+        {/* Account Statistics */}
         <Grid item xs={12} lg={4}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/* Account Statistics */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+          >
+            <Card
+              elevation={0}
+              sx={{
+                borderRadius: 4,
+                border: '1px solid rgba(0,0,0,0.08)',
+                overflow: 'hidden'
+              }}
             >
-              <Card
-                elevation={0}
+              <Box
                 sx={{
-                  borderRadius: 4,
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  overflow: 'hidden'
+                  p: 3,
+                  background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+                  borderBottom: '1px solid rgba(0,0,0,0.08)'
                 }}
               >
-                <Box
-                  sx={{
-                    p: 3,
-                    background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
-                    borderBottom: '1px solid rgba(0,0,0,0.08)'
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar
-                      sx={{
-                        bgcolor: '#2a9d7f',
-                        width: 40,
-                        height: 40
-                      }}
-                    >
-                      <SettingsIcon />
-                    </Avatar>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c' }}>
+                  Account Information
+                </Typography>
+              </Box>
+              
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <Box
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 3,
+                      bgcolor: alpha('#0a4f3c', 0.05),
+                      border: '1px solid',
+                      borderColor: alpha('#0a4f3c', 0.1)
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                      <CalendarIcon sx={{ color: '#0a4f3c', fontSize: 20 }} />
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#0a4f3c' }}>
+                        Member Since
+                      </Typography>
+                    </Box>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c' }}>
-                      Account Statistics
+                      {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      }) : 'N/A'}
+                    </Typography>
+                  </Box>
+                  
+                  <Box
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 3,
+                      bgcolor: alpha('#1a7a5e', 0.05),
+                      border: '1px solid',
+                      borderColor: alpha('#1a7a5e', 0.1)
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                      <BadgeIcon sx={{ color: '#1a7a5e', fontSize: 20 }} />
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#1a7a5e' }}>
+                        Account Role
+                      </Typography>
+                    </Box>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#1a7a5e' }}>
+                      {user?.role === 'main_coordinator' ? 'Main Coordinator' : 'Faculty Member'}
+                    </Typography>
+                  </Box>
+                  
+                  <Box
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 3,
+                      bgcolor: user?.is_active ? alpha('#4caf50', 0.05) : alpha('#f44336', 0.05),
+                      border: '1px solid',
+                      borderColor: user?.is_active ? alpha('#4caf50', 0.1) : alpha('#f44336', 0.1)
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                      <SecurityIcon sx={{ 
+                        color: user?.is_active ? '#4caf50' : '#f44336', 
+                        fontSize: 20 
+                      }} />
+                      <Typography variant="body2" sx={{ 
+                        fontWeight: 600, 
+                        color: user?.is_active ? '#4caf50' : '#f44336'
+                      }}>
+                        Account Status
+                      </Typography>
+                    </Box>
+                    <Typography variant="h6" sx={{ 
+                      fontWeight: 700, 
+                      color: user?.is_active ? '#4caf50' : '#f44336'
+                    }}>
+                      {user?.is_active ? 'Active & Verified' : 'Inactive'}
                     </Typography>
                   </Box>
                 </Box>
-                
-                <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <Box
-                      sx={{
-                        p: 2.5,
-                        borderRadius: 3,
-                        bgcolor: alpha('#0a4f3c', 0.05),
-                        border: '1px solid',
-                        borderColor: alpha('#0a4f3c', 0.1)
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                        <CalendarIcon sx={{ color: '#0a4f3c', fontSize: 20 }} />
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#0a4f3c' }}>
-                          Member Since
-                        </Typography>
-                      </Box>
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c' }}>
-                        {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        }) : 'N/A'}
-                      </Typography>
-                    </Box>
-                    
-                    <Box
-                      sx={{
-                        p: 2.5,
-                        borderRadius: 3,
-                        bgcolor: alpha('#1a7a5e', 0.05),
-                        border: '1px solid',
-                        borderColor: alpha('#1a7a5e', 0.1)
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                        <BadgeIcon sx={{ color: '#1a7a5e', fontSize: 20 }} />
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#1a7a5e' }}>
-                          Account Role
-                        </Typography>
-                      </Box>
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#1a7a5e' }}>
-                        {user?.role === 'main_coordinator' ? 'Main Coordinator' : 'Faculty Member'}
-                      </Typography>
-                    </Box>
-                    
-                    <Box
-                      sx={{
-                        p: 2.5,
-                        borderRadius: 3,
-                        bgcolor: user?.is_active ? alpha('#4caf50', 0.05) : alpha('#f44336', 0.05),
-                        border: '1px solid',
-                        borderColor: user?.is_active ? alpha('#4caf50', 0.1) : alpha('#f44336', 0.1)
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                        <SecurityIcon sx={{ 
-                          color: user?.is_active ? '#4caf50' : '#f44336', 
-                          fontSize: 20 
-                        }} />
-                        <Typography variant="body2" sx={{ 
-                          fontWeight: 600, 
-                          color: user?.is_active ? '#4caf50' : '#f44336'
-                        }}>
-                          Account Status
-                        </Typography>
-                      </Box>
-                      <Typography variant="h6" sx={{ 
-                        fontWeight: 700, 
-                        color: user?.is_active ? '#4caf50' : '#f44336'
-                      }}>
-                        {user?.is_active ? 'Active & Verified' : 'Inactive'}
-                      </Typography>
-                    </Box>
-                    
-                    <Box
-                      sx={{
-                        p: 2.5,
-                        borderRadius: 3,
-                        bgcolor: alpha('#2a9d7f', 0.05),
-                        border: '1px solid',
-                        borderColor: alpha('#2a9d7f', 0.1)
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                        <PersonIcon sx={{ color: '#2a9d7f', fontSize: 20 }} />
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#2a9d7f' }}>
-                          Projects Created
-                        </Typography>
-                      </Box>
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#2a9d7f' }}>
-                        Coming Soon
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Project statistics will be available soon
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Quick Actions */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
-            >
-              <Card
-                elevation={0}
-                sx={{
-                  borderRadius: 4,
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  overflow: 'hidden'
-                }}
-              >
-                <Box
-                  sx={{
-                    p: 3,
-                    background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
-                    borderBottom: '1px solid rgba(0,0,0,0.08)'
-                  }}
-                >
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#0a4f3c' }}>
-                    Quick Actions
-                  </Typography>
-                </Box>
-                
-                <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Button
-                      variant="outlined"
-                      fullWidth
-                      startIcon={<SecurityIcon />}
-                      sx={{
-                        py: 1.5,
-                        borderRadius: 3,
-                        borderColor: '#0a4f3c',
-                        color: '#0a4f3c',
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        '&:hover': {
-                          borderColor: '#063d2f',
-                          bgcolor: alpha('#0a4f3c', 0.04)
-                        }
-                      }}
-                    >
-                      Change Password
-                    </Button>
-                    
-                    <Button
-                      variant="outlined"
-                      fullWidth
-                      startIcon={<SettingsIcon />}
-                      sx={{
-                        py: 1.5,
-                        borderRadius: 3,
-                        borderColor: '#2a9d7f',
-                        color: '#2a9d7f',
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        '&:hover': {
-                          borderColor: '#1a7a5e',
-                          bgcolor: alpha('#2a9d7f', 0.04)
-                        }
-                      }}
-                    >
-                      Account Settings
-                    </Button>
-                  </Box>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Box>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
       </Grid>
     </Box>

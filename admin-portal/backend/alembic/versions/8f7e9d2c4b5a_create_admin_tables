@@ -1,4 +1,4 @@
-"""Create admin tables
+"""Create admin tables and project images
 
 Revision ID: 8f7e9d2c4b5a
 Revises: 7246b26025e9
@@ -34,13 +34,19 @@ def upgrade() -> None:
             sa.Column('institution', sa.String(), nullable=True),
             sa.Column('department', sa.String(), nullable=True),
             sa.Column('phone', sa.String(), nullable=True),
+            sa.Column('profile_image', sa.String(), nullable=True),
+            sa.Column('about', sa.Text(), nullable=True),
+            sa.Column('disciplines', sa.Text(), nullable=True),
             sa.Column('role', sa.String(), nullable=True),
             sa.Column('is_active', sa.Boolean(), nullable=True),
+            sa.Column('reset_token', sa.String(), nullable=True),
+            sa.Column('reset_token_expires', sa.DateTime(), nullable=True),
             sa.PrimaryKeyConstraint('id')
         )
         op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
         op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
         op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
+        op.create_index(op.f('ix_users_reset_token'), 'users', ['reset_token'], unique=False)
     else:
         # Check if indexes exist and create them if they don't
         existing_indexes = [idx['name'] for idx in inspector.get_indexes('users')]
@@ -50,6 +56,26 @@ def upgrade() -> None:
             op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
         if 'ix_users_username' not in existing_indexes:
             op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
+        if 'ix_users_reset_token' not in existing_indexes:
+            op.create_index(op.f('ix_users_reset_token'), 'users', ['reset_token'], unique=False)
+        
+        # Check for missing columns and add them
+        existing_columns = [col['name'] for col in inspector.get_columns('users')]
+        
+        if 'profile_image' not in existing_columns:
+            op.add_column('users', sa.Column('profile_image', sa.String(), nullable=True))
+        
+        if 'about' not in existing_columns:
+            op.add_column('users', sa.Column('about', sa.Text(), nullable=True))
+        
+        if 'disciplines' not in existing_columns:
+            op.add_column('users', sa.Column('disciplines', sa.Text(), nullable=True))
+        
+        if 'reset_token' not in existing_columns:
+            op.add_column('users', sa.Column('reset_token', sa.String(), nullable=True))
+        
+        if 'reset_token_expires' not in existing_columns:
+            op.add_column('users', sa.Column('reset_token_expires', sa.DateTime(), nullable=True))
     
     # Handle projects table
     if 'projects' in existing_tables:
@@ -101,12 +127,43 @@ def upgrade() -> None:
         op.create_index(op.f('ix_projects_research_area'), 'projects', ['research_area'], unique=False)
         op.create_index(op.f('ix_projects_slug'), 'projects', ['slug'], unique=True)
         op.create_index(op.f('ix_projects_title'), 'projects', ['title'], unique=False)
+    
+    # Create project_images table
+    if 'project_images' not in existing_tables:
+        op.create_table('project_images',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('project_id', sa.Integer(), nullable=False),
+            sa.Column('filename', sa.String(), nullable=False),
+            sa.Column('content_type', sa.String(), nullable=True),
+            sa.Column('image_size', sa.Integer(), nullable=True),
+            sa.Column('image_data', sa.LargeBinary(), nullable=False),
+            sa.Column('order_index', sa.Integer(), nullable=True, default=0),
+            sa.Column('is_featured', sa.Boolean(), nullable=True, default=False),
+            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
+            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
+            sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('id')
+        )
+        op.create_index(op.f('ix_project_images_id'), 'project_images', ['id'], unique=False)
+        op.create_index(op.f('ix_project_images_project_id'), 'project_images', ['project_id'], unique=False)
+        op.create_index(op.f('ix_project_images_is_featured'), 'project_images', ['is_featured'], unique=False)
 
 def downgrade() -> None:
     # Get connection and inspector
     conn = op.get_bind()
     inspector = inspect(conn)
     existing_tables = inspector.get_table_names()
+    
+    # Drop project_images table and its indexes if they exist
+    if 'project_images' in existing_tables:
+        existing_indexes = [idx['name'] for idx in inspector.get_indexes('project_images')]
+        if 'ix_project_images_is_featured' in existing_indexes:
+            op.drop_index(op.f('ix_project_images_is_featured'), table_name='project_images')
+        if 'ix_project_images_project_id' in existing_indexes:
+            op.drop_index(op.f('ix_project_images_project_id'), table_name='project_images')
+        if 'ix_project_images_id' in existing_indexes:
+            op.drop_index(op.f('ix_project_images_id'), table_name='project_images')
+        op.drop_table('project_images')
     
     if 'projects' in existing_tables:
         # Check if created_by_id column exists
@@ -122,6 +179,8 @@ def downgrade() -> None:
     # Drop users table and its indexes if they exist
     if 'users' in existing_tables:
         existing_indexes = [idx['name'] for idx in inspector.get_indexes('users')]
+        if 'ix_users_reset_token' in existing_indexes:
+            op.drop_index(op.f('ix_users_reset_token'), table_name='users')
         if 'ix_users_username' in existing_indexes:
             op.drop_index(op.f('ix_users_username'), table_name='users')
         if 'ix_users_id' in existing_indexes:
