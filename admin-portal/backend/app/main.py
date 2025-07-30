@@ -13,8 +13,8 @@ from app.models import Base
 # Create FastAPI app
 app = FastAPI(title="Literature Review Database - Admin Portal")
 
-# Get the base directory - CRITICAL: This must point to the app directory
-BASE_DIR = Path(__file__).resolve().parent  # This is the 'app' directory
+# Get the base directory
+BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 STATIC_DIR = BASE_DIR / "static"
 
@@ -30,6 +30,7 @@ print(f"🚀 Starting Literature Review Database - Admin Portal")
 print(f"📁 Base directory: {BASE_DIR}")
 print(f"📁 Upload directory: {UPLOAD_DIR}")
 print(f"📁 Upload directory exists: {UPLOAD_DIR.exists()}")
+print(f"📁 Static directory: {STATIC_DIR}")
 
 # Configure CORS
 app.add_middleware(
@@ -44,7 +45,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers first
+# Include routers FIRST
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
@@ -52,21 +53,14 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"]
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
 app.include_router(utils.router, prefix="/api/utils", tags=["utils"])
 
-# Mount static files for uploads - This MUST come after routers
-try:
-    app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
-    print(f"✅ Successfully mounted uploads directory at /api/uploads")
-except Exception as e:
-    print(f"❌ Failed to mount uploads directory: {e}")
-
-# Fallback route for serving uploaded files manually
+# IMPORTANT: Add the fallback route for uploads BEFORE mounting static files
 @app.get("/api/uploads/{file_path:path}")
-async def serve_upload_fallback(file_path: str):
-    """Fallback for serving uploaded files if static mount fails"""
+async def serve_upload_file(file_path: str):
+    """Serve uploaded files"""
     file_full_path = UPLOAD_DIR / file_path
     
-    print(f"📁 Fallback file serve request:")
-    print(f"   Requested: {file_path}")
+    # Log for debugging
+    print(f"📁 File request: /api/uploads/{file_path}")
     print(f"   Full path: {file_full_path}")
     print(f"   Exists: {file_full_path.exists()}")
     
@@ -79,6 +73,8 @@ async def serve_upload_fallback(file_path: str):
             content_type = "image/jpeg"
         elif file_path.endswith('.gif'):
             content_type = "image/gif"
+        elif file_path.endswith('.webp'):
+            content_type = "image/webp"
         elif file_path.endswith('.pdf'):
             content_type = "application/pdf"
         
@@ -87,14 +83,15 @@ async def serve_upload_fallback(file_path: str):
             media_type=content_type,
             headers={
                 "Cache-Control": "public, max-age=3600",
+                "Access-Control-Allow-Origin": "*",
             }
         )
     
-    # List directory contents for debugging
+    # If not found, provide detailed error
     parent_dir = file_full_path.parent
     dir_contents = []
     if parent_dir.exists():
-        dir_contents = [f.name for f in parent_dir.iterdir()]
+        dir_contents = [f.name for f in parent_dir.iterdir() if f.is_file()][:5]
     
     return JSONResponse(
         status_code=404,
@@ -104,9 +101,23 @@ async def serve_upload_fallback(file_path: str):
             "full_path": str(file_full_path),
             "exists": file_full_path.exists(),
             "parent_exists": parent_dir.exists(),
-            "directory_contents": dir_contents[:10]  # Show first 10 files
+            "sample_files_in_directory": dir_contents
         }
     )
+
+# Try to mount static files, but don't fail if it doesn't work
+try:
+    app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+    print(f"✅ Mounted static files at /api/uploads")
+except Exception as e:
+    print(f"⚠️  Could not mount static files: {e}")
+    print(f"   Using fallback route instead")
+
+# Alternative route without /api prefix
+@app.get("/uploads/{path:path}")
+async def serve_upload_alt(path: str):
+    """Alternative upload route"""
+    return await serve_upload_file(path)
 
 # Debug endpoint
 @app.get("/api/debug/uploads")
@@ -126,6 +137,22 @@ async def debug_uploads():
         "upload_dir": str(UPLOAD_DIR),
         "exists": UPLOAD_DIR.exists(),
         "structure": structure
+    }
+
+# Test specific file
+@app.get("/api/debug/test-file/{file_path:path}")
+async def test_file(file_path: str):
+    """Test if a specific file can be accessed"""
+    full_path = UPLOAD_DIR / file_path
+    
+    return {
+        "requested": file_path,
+        "full_path": str(full_path),
+        "exists": full_path.exists(),
+        "is_file": full_path.is_file() if full_path.exists() else False,
+        "size": full_path.stat().st_size if full_path.exists() and full_path.is_file() else None,
+        "parent_exists": full_path.parent.exists(),
+        "parent_contents": [f.name for f in full_path.parent.iterdir()] if full_path.parent.exists() else []
     }
 
 # Fixed validation error handler
@@ -153,18 +180,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
     )
 
-# Serve static files manually as backup
-@app.get("/uploads/{path:path}")
-async def serve_upload(path: str):
-    """Manually serve uploaded files"""
-    file_path = UPLOAD_DIR / path
-    if file_path.exists() and file_path.is_file():
-        return FileResponse(file_path)
-    return JSONResponse(
-        status_code=404,
-        content={"error": "File not found", "path": str(file_path)}
-    )
-
 # Startup event
 @app.on_event("startup")
 async def startup_event():
@@ -180,6 +195,15 @@ async def startup_event():
     print(f"   - uploads/profile_images/ {'✅' if (UPLOAD_DIR / 'profile_images').exists() else '❌'}")
     print(f"   - uploads/projects/ {'✅' if (UPLOAD_DIR / 'projects').exists() else '❌'}")
     print(f"   - static/ {'✅' if STATIC_DIR.exists() else '❌'}")
+    
+    # Test file serving
+    test_file_path = UPLOAD_DIR / "test.txt"
+    try:
+        test_file_path.write_text("test")
+        print(f"   - Write test: ✅")
+        test_file_path.unlink()
+    except Exception as e:
+        print(f"   - Write test: ❌ {e}")
     
     # Check if React build exists
     index_path = STATIC_DIR / "index.html"
@@ -215,15 +239,11 @@ async def api_root():
         "health": "/api/health"
     }
 
-# Health check endpoint
+# Health check endpoints
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "healthy",
-        "service": "admin-portal-api"
-    }
+    return {"status": "healthy", "service": "admin-portal-api"}
 
-# API health check endpoint
 @app.get("/api/health")
 async def api_health_check():
     """Health check endpoint"""
