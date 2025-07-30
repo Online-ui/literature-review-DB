@@ -84,37 +84,28 @@ const ProfilePage: React.FC = () => {
 
   // Update the handleImageUpload function
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    console.error('Failed to update profile:', error);
+  const file = event.target.files?.[0];
+  if (!file) return;
+  
+  console.log('Uploading image:', file.name);
+  setUploadingImage(true);
+  
+  try {
+    const response = await adminApi.uploadProfileImage(file);
+    console.log('Image upload response:', response);
     
-    setUploadingImage(true);
-    try {
-      const response = await adminApi.uploadProfileImage(file);
-
-      console.log('Image upload response:', response);
-      
-      // Set the display URL
-      setProfileImage(response.image_url);
-      
-      // Update the user context with just the filename/path
-      updateUser({ profile_image: response.path });
-
-      console.log('User after image update:', user);
-      
-      // Also update the profile data if in edit mode
-      if (editing) {
-        setProfileData(prev => ({ ...prev }));
-      }
-    } catch (error) {
-      console.error('Failed to upload image:', error);
-      alert('Failed to upload image. Please try again.');
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
+    setProfileImage(response.image_url);
+    updateUser({ profile_image: response.path });
+    
+    console.log('User after image update:', user);
+  } catch (error) {
+    console.error('Failed to upload image:', error);
+    alert('Failed to upload image. Please try again.');
+  } finally {
+    setUploadingImage(false);
+  }
+};
+  
   // Add image delete handler
   const handleImageDelete = async () => {
     try {
@@ -144,47 +135,47 @@ const ProfilePage: React.FC = () => {
   };
 
   const handleSave = async () => {
-    try {
-      console.log('Saving profile with data:', profileData);
-      
-      // Update the profile via API
-      const updatedUser = await adminApi.updateProfile({
-        full_name: profileData.full_name,
-        email: profileData.email,
-        institution: profileData.institution,
-        department: profileData.department,
-        phone: profileData.phone,
-        about: profileData.about,
-        disciplines: profileData.disciplines
-      });
-
-      console.log('API Response:', response);
-      
-      // Update the user context with the returned user data
-      updateUser(updatedUser);
-
-      console.log('User after update:', user);
-      
-      // Update local state to reflect saved changes
-      setProfileData({
-        full_name: updatedUser.full_name || '',
-        email: updatedUser.email || '',
-        institution: updatedUser.institution || '',
-        department: updatedUser.department || '',
-        phone: updatedUser.phone || '',
-        about: updatedUser.about || '',
-        disciplines: updatedUser.disciplines || ''
-      });
-         
-      setEditing(false);
-      // Show success message
-      alert('Profile updated successfully!');
-    } catch (error) {
-      console.error('Failed to update profile:', error);
-      alert('Failed to update profile. Please try again.');
-    }
-  };
-
+  try {
+    console.log('Saving profile with data:', profileData);
+    
+    // Update the profile via API
+    const response = await adminApi.updateProfile({
+      full_name: profileData.full_name,
+      email: profileData.email,
+      institution: profileData.institution,
+      department: profileData.department,
+      phone: profileData.phone,
+      about: profileData.about,
+      disciplines: profileData.disciplines
+    });
+    
+    console.log('API Response:', response);
+    
+    // Update the user context with the returned user data
+    updateUser(response);
+    
+    // Check if update worked
+    console.log('User after update:', user);
+    
+    // Update local state to reflect saved changes
+    setProfileData({
+      full_name: response.full_name || '',
+      email: response.email || '',
+      institution: response.institution || '',
+      department: response.department || '',
+      phone: response.phone || '',
+      about: response.about || '',
+      disciplines: response.disciplines || ''
+    });
+       
+    setEditing(false);
+    alert('Profile updated successfully!');
+  } catch (error) {
+    console.error('Failed to update profile:', error);
+    alert('Failed to update profile. Please try again.');
+  }
+};
+  
   const handleInputChange = (field: string) => (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
