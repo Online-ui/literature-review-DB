@@ -13,8 +13,8 @@ from app.models import Base
 # Create FastAPI app
 app = FastAPI(title="Literature Review Database - Admin Portal")
 
-# Get the base directory - this is important
-BASE_DIR = Path(__file__).resolve().parent
+# Get the base directory - CRITICAL: This must point to the app directory
+BASE_DIR = Path(__file__).resolve().parent  # This is the 'app' directory
 UPLOAD_DIR = BASE_DIR / "uploads"
 STATIC_DIR = BASE_DIR / "static"
 
@@ -26,7 +26,12 @@ STATIC_DIR.mkdir(exist_ok=True)
 (UPLOAD_DIR / "profile_images").mkdir(exist_ok=True)
 (UPLOAD_DIR / "projects").mkdir(exist_ok=True)
 
-# Configure CORS - MUST be before routes
+print(f"🚀 Starting Literature Review Database - Admin Portal")
+print(f"📁 Base directory: {BASE_DIR}")
+print(f"📁 Upload directory: {UPLOAD_DIR}")
+print(f"📁 Upload directory exists: {UPLOAD_DIR.exists()}")
+
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -39,12 +44,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount uploads directory - MUST be before API routes
-if UPLOAD_DIR.exists():
-    app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
-    print(f"✅ Mounted uploads at /api/uploads from {UPLOAD_DIR}")
-
-# Include routers
+# Include routers first
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
@@ -52,22 +52,49 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"]
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
 app.include_router(utils.router, prefix="/api/utils", tags=["utils"])
 
-# Manual file serving as fallback
+# Mount static files for uploads - This MUST come after routers
+try:
+    app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+    print(f"✅ Successfully mounted uploads directory at /api/uploads")
+except Exception as e:
+    print(f"❌ Failed to mount uploads directory: {e}")
+
+# Fallback route for serving uploaded files manually
 @app.get("/api/uploads/{file_path:path}")
-async def serve_upload_file(file_path: str):
-    """Manually serve uploaded files as fallback"""
+async def serve_upload_fallback(file_path: str):
+    """Fallback for serving uploaded files if static mount fails"""
     file_full_path = UPLOAD_DIR / file_path
     
-    # Debug logging
-    print(f"Requested file: {file_path}")
-    print(f"Full path: {file_full_path}")
-    print(f"File exists: {file_full_path.exists()}")
+    print(f"📁 Fallback file serve request:")
+    print(f"   Requested: {file_path}")
+    print(f"   Full path: {file_full_path}")
+    print(f"   Exists: {file_full_path.exists()}")
     
     if file_full_path.exists() and file_full_path.is_file():
+        # Determine content type
+        content_type = "application/octet-stream"
+        if file_path.endswith('.png'):
+            content_type = "image/png"
+        elif file_path.endswith('.jpg') or file_path.endswith('.jpeg'):
+            content_type = "image/jpeg"
+        elif file_path.endswith('.gif'):
+            content_type = "image/gif"
+        elif file_path.endswith('.pdf'):
+            content_type = "application/pdf"
+        
         return FileResponse(
             path=str(file_full_path),
-            media_type="image/png" if file_path.endswith('.png') else "image/jpeg"
+            media_type=content_type,
+            headers={
+                "Cache-Control": "public, max-age=3600",
+            }
         )
+    
+    # List directory contents for debugging
+    parent_dir = file_full_path.parent
+    dir_contents = []
+    if parent_dir.exists():
+        dir_contents = [f.name for f in parent_dir.iterdir()]
     
     return JSONResponse(
         status_code=404,
@@ -75,15 +102,31 @@ async def serve_upload_file(file_path: str):
             "error": "File not found",
             "requested_path": file_path,
             "full_path": str(file_full_path),
-            "exists": file_full_path.exists()
+            "exists": file_full_path.exists(),
+            "parent_exists": parent_dir.exists(),
+            "directory_contents": dir_contents[:10]  # Show first 10 files
         }
     )
 
-print("🚀 Starting Literature Review Database - Admin Portal")
-print(f"📁 Base directory: {BASE_DIR}")
-print(f"📁 Upload directory: {UPLOAD_DIR}")
-print(f"📁 Upload directory exists: {UPLOAD_DIR.exists()}")
-print(f"📁 Static directory: {STATIC_DIR}")
+# Debug endpoint
+@app.get("/api/debug/uploads")
+async def debug_uploads():
+    """Debug endpoint to check upload directory structure"""
+    structure = {}
+    
+    if UPLOAD_DIR.exists():
+        for root, dirs, files in os.walk(UPLOAD_DIR):
+            rel_root = os.path.relpath(root, UPLOAD_DIR)
+            structure[rel_root] = {
+                "dirs": dirs,
+                "files": files[:5]  # Limit to 5 files per directory
+            }
+    
+    return {
+        "upload_dir": str(UPLOAD_DIR),
+        "exists": UPLOAD_DIR.exists(),
+        "structure": structure
+    }
 
 # Fixed validation error handler
 @app.exception_handler(RequestValidationError)
@@ -132,9 +175,10 @@ async def startup_event():
     
     # Verify directories
     print(f"\n📁 Directory Status:")
-    print(f"   - uploads/ {'✅' if UPLOAD_DIR.exists() else '❌'}")
-    print(f"   - uploads/projects/ {'✅' if (UPLOAD_DIR / 'projects').exists() else '❌'}")
+    print(f"   Base: {BASE_DIR}")
+    print(f"   - uploads/ {'✅' if UPLOAD_DIR.exists() else '❌'} at {UPLOAD_DIR}")
     print(f"   - uploads/profile_images/ {'✅' if (UPLOAD_DIR / 'profile_images').exists() else '❌'}")
+    print(f"   - uploads/projects/ {'✅' if (UPLOAD_DIR / 'projects').exists() else '❌'}")
     print(f"   - static/ {'✅' if STATIC_DIR.exists() else '❌'}")
     
     # Check if React build exists
