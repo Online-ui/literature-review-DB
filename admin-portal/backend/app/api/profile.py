@@ -3,11 +3,16 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from datetime import datetime
+import logging
 
 from app.database import get_db
 from app.models.user import User
 from app.api.auth import get_current_user
 from app.services.image_upload import ImageUploadService
+
+# Add logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -79,18 +84,23 @@ async def update_profile(
 ) -> Dict[str, Any]:
     """Update user profile information"""
     try:
+        # Log incoming data
+        logger.info(f"Updating profile for user {current_user.id}")
+        logger.info(f"Update data: {profile_data.dict(exclude_unset=True)}")
+        
         # Update only provided fields
         update_data = profile_data.dict(exclude_unset=True)
         
         for field, value in update_data.items():
             if hasattr(current_user, field):
                 setattr(current_user, field, value)
+                logger.info(f"Set {field} = {value}")
         
         db.commit()
         db.refresh(current_user)
         
-        # Return the user object directly (not nested) - this is the key fix
-        return {
+        # Log what we're returning
+        response_data = {
             "id": current_user.id,
             "username": current_user.username,
             "email": current_user.email,
@@ -105,7 +115,12 @@ async def update_profile(
             "is_active": current_user.is_active,
             "created_at": current_user.created_at.isoformat() if current_user.created_at else None
         }
+        
+        logger.info(f"Returning response: {response_data}")
+        return response_data
+        
     except Exception as e:
+        logger.error(f"Error updating profile: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -128,4 +143,29 @@ async def get_profile(
         "role": current_user.role,
         "is_active": current_user.is_active,
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+    }
+
+@router.get("/debug")
+async def debug_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Debug endpoint to check current database values"""
+    # Refresh from database
+    db.refresh(current_user)
+    
+    return {
+        "database_values": {
+            "id": current_user.id,
+            "username": current_user.username,
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "institution": current_user.institution,
+            "department": current_user.department,
+            "phone": current_user.phone,
+            "about": current_user.about,
+            "disciplines": current_user.disciplines,
+            "profile_image": current_user.profile_image,
+        },
+        "timestamp": datetime.utcnow().isoformat()
     }
