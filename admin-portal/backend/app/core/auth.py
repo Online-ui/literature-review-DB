@@ -1,39 +1,59 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Form, Response
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
-import secrets
+from typing import Optional
+from pydantic import BaseModel, EmailStr
 from jose import JWTError, jwt
+import secrets
+import string
 
-from app.database import get_db
-from app.models.user import User
-from app.core.security import verify_password, get_password_hash
-from app.core.config import settings
-from app.core.email import send_reset_email
-from app.schemas.user import UserResponse
+from ..database import get_db
+from ..models.user import User
+from ..core.security import verify_password, get_password_hash, create_access_token, verify_token
+from ..core.config import settings
 
 router = APIRouter()
+security = HTTPBearer()
 
-# OAuth2 scheme for token authentication
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
-# Token creation
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-    return encoded_jwt
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: dict
 
-# Get current user from token
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+class PasswordResetResponse(BaseModel):
+    message: str
+
+class TokenVerificationResponse(BaseModel):
+    valid: bool
+    email: str
+    username: str
+
+def generate_reset_token() -> str:
+    """Generate a secure random token for password reset"""
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(32))
+
+# Authentication dependency functions
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
+    """
+    Get current user from JWT token.
+    Returns 401 error without any redirect.
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -41,8 +61,7 @@ async def get_current_user(
     )
     
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username: str = payload.get("sub")
+        username = verify_token(credentials.credentials)
         if username is None:
             print("Invalid token - no username extracted")
             raise credentials_exception
@@ -57,56 +76,54 @@ async def get_current_user(
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user"
+            detail="Inactive user account"
         )
     
     return user
 
-# Get current active admin user
-async def get_current_admin_user(
-    current_user: User = Depends(get_current_user)
-) -> User:
-    if current_user.role != "main_coordinator":
+def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+    return current_user
+
+def require_main_coordinator(current_user: User = Depends(get_current_active_user)) -> User:
+    if not current_user.is_main_coordinator:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            detail="Not enough permissions. Main coordinator access required."
         )
     return current_user
 
-@router.post("/login")
+# Authentication endpoints
+@router.post("/login", response_model=LoginResponse)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
-) -> Dict[str, Any]:
+):
     """
-    OAuth2 compatible token login, get an access token for future requests.
-    Don't redirect on failure - let the frontend handle it.
+    Login endpoint that accepts form data.
+    Returns JSON response only - no redirects.
+    Frontend handles all routing.
     """
-    # Authenticate user
-    user = db.query(User).filter(User.username == form_data.username).first()
+    # Check if user exists by username or email
+    user = db.query(User).filter(
+        (User.username == form_data.username) | (User.email == form_data.username)
+    ).first()
     
     if not user or not verify_password(form_data.password, user.hashed_password):
-        # Return 401 error without any redirect
+        # Return 401 error - let frontend handle the display
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect username/email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user account"
+            detail="Your account has been deactivated. Please contact an administrator."
         )
     
-    # Create access token
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username}, 
-        expires_delta=access_token_expires
-    )
+    access_token = create_access_token(data={"sub": user.username})
     
-    # Return user data with token
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -116,42 +133,180 @@ async def login(
             "email": user.email,
             "full_name": user.full_name,
             "role": user.role,
-            "is_active": user.is_active,
             "institution": user.institution,
             "department": user.department,
             "phone": user.phone,
-            "profile_image": user.profile_image,
             "about": user.about,
             "disciplines": user.disciplines,
+            "profile_image": user.profile_image,
+            "is_active": user.is_active,
             "created_at": user.created_at.isoformat() if user.created_at else None
         }
     }
 
-@router.post("/logout")
-async def logout(response: Response):
+@router.post("/forgot-password", response_model=PasswordResetResponse)
+async def forgot_password(
+    request: PasswordResetRequest,
+    db: Session = Depends(get_db)
+):
     """
-    Logout endpoint - frontend should handle the redirect
+    Request password reset token.
+    Always returns success to prevent email enumeration.
     """
-    # The frontend will handle clearing the token and redirecting
-    return {"message": "Successfully logged out"}
+    print(f"🔐 Password reset requested for email: {request.email}")
+    
+    # Find user by email
+    user = db.query(User).filter(User.email == request.email).first()
+    
+    # Always return success message to prevent email enumeration
+    if not user:
+        print(f"❌ No user found with email: {request.email}")
+        return {"message": "If the email exists in our system, you will receive a password reset email shortly."}
+    
+    # Generate reset token
+    reset_token = generate_reset_token()
+    
+    # Save token and expiration to database
+    user.reset_token = reset_token
+    user.reset_token_expires = datetime.utcnow() + timedelta(minutes=30)
+    db.commit()
 
-@router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
-    """Get current user info"""
-    return current_user
+    print(f"✅ Reset token generated for user: {user.username}")
+    print(f"🔗 Reset URL: {settings.FRONTEND_URL}/#/reset-password?token={reset_token}")  # Note the hash
+
+    # TODO: Send reset email here
+    # The email should link to: {settings.FRONTEND_URL}/#/reset-password?token={reset_token}
+    
+    return {"message": "If the email exists in our system, you will receive a password reset email shortly."}
+
+@router.post("/reset-password", response_model=PasswordResetResponse)
+async def reset_password(
+    request: PasswordResetConfirm,
+    db: Session = Depends(get_db)
+):
+    """
+    Reset password using token.
+    Returns JSON response only.
+    """
+    print(f"🔐 Password reset attempt with token: {request.token}")
+    
+    # Find user by reset token
+    user = db.query(User).filter(User.reset_token == request.token).first()
+    
+    if not user:
+        print(f"❌ Invalid reset token: {request.token}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token. Please request a new password reset."
+        )
+    
+    # Check if token has expired
+    if user.has_reset_token_expired():
+        print(f"⏰ Expired reset token for user: {user.username}")
+        user.clear_reset_token()
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token has expired. Please request a new password reset."
+        )
+    
+    # Validate password strength
+    if len(request.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters long"
+        )
+    
+    # Update password
+    user.hashed_password = get_password_hash(request.new_password)
+    user.clear_reset_token()
+    db.commit()
+    
+    print(f"✅ Password reset successful for user: {user.username}")
+    
+    return {"message": "Password has been successfully reset. You can now login with your new password."}
+
+@router.get("/verify-reset-token", response_model=TokenVerificationResponse)
+async def verify_reset_token(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Verify if a reset token is valid"""
+    print(f"🔍 Verifying reset token: {token}")
+    
+    user = db.query(User).filter(User.reset_token == token).first()
+    
+    if not user:
+        print(f"❌ Invalid token: {token}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid reset token"
+        )
+    
+    if user.has_reset_token_expired():
+        print(f"⏰ Expired token for user: {user.username}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token has expired"
+        )
+    
+    print(f"✅ Valid token for user: {user.username}")
+    
+    return TokenVerificationResponse(
+        valid=True,
+        email=user.email,
+        username=user.username
+    )
+
+@router.get("/me")
+async def get_current_user_info(
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get current user information"""
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
+        "institution": current_user.institution,
+        "department": current_user.department,
+        "phone": current_user.phone,
+        "about": current_user.about,
+        "disciplines": current_user.disciplines,
+        "profile_image": current_user.profile_image,
+        "is_active": current_user.is_active,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+    }
+
+@router.post("/logout")
+async def logout(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Logout endpoint.
+    Frontend should clear the token and redirect.
+    """
+    return {"message": "Successfully logged out"}
 
 @router.post("/change-password")
 async def change_password(
     current_password: str,
     new_password: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """Change user password"""
     if not verify_password(current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect password"
+            detail="Incorrect current password"
+        )
+    
+    if len(new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters long"
         )
     
     current_user.hashed_password = get_password_hash(new_password)
@@ -159,87 +314,30 @@ async def change_password(
     
     return {"message": "Password updated successfully"}
 
-@router.post("/forgot-password")
-async def forgot_password(
-    email: str = Form(...),
-    db: Session = Depends(get_db)
-):
-    """Request password reset"""
-    user = db.query(User).filter(User.email == email).first()
-    
-    if not user:
-        # Don't reveal if email exists
-        return {"message": "If the email exists, a reset link has been sent"}
-    
-    # Generate reset token
-    reset_token = secrets.token_urlsafe(32)
-    user.reset_token = reset_token
-    user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
-    db.commit()
-    
-    # Send reset email
-    try:
-        await send_reset_email(user.email, reset_token)
-    except Exception as e:
-        print(f"Failed to send reset email: {e}")
-        # Don't reveal email sending failed to user
-    
-    return {"message": "If the email exists, a reset link has been sent"}
-
-@router.post("/reset-password")
-async def reset_password(
-    token: str,
-    new_password: str,
-    db: Session = Depends(get_db)
-):
-    """Reset password with token"""
-    user = db.query(User).filter(User.reset_token == token).first()
-    
-    if not user or user.has_reset_token_expired():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired reset token"
-        )
-    
-    # Update password and clear token
-    user.hashed_password = get_password_hash(new_password)
-    user.clear_reset_token()
-    db.commit()
-    
-    return {"message": "Password reset successfully"}
-
-@router.get("/verify-reset-token")
-async def verify_reset_token(
-    token: str,
-    db: Session = Depends(get_db)
-):
-    """Verify if reset token is valid"""
-    user = db.query(User).filter(User.reset_token == token).first()
-    
-    if not user or user.has_reset_token_expired():
-        return {"valid": False}
-    
-    return {
-        "valid": True,
-        "email": user.email,
-        "username": user.username
-    }
-
-# Health check endpoints
 @router.get("/check-auth")
-async def check_auth(current_user: User = Depends(get_current_user)):
+async def check_auth(current_user: User = Depends(get_current_active_user)):
     """Check if user is authenticated"""
     return {"authenticated": True, "user": current_user.username}
 
 @router.get("/protected")
-async def protected_route(current_user: User = Depends(get_current_user)):
+async def protected_route(
+    current_user: User = Depends(get_current_active_user)
+):
     """Example protected route"""
-    return {"message": f"Hello {current_user.username}, this is a protected route"}
+    return {
+        "message": f"Hello {current_user.username}, this is a protected route!",
+        "user_role": current_user.role
+    }
 
 @router.get("/admin-only")
-async def admin_only_route(current_user: User = Depends(get_current_admin_user)):
+async def admin_only_route(
+    current_user: User = Depends(require_main_coordinator)
+):
     """Example admin-only route"""
-    return {"message": f"Hello admin {current_user.username}"}
+    return {
+        "message": f"Hello {current_user.username}, you have main coordinator access!",
+        "user_role": current_user.role
+    }
 
 @router.get("/health")
 async def health_check():
