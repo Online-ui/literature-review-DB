@@ -13,7 +13,7 @@ from app.models import Base
 # Create FastAPI app
 app = FastAPI(title="Literature Review Database - Admin Portal")
 
-# Get the base directory
+# Get the base directory - this is important
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 STATIC_DIR = BASE_DIR / "static"
@@ -25,6 +25,59 @@ STATIC_DIR.mkdir(exist_ok=True)
 # Create subdirectories for uploads
 (UPLOAD_DIR / "profile_images").mkdir(exist_ok=True)
 (UPLOAD_DIR / "projects").mkdir(exist_ok=True)
+
+# Configure CORS - MUST be before routes
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://literature-rev-admin-portal.onrender.com",
+        "http://localhost:3000",
+        "http://localhost:3001"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount uploads directory - MUST be before API routes
+if UPLOAD_DIR.exists():
+    app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+    print(f"✅ Mounted uploads at /api/uploads from {UPLOAD_DIR}")
+
+# Include routers
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
+app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
+app.include_router(utils.router, prefix="/api/utils", tags=["utils"])
+
+# Manual file serving as fallback
+@app.get("/api/uploads/{file_path:path}")
+async def serve_upload_file(file_path: str):
+    """Manually serve uploaded files as fallback"""
+    file_full_path = UPLOAD_DIR / file_path
+    
+    # Debug logging
+    print(f"Requested file: {file_path}")
+    print(f"Full path: {file_full_path}")
+    print(f"File exists: {file_full_path.exists()}")
+    
+    if file_full_path.exists() and file_full_path.is_file():
+        return FileResponse(
+            path=str(file_full_path),
+            media_type="image/png" if file_path.endswith('.png') else "image/jpeg"
+        )
+    
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": "File not found",
+            "requested_path": file_path,
+            "full_path": str(file_full_path),
+            "exists": file_full_path.exists()
+        }
+    )
 
 print("🚀 Starting Literature Review Database - Admin Portal")
 print(f"📁 Base directory: {BASE_DIR}")
@@ -56,30 +109,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             ]
         }
     )
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://literature-rev-admin-portal.onrender.com",
-        "http://localhost:3000",  # Add for local development
-        "http://localhost:3001"   # Add for local development
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Include routers
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(users.router, prefix="/api/users", tags=["users"])
-app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
-app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
-app.include_router(utils.router, prefix="/api/utils", tags=["utils"])
-
-# Mount static files for uploads - IMPORTANT: This must be before catch-all routes
-app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 # Serve static files manually as backup
 @app.get("/uploads/{path:path}")
