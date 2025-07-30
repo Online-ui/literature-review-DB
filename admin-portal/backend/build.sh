@@ -76,7 +76,7 @@ if [ -d "../frontend" ]; then
     npm install --legacy-peer-deps
     
     echo "   Building React app..."
-    # === CHANGE: Disable treating warnings as errors by setting CI=false ===
+    # Disable treating warnings as errors by setting CI=false
     CI=false npm run build
     
     echo "   Copying build to backend static directory..."
@@ -105,9 +105,14 @@ print(f'  ✓ Working directory: {os.getcwd()}')
 
 # Check uploads directory
 uploads = Path('app/uploads')
-print(f'  {"✓" if uploads.exists() else "✗"} Uploads directory: {uploads.absolute()}')
-print(f'  {"✓" if (uploads / "profile_images").exists() else "✗"} Profile images directory')
-print(f'  {"✓" if (uploads / "projects").exists() else "✗"} Projects directory')
+exists_symbol = '✓' if uploads.exists() else '✗'
+print(f'  {exists_symbol} Uploads directory: {uploads.absolute()}')
+
+profile_exists = '✓' if (uploads / 'profile_images').exists() else '✗'
+print(f'  {profile_exists} Profile images directory')
+
+projects_exists = '✓' if (uploads / 'projects').exists() else '✗'
+print(f'  {projects_exists} Projects directory')
 
 # Check static directory
 static = Path('app/static')
@@ -117,9 +122,13 @@ else:
     print(f'  ⚠️  Frontend build not found (API-only mode)')
 
 # Check environment
-print(f'\nEnvironment:')
-print(f'  RENDER: {"Yes" if os.environ.get("RENDER") else "No"}')
-print(f'  DATABASE_URL: {"Set" if os.environ.get("DATABASE_URL") else "Not set"}')
+print('')
+print('Environment:')
+render_status = 'Yes' if os.environ.get('RENDER') else 'No'
+print(f'  RENDER: {render_status}')
+
+db_status = 'Set' if os.environ.get('DATABASE_URL') else 'Not set'
+print(f'  DATABASE_URL: {db_status}')
 "
 
 echo ""
