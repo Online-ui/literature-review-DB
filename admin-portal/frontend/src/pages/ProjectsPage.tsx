@@ -1329,7 +1329,7 @@ const ProjectsPage: React.FC = () => {
                     
                     <Grid item xs={12}>
                       <TextField
-                        label="Supervisor"
+                        label="Supervisor(S)"
                         fullWidth
                         variant="outlined"
                         value={formData.supervisor}
