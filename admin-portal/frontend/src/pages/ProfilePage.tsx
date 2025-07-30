@@ -86,16 +86,22 @@ const ProfilePage: React.FC = () => {
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    console.error('Failed to update profile:', error);
     
     setUploadingImage(true);
     try {
       const response = await adminApi.uploadProfileImage(file);
+
+      console.log('Image upload response:', response);
       
       // Set the display URL
       setProfileImage(response.image_url);
       
       // Update the user context with just the filename/path
       updateUser({ profile_image: response.path });
+
+      console.log('User after image update:', user);
       
       // Also update the profile data if in edit mode
       if (editing) {
@@ -139,6 +145,8 @@ const ProfilePage: React.FC = () => {
 
   const handleSave = async () => {
     try {
+      console.log('Saving profile with data:', profileData);
+      
       // Update the profile via API
       const updatedUser = await adminApi.updateProfile({
         full_name: profileData.full_name,
@@ -149,9 +157,13 @@ const ProfilePage: React.FC = () => {
         about: profileData.about,
         disciplines: profileData.disciplines
       });
+
+      console.log('API Response:', response);
       
       // Update the user context with the returned user data
       updateUser(updatedUser);
+
+      console.log('User after update:', user);
       
       // Update local state to reflect saved changes
       setProfileData({
