@@ -41,19 +41,21 @@ async def upload_profile_image(
         try:
             await profile_image_service.delete_image(current_user.profile_image)
         except Exception:
-            # Continue even if deletion fails
             pass
     
-    # Upload new image
     try:
+        # Save image and get the relative path
         path = await profile_image_service.save_image(file, f"user_{current_user.id}")
-        current_user.profile_image = path
+        
+        # Store the full relative path including user directory
+        full_relative_path = f"user_{current_user.id}/{path}" if not path.startswith(f"user_{current_user.id}") else path
+        
+        current_user.profile_image = full_relative_path
         db.commit()
         
-        # Return the correct URL format
         return {
-            "image_url": f"/api/uploads/profile_images/{path}",  # Full API path
-            "path": path  # Raw path for database storage
+            "image_url": f"/api/uploads/profile_images/{full_relative_path}",
+            "path": full_relative_path
         }
     except Exception as e:
         db.rollback()
@@ -168,4 +170,32 @@ async def debug_profile(
             "profile_image": current_user.profile_image,
         },
         "timestamp": datetime.utcnow().isoformat()
+    }
+
+@router.get("/image/debug")
+async def debug_profile_image(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Debug profile image paths"""
+    import os
+    from pathlib import Path
+    
+    base_dir = Path(__file__).resolve().parent.parent
+    upload_dir = base_dir / "uploads" / "profile_images"
+    
+    user_images = []
+    if upload_dir.exists():
+        user_dir = upload_dir / f"user_{current_user.id}"
+        if user_dir.exists():
+            user_images = [f.name for f in user_dir.iterdir() if f.is_file()]
+    
+    return {
+        "current_profile_image": current_user.profile_image,
+        "upload_dir_exists": upload_dir.exists(),
+        "user_dir": str(upload_dir / f"user_{current_user.id}"),
+        "user_dir_exists": (upload_dir / f"user_{current_user.id}").exists(),
+        "images_in_user_dir": user_images,
+        "full_path": str(upload_dir / current_user.profile_image) if current_user.profile_image else None,
+        "file_exists": (upload_dir / current_user.profile_image).exists() if current_user.profile_image else False
     }
