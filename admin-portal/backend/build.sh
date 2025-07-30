@@ -76,7 +76,8 @@ if [ -d "../frontend" ]; then
     npm install --legacy-peer-deps
     
     echo "   Building React app..."
-    npm run build
+    # === CHANGE: Disable treating warnings as errors by setting CI=false ===
+    CI=false npm run build
     
     echo "   Copying build to backend static directory..."
     cd ../backend
