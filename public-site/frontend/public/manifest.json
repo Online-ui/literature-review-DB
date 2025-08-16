@@ -1,6 +1,7 @@
 {
-  "short_name": "UHAS RESEARCH HUB",
-  "name": "UHAS RESEARCH HUB APP",
+  "short_name": "UHAS Research",
+  "name": "UHAS Research Hub - Public Health Database",
+  "description": "Discover and explore public health research projects from FRED N. BINKA School of Public Health",
   "icons": [
     {
       "src": "favicon.ico",
@@ -8,18 +9,35 @@
       "type": "image/x-icon"
     },
     {
+      "src": "favicon-16x16.png",
+      "type": "image/png",
+      "sizes": "16x16"
+    },
+    {
+      "src": "favicon-32x32.png",
+      "type": "image/png",
+      "sizes": "32x32"
+    },
+    {
       "src": "logo192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "orientation": "portrait-primary",
+  "theme_color": "#1b5e20",
+  "background_color": "#fafafa",
+  "categories": ["education", "research", "health"],
+  "lang": "en",
+  "scope": "/",
+  "prefer_related_applications": false
 }

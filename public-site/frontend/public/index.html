@@ -3,6 +3,22 @@
   <head>
     <meta charset="utf-8" />
     
+    <!-- Mobile-first viewport configuration -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover" />
+    
+    <!-- Mobile web app capabilities -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="UHAS Research Hub">
+    
+    <!-- Prevent automatic phone number detection -->
+    <meta name="format-detection" content="telephone=no">
+    
+    <!-- Improve mobile performance -->
+    <meta name="HandheldFriendly" content="true">
+    <meta name="MobileOptimized" content="width">
+    
     <!-- Preconnect to external domains for faster loading -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,8 +29,19 @@
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/apple-touch-icon.png">
     
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Additional mobile icons -->
+    <link rel="apple-touch-icon" sizes="57x57" href="%PUBLIC_URL%/apple-touch-icon-57x57.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="%PUBLIC_URL%/apple-touch-icon-60x60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="%PUBLIC_URL%/apple-touch-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="%PUBLIC_URL%/apple-touch-icon-76x76.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="%PUBLIC_URL%/apple-touch-icon-114x114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="%PUBLIC_URL%/apple-touch-icon-120x120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="%PUBLIC_URL%/apple-touch-icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="%PUBLIC_URL%/apple-touch-icon-152x152.png">
+    
     <meta name="theme-color" content="#1976d2" />
+    <meta name="msapplication-TileColor" content="#1976d2">
+    <meta name="msapplication-config" content="%PUBLIC_URL%/browserconfig.xml">
     
     <!-- Default meta description - will be overridden by SEOHead component -->
     <meta
@@ -22,15 +49,32 @@
       content="Discover and explore academic research projects, theses, and dissertations from universities worldwide. Search by research area, degree type, and institution."
     />
     
+    <!-- Open Graph meta tags for better social sharing -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="UHAS Research Hub">
+    <meta property="og:locale" content="en_US">
+    
+    <!-- Twitter Card meta tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@UHASOfficial">
+    
     <!-- Critical CSS for faster rendering -->
     <link rel="preload" href="%PUBLIC_URL%/static/css/main.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="%PUBLIC_URL%/static/css/main.css"></noscript>
+    
+    <!-- Preload key fonts for better performance -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"></noscript>
     
     <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
     -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <!-- DNS prefetch for better performance -->
+    <link rel="dns-prefetch" href="//fonts.googleapis.com">
+    <link rel="dns-prefetch" href="//fonts.gstatic.com">
     
     <!--
       Notice the use of %PUBLIC_URL% in the tags above.
@@ -42,11 +86,80 @@
     -->
     
     <!-- Default title - will be overridden by SEOHead component -->
-    <title>Research Projects Database - Academic Papers & Dissertations</title>
+    <title>UHAS Research Hub - Public Health Research Database</title>
+    
+    <!-- Inline critical CSS for mobile optimization -->
+    <style>
+      /* Critical CSS for above-the-fold content */
+      body {
+        margin: 0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background-color: #fafafa;
+      }
+      
+      /* Loading state */
+      #root {
+        min-height: 100vh;
+      }
+      
+      /* Prevent flash of unstyled content */
+      .loading {
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+      
+      .loaded {
+        opacity: 1;
+      }
+      
+      /* Mobile-specific optimizations */
+      @media (max-width: 600px) {
+        body {
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        
+        /* Improve touch targets */
+        button, a, [role="button"] {
+          min-height: 44px;
+          min-width: 44px;
+        }
+        
+        /* Prevent zoom on input focus */
+        input, select, textarea {
+          font-size: 16px;
+        }
+      }
+    </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+    <div id="root" class="loading"></div>
+    
+    <!-- Add loading script -->
+    <script>
+      // Remove loading class when React app loads
+      window.addEventListener('load', function() {
+        document.getElementById('root').classList.remove('loading');
+        document.getElementById('root').classList.add('loaded');
+      });
+      
+      // Service worker registration for better mobile performance
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js')
+            .then(function(registration) {
+              console.log('SW registered: ', registration);
+            })
+            .catch(function(registrationError) {
+              console.log('SW registration failed: ', registrationError);
+            });
+        });
+      }
+    </script>
+    
     <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.

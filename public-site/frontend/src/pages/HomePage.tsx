@@ -19,12 +19,9 @@ import {
   useTheme,
   useMediaQuery,
   Skeleton,
-  Drawer,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Divider
+  Divider,
+  Zoom,
+  Grow
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -40,8 +37,7 @@ import {
   EmojiObjects as InnovationIcon,
   Favorite as HeartIcon,
   Groups as CommunityIcon,
-  Menu as MenuIcon,
-  Close as CloseIcon
+  TouchApp as TouchIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
@@ -69,16 +65,35 @@ const HomePage: React.FC = () => {
   const [featuredProjects, setFeaturedProjects] = useState<ProjectSummary[]>([]);
   const [stats, setStats] = useState<SiteStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  const isExtraSmall = useMediaQuery(theme.breakpoints.down(400));
 
   useEffect(() => {
     loadData();
   }, []);
 
+  // Add touch gesture handling for better mobile experience
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartY(e.touches[0].clientY);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartY) return;
+    
+    const touchEndY = e.changedTouches[0].clientY;
+    const diff = touchStartY - touchEndY;
+    
+    // If swipe up is detected and we're at the top, show a subtle hint
+    if (diff > 50 && window.scrollY < 100) {
+      // Could add a subtle animation or hint here
+    }
+    
+    setTouchStartY(null);
+  };
   useEffect(() => {
     // Add homepage structured data
     const homepageSchema = {
@@ -153,7 +168,11 @@ const HomePage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ bgcolor: '#fafafa', minHeight: '100vh' }}>
+    <Box 
+      sx={{ bgcolor: '#fafafa', minHeight: '100vh' }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <SEOHead 
         title="School of Public Health - Advancing Health Equity and Population Health"
         description="Leading institution in public health education, research, and community engagement. Discover our programs, research initiatives, and commitment to improving global health outcomes."
@@ -165,12 +184,12 @@ const HomePage: React.FC = () => {
       <Box
         sx={{
           position: 'relative',
-          minHeight: { xs: '100vh', md: '100vh' },
+          minHeight: { xs: 'calc(100vh - 60px)', sm: '100vh', md: '100vh' },
           display: 'flex',
           alignItems: 'center',
           overflow: 'hidden',
           background: 'linear-gradient(135deg, #0d4715 100%, #1a7a5e 50%, #2a9d7f 100%)',
-          pb: { xs: 8, md: 0 }
+          pb: { xs: isMobile ? 12 : 8, md: 0 }
         }}
       >
         {/* Animated Background Pattern */}
@@ -186,7 +205,12 @@ const HomePage: React.FC = () => {
           }}
         />
         
-        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 2, px: { xs: 2, sm: 3 } }}>
+        <Container maxWidth="lg" sx={{ 
+          position: 'relative', 
+          zIndex: 2, 
+          px: { xs: 1.5, sm: 2, md: 3 },
+          py: { xs: 2, sm: 0 }
+        }}>
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -198,11 +222,17 @@ const HomePage: React.FC = () => {
                   variant="h1"
                   sx={{
                     fontWeight: 800,
-                    fontSize: { xs: '2rem', sm: '3rem', md: '4.5rem' },
+                    fontSize: { 
+                      xs: isExtraSmall ? '1.75rem' : '2rem', 
+                      sm: '2.5rem', 
+                      md: '3.5rem', 
+                      lg: '4.5rem' 
+                    },
                     color: 'white',
                     mb: { xs: 2, md: 3 },
                     lineHeight: 1.1,
-                    letterSpacing: '-0.02em'
+                    letterSpacing: '-0.02em',
+                    textAlign: { xs: 'center', md: 'left' }
                   }}
                 >
                   Transforming Public Health
@@ -214,9 +244,16 @@ const HomePage: React.FC = () => {
                   sx={{
                     mb: { xs: 3, md: 4 },
                     color: 'rgba(255,255,255,0.9)',
-                    fontSize: { xs: '1rem', sm: '1.2rem', md: '1.4rem' },
+                    fontSize: { 
+                      xs: isExtraSmall ? '0.875rem' : '1rem', 
+                      sm: '1.1rem', 
+                      md: '1.3rem', 
+                      lg: '1.4rem' 
+                    },
                     lineHeight: 1.6,
-                    fontWeight: 300
+                    fontWeight: 300,
+                    textAlign: { xs: 'center', md: 'left' },
+                    px: { xs: 1, md: 0 }
                   }}
                 >
                   Leading the way in health equity, innovative research, and community-driven solutions 
@@ -227,22 +264,29 @@ const HomePage: React.FC = () => {
                 <Paper
                   elevation={0}
                   sx={{
-                    p: { xs: 0.3, sm: 0.5 },
+                    p: { xs: 0.2, sm: 0.3, md: 0.5 },
                     display: 'flex',
                     alignItems: 'center',
-                    maxWidth: 600,
+                    maxWidth: { xs: '100%', sm: 500, md: 600 },
+                    mx: { xs: 'auto', md: 0 },
                     borderRadius: '50px',
                     bgcolor: 'rgba(255,255,255,0.95)',
                     backdropFilter: 'blur(10px)',
                     border: '1px solid rgba(255,255,255,0.3)',
                     mb: { xs: 3, md: 4 },
                     flexDirection: { xs: 'column', sm: 'row' },
-                    gap: { xs: 1, sm: 0 }
+                    gap: { xs: 0.5, sm: 0 }
                   }}
                 >
                   <TextField
                     fullWidth
-                    placeholder={isMobile ? "Search..." : "Discover research, programs, and more..."}
+                    placeholder={
+                      isExtraSmall 
+                        ? "Search..." 
+                        : isMobile 
+                          ? "Search research..." 
+                          : "Discover research, programs, and more..."
+                    }
                     variant="standard"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -251,10 +295,18 @@ const HomePage: React.FC = () => {
                       disableUnderline: true,
                       startAdornment: (
                         <InputAdornment position="start">
-                          <SearchIcon sx={{ color: '#0a4f3c', ml: { xs: 1, sm: 2 } }} />
+                          <SearchIcon sx={{ 
+                            color: '#0a4f3c', 
+                            ml: { xs: 0.5, sm: 1, md: 2 },
+                            fontSize: { xs: 20, sm: 24 }
+                          }} />
                         </InputAdornment>
                       ),
-                      sx: { px: { xs: 1, sm: 2 }, py: 1 }
+                      sx: { 
+                        px: { xs: 0.5, sm: 1, md: 2 }, 
+                        py: { xs: 0.75, sm: 1 },
+                        fontSize: { xs: '0.875rem', sm: '1rem' }
+                      }
                     }}
                   />
                   <Button
@@ -262,14 +314,16 @@ const HomePage: React.FC = () => {
                     onClick={handleSearch}
                     sx={{
                       borderRadius: '50px',
-                      px: { xs: 3, sm: 4 },
+                      px: { xs: 2.5, sm: 3, md: 4 },
                       py: { xs: 1, sm: 1.5 },
                       mr: { xs: 0, sm: 0.5 },
                       mb: { xs: 0.5, sm: 0 },
                       width: { xs: '100%', sm: 'auto' },
+                      minWidth: { xs: 'auto', sm: 100 },
                       bgcolor: '#0a4f3c',
                       textTransform: 'none',
                       fontWeight: 600,
+                      fontSize: { xs: '0.875rem', sm: '1rem' },
                       boxShadow: 'none',
                       '&:hover': {
                         bgcolor: '#063d2f',
@@ -282,7 +336,7 @@ const HomePage: React.FC = () => {
                 </Paper>
 
                 {/* Quick Stats - Mobile Optimized */}
-                <Grid container spacing={2}>
+                <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ justifyContent: { xs: 'center', md: 'flex-start' } }}>
                   {[
                     { number: '12+', label: 'Years of Excellence' },
                     { number: '10K+', label: 'Alumni Worldwide' },
@@ -293,13 +347,25 @@ const HomePage: React.FC = () => {
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: 0.5 + index * 0.1 }}
                       >
-                        <Box sx={{ textAlign: { xs: 'left', sm: 'center' } }}>
+                        <Box sx={{ 
+                          textAlign: { xs: 'center', md: 'left' },
+                          p: { xs: 1, sm: 1.5 },
+                          borderRadius: 2,
+                          bgcolor: 'rgba(255,255,255,0.1)',
+                          backdropFilter: 'blur(10px)',
+                          border: '1px solid rgba(255,255,255,0.2)'
+                        }}>
                           <Typography 
                             variant="h4" 
                             sx={{ 
                               color: '#a7ffeb', 
                               fontWeight: 700,
-                              fontSize: { xs: '1.8rem', sm: '2.5rem' }
+                              fontSize: { 
+                                xs: isExtraSmall ? '1.5rem' : '1.8rem', 
+                                sm: '2rem', 
+                                md: '2.5rem' 
+                              },
+                              mb: 0.5
                             }}
                           >
                             {stat.number}
@@ -308,7 +374,8 @@ const HomePage: React.FC = () => {
                             variant="body2" 
                             sx={{ 
                               color: 'rgba(255,255,255,0.8)',
-                              fontSize: { xs: '0.875rem', sm: '1rem' }
+                              fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' },
+                              fontWeight: 500
                             }}
                           >
                             {stat.label}
@@ -321,7 +388,7 @@ const HomePage: React.FC = () => {
               </Grid>
               
               {/* Hero Illustration - Hidden on mobile */}
-              {!isMobile && (
+              {!isTablet && (
                 <Grid item xs={12} md={5}>
                   <motion.div
                     initial={{ opacity: 0, x: 50 }}
@@ -387,7 +454,7 @@ const HomePage: React.FC = () => {
         </Container>
 
         {/* Scroll Indicator - Hidden on mobile */}
-        {!isMobile && (
+        {!isTablet && (
           <Box
             component={motion.div}
             animate={{ y: [0, 10, 0] }}
@@ -404,11 +471,43 @@ const HomePage: React.FC = () => {
             <Typography variant="caption">Scroll to explore</Typography>
           </Box>
         )}
+
+        {/* Mobile Swipe Hint */}
+        {isMobile && (
+          <Box
+            component={motion.div}
+            animate={{ y: [0, 8, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            sx={{
+              position: 'absolute',
+              bottom: { xs: 80, sm: 30 },
+              left: '50%',
+              transform: 'translateX(-50%)',
+              color: 'white',
+              opacity: 0.6,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 0.5
+            }}
+          >
+            <TouchIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
+            <Typography variant="caption" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
+              Swipe to explore
+            </Typography>
+          </Box>
+        )}
       </Box>
 
       {/* Modern Stats Section - Mobile Optimized */}
-      <Container maxWidth="lg" sx={{ py: { xs: 6, md: 10 }, mt: { xs: -6, md: -10 }, position: 'relative', zIndex: 10 }}>
-        <Grid container spacing={{ xs: 2, md: 3 }}>
+      <Container maxWidth="lg" sx={{ 
+        py: { xs: 4, sm: 6, md: 8, lg: 10 }, 
+        mt: { xs: -4, sm: -6, md: -8, lg: -10 }, 
+        position: 'relative', 
+        zIndex: 10,
+        px: { xs: 1.5, sm: 2, md: 3 }
+      }}>
+        <Grid container spacing={{ xs: 1.5, sm: 2, md: 3 }}>
           {[
             { 
               icon: ResearchIcon, 
@@ -449,7 +548,7 @@ const HomePage: React.FC = () => {
                 <Card
                   elevation={0}
                   sx={{
-                    p: { xs: 2, sm: 3 },
+                    p: { xs: 1.5, sm: 2, md: 3 },
                     height: '100%',
                     background: 'white',
                     borderRadius: { xs: 3, md: 4 },
@@ -457,12 +556,16 @@ const HomePage: React.FC = () => {
                     overflow: 'hidden',
                     transition: 'all 0.3s ease',
                     border: '1px solid rgba(0,0,0,0.08)',
+                    cursor: 'pointer',
                     '&:hover': {
                       transform: { xs: 'none', md: 'translateY(-8px)' },
                       boxShadow: { xs: 'none', md: '0 20px 40px rgba(0,0,0,0.1)' },
                       '& .stat-icon': {
                         transform: { xs: 'none', md: 'scale(1.1) rotate(5deg)' }
                       }
+                    },
+                    '&:active': {
+                      transform: { xs: 'scale(0.98)', md: 'translateY(-8px) scale(0.98)' }
                     }
                   }}
                 >
@@ -471,8 +574,8 @@ const HomePage: React.FC = () => {
                       position: 'absolute',
                       top: -20,
                       right: -20,
-                      width: { xs: 80, md: 100 },
-                      height: { xs: 80, md: 100 },
+                      width: { xs: 60, sm: 80, md: 100 },
+                      height: { xs: 60, sm: 80, md: 100 },
                       borderRadius: '50%',
                       background: stat.gradient,
                       opacity: 0.1
@@ -482,8 +585,8 @@ const HomePage: React.FC = () => {
                     <Box
                       className="stat-icon"
                       sx={{
-                        width: { xs: 50, md: 60 },
-                        height: { xs: 50, md: 60 },
+                        width: { xs: 40, sm: 50, md: 60 },
+                        height: { xs: 40, sm: 50, md: 60 },
                         borderRadius: { xs: 2, md: 3 },
                         background: stat.gradient,
                         display: 'flex',
@@ -495,7 +598,10 @@ const HomePage: React.FC = () => {
                         boxShadow: '0 10px 30px rgba(0,0,0,0.1)'
                       }}
                     >
-                      <stat.icon sx={{ color: 'white', fontSize: { xs: 24, md: 28 } }} />
+                      <stat.icon sx={{ 
+                        color: 'white', 
+                        fontSize: { xs: 20, sm: 24, md: 28 } 
+                      }} />
                     </Box>
                     <Typography
                       variant="h3"
@@ -503,11 +609,16 @@ const HomePage: React.FC = () => {
                         fontWeight: 700,
                         color: stat.color,
                         mb: 0.5,
-                        fontSize: { xs: '1.8rem', sm: '2rem', md: '2.5rem' }
+                        fontSize: { 
+                          xs: isExtraSmall ? '1.5rem' : '1.8rem', 
+                          sm: '2rem', 
+                          md: '2.2rem',
+                          lg: '2.5rem' 
+                        }
                       }}
                     >
                       {loading ? (
-                        <Skeleton width={80} sx={{ mx: 'auto' }} />
+                        <Skeleton width={{ xs: 60, sm: 80 }} sx={{ mx: 'auto' }} />
                       ) : (
                         `${stat.number.toLocaleString()}${stat.number >= 1000 ? '+' : ''}`
                       )}
@@ -517,8 +628,9 @@ const HomePage: React.FC = () => {
                       sx={{ 
                         color: 'text.secondary', 
                         fontWeight: 500,
-                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                        lineHeight: 1.3
+                        fontSize: { xs: '0.7rem', sm: '0.75rem', md: '0.875rem' },
+                        lineHeight: 1.3,
+                        px: { xs: 0.5, sm: 0 }
                       }}
                     >
                       {stat.label}
@@ -532,30 +644,40 @@ const HomePage: React.FC = () => {
       </Container>
 
       {/* Modern Dean's Message Section - Mobile Optimized */}
-      <Box sx={{ bgcolor: 'white', py: { xs: 6, md: 10 } }}>
-        <Container maxWidth="lg" sx={{ px: { xs: 2, sm: 3 } }}>
+      <Box sx={{ bgcolor: 'white', py: { xs: 4, sm: 6, md: 8, lg: 10 } }}>
+        <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 2, md: 3 } }}>
           <motion.div
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             transition={{ duration: 0.8 }}
             viewport={{ once: true }}
           >
-            <Grid container spacing={{ xs: 4, md: 6 }} alignItems="center">
+            <Grid container spacing={{ xs: 3, sm: 4, md: 6 }} alignItems="center">
               <Grid item xs={12} md={5}>
                 <Box sx={{ position: 'relative' }}>
                   <Box
                     sx={{
-                      width: { xs: 200, sm: 250, md: 350 },
-                      height: { xs: 200, sm: 250, md: 350 },
+                      width: { 
+                        xs: isExtraSmall ? 150 : 180, 
+                        sm: 220, 
+                        md: 300, 
+                        lg: 350 
+                      },
+                      height: { 
+                        xs: isExtraSmall ? 150 : 180, 
+                        sm: 220, 
+                        md: 300, 
+                        lg: 350 
+                      },
                       mx: 'auto',
                       position: 'relative',
                       '&::before': {
                         content: '""',
                         position: 'absolute',
-                        top: -20,
-                        left: -20,
-                        right: 20,
-                        bottom: 20,
+                        top: { xs: -10, sm: -15, md: -20 },
+                        left: { xs: -10, sm: -15, md: -20 },
+                        right: { xs: 10, sm: 15, md: 20 },
+                        bottom: { xs: 10, sm: 15, md: 20 },
                         background: 'linear-gradient(135deg, #0a4f3c 0%, #2a9d7f 100%)',
                         borderRadius: '50%',
                         opacity: 0.1
@@ -571,22 +693,28 @@ const HomePage: React.FC = () => {
                         height: '100%',
                         borderRadius: '50%',
                         objectFit: 'cover',
-                        boxShadow: '0 20px 60px rgba(0,0,0,0.15)'
+                        boxShadow: { 
+                          xs: '0 10px 30px rgba(0,0,0,0.15)', 
+                          md: '0 20px 60px rgba(0,0,0,0.15)' 
+                        }
                       }}
                     />
                   </Box>
-                  <Box sx={{ textAlign: 'center', mt: 3 }}>
+                  <Box sx={{ textAlign: 'center', mt: { xs: 2, sm: 3 } }}>
                     <Typography 
                       variant="h5" 
                       sx={{ 
                         fontWeight: 700, 
                         color: '#0a4f3c',
-                        fontSize: { xs: '1.25rem', md: '1.5rem' }
+                        fontSize: { xs: '1.1rem', sm: '1.25rem', md: '1.4rem', lg: '1.5rem' }
                       }}
                     >
                       Prof. Frank Baiden
                     </Typography>
-                    <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                    <Typography variant="body1" sx={{ 
+                      color: 'text.secondary',
+                      fontSize: { xs: '0.875rem', sm: '1rem' }
+                    }}>
                       Dean, School of Public Health
                     </Typography>
                   </Box>
@@ -601,7 +729,8 @@ const HomePage: React.FC = () => {
                     letterSpacing: 2,
                     mb: 2,
                     display: 'block',
-                    fontSize: { xs: '0.75rem', md: '0.875rem' }
+                    fontSize: { xs: '0.7rem', sm: '0.75rem', md: '0.875rem' },
+                    textAlign: { xs: 'center', md: 'left' }
                   }}
                 >
                   MESSAGE FROM THE DEAN
@@ -612,7 +741,14 @@ const HomePage: React.FC = () => {
                     fontWeight: 700,
                     color: '#0a4f3c',
                     mb: 3,
-                    fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' }
+                    fontSize: { 
+                      xs: isExtraSmall ? '1.25rem' : '1.5rem', 
+                      sm: '1.75rem', 
+                      md: '2.25rem', 
+                      lg: '2.5rem' 
+                    },
+                    textAlign: { xs: 'center', md: 'left' },
+                    lineHeight: 1.2
                   }}
                 >
                   Building a Healthier Future Together
@@ -623,7 +759,8 @@ const HomePage: React.FC = () => {
                     color: 'text.secondary',
                     lineHeight: 1.8,
                     mb: 3,
-                    fontSize: { xs: '1rem', md: '1.1rem' }
+                    fontSize: { xs: '0.875rem', sm: '1rem', md: '1.1rem' },
+                    textAlign: { xs: 'center', md: 'left' }
                   }}
                 >
                   Welcome to our School of Public Health, where innovation meets compassion. 
@@ -637,39 +774,47 @@ const HomePage: React.FC = () => {
                     color: 'text.secondary',
                     lineHeight: 1.8,
                     mb: 4,
-                    fontSize: { xs: '1rem', md: '1.1rem' },
-                    display: { xs: 'none', sm: 'block' }
+                    fontSize: { xs: '0.875rem', sm: '1rem', md: '1.1rem' },
+                    display: { xs: 'none', sm: 'block' },
+                    textAlign: { xs: 'center', md: 'left' }
                   }}
                 >
                   Our interdisciplinary approach, cutting-edge research facilities, and global 
                   partnerships position us at the forefront of public health education and practice. 
                   Join us in our mission to create healthier, more equitable communities worldwide.
                 </Typography>
-                <Button
-                  variant="contained"
-                  size={isMobile ? "medium" : "large"}
-                  endIcon={<ArrowIcon />}
-                  component="a"
-                  href="https://uhas.edu.gh/uhas/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  fullWidth={isMobile}
-                  sx={{
-                    bgcolor: '#0a4f3c',
-                    px: { xs: 3, md: 4 },
-                    py: 1.5,
-                    borderRadius: 3,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    boxShadow: 'none',
-                    '&:hover': {
-                      bgcolor: '#063d2f',
-                      boxShadow: '0 10px 30px rgba(10,79,60,0.2)'
-                    }
-                  }}
-                >
-                  Learn More About Us
-                </Button>
+                <Box sx={{ textAlign: { xs: 'center', md: 'left' } }}>
+                  <Button
+                    variant="contained"
+                    size={isMobile ? "medium" : "large"}
+                    endIcon={<ArrowIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
+                    component="a"
+                    href="https://uhas.edu.gh/uhas/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    fullWidth={isMobile}
+                    sx={{
+                      bgcolor: '#0a4f3c',
+                      px: { xs: 3, sm: 4, md: 5 },
+                      py: { xs: 1.25, sm: 1.5 },
+                      borderRadius: 3,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      fontSize: { xs: '0.875rem', sm: '1rem' },
+                      boxShadow: 'none',
+                      maxWidth: { xs: '100%', sm: 280 },
+                      '&:hover': {
+                        bgcolor: '#063d2f',
+                        boxShadow: '0 10px 30px rgba(10,79,60,0.2)'
+                      },
+                      '&:active': {
+                        transform: 'scale(0.98)'
+                      }
+                    }}
+                  >
+                    Learn More About Us
+                  </Button>
+                </Box>
               </Grid>
             </Grid>
           </motion.div>
@@ -677,8 +822,8 @@ const HomePage: React.FC = () => {
       </Box>
 
       {/* Featured Research Section - Mobile Optimized */}
-      <Box sx={{ bgcolor: '#f8f9fa', py: { xs: 6, md: 10 } }}>
-        <Container maxWidth="lg" sx={{ px: { xs: 2, sm: 3 } }}>
+      <Box sx={{ bgcolor: '#f8f9fa', py: { xs: 4, sm: 6, md: 8, lg: 10 } }}>
+        <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 2, md: 3 } }}>
           <Box sx={{ textAlign: 'center', mb: { xs: 4, md: 8 } }}>
             <Typography
               variant="overline"
@@ -688,7 +833,7 @@ const HomePage: React.FC = () => {
                 letterSpacing: 2,
                 mb: 2,
                 display: 'block',
-                fontSize: { xs: '0.75rem', md: '0.875rem' }
+                fontSize: { xs: '0.7rem', sm: '0.75rem', md: '0.875rem' }
               }}
             >
               RESEARCH EXCELLENCE
@@ -699,7 +844,14 @@ const HomePage: React.FC = () => {
                 fontWeight: 700,
                 color: '#0a4f3c',
                 mb: 2,
-                fontSize: { xs: '1.75rem', sm: '2.25rem', md: '3rem' }
+                fontSize: { 
+                  xs: isExtraSmall ? '1.5rem' : '1.75rem', 
+                  sm: '2rem', 
+                  md: '2.5rem', 
+                  lg: '3rem' 
+                },
+                lineHeight: 1.2,
+                px: { xs: 1, sm: 0 }
               }}
             >
               Featured Research Projects
@@ -708,9 +860,10 @@ const HomePage: React.FC = () => {
               variant="body1"
               sx={{
                 color: 'text.secondary',
-                maxWidth: 600,
+                maxWidth: { xs: '100%', sm: 500, md: 600 },
                 mx: 'auto',
-                fontSize: { xs: '0.875rem', md: '1rem' }
+                fontSize: { xs: '0.875rem', sm: '1rem' },
+                px: { xs: 1, sm: 0 }
               }}
             >
               Discover groundbreaking research that's shaping the future of public health
@@ -718,15 +871,19 @@ const HomePage: React.FC = () => {
           </Box>
 
           {loading ? (
-            <Grid container spacing={{ xs: 2, md: 4 }}>
+            <Grid container spacing={{ xs: 1.5, sm: 2, md: 3, lg: 4 }}>
               {[1, 2, 3].map((item) => (
-                <Grid item xs={12} md={4} key={item}>
-                  <Skeleton variant="rectangular" height={400} sx={{ borderRadius: 4 }} />
+                <Grid item xs={12} sm={6} lg={4} key={item}>
+                  <Skeleton 
+                    variant="rectangular" 
+                    height={{ xs: 300, sm: 350, md: 400 }} 
+                    sx={{ borderRadius: { xs: 3, md: 4 } }} 
+                  />
                 </Grid>
               ))}
             </Grid>
           ) : featuredProjects.length > 0 ? (
-            <Grid container spacing={{ xs: 2, md: 4 }}>
+            <Grid container spacing={{ xs: 1.5, sm: 2, md: 3, lg: 4 }}>
               {featuredProjects.slice(0, isMobile ? 3 : 6).map((project, index) => (
                 <Grid item xs={12} sm={6} lg={4} key={project.id}>
                   <motion.div
@@ -746,12 +903,16 @@ const HomePage: React.FC = () => {
                         transition: 'all 0.3s ease',
                         cursor: 'pointer',
                         border: '1px solid rgba(0,0,0,0.08)',
+                        position: 'relative',
                         '&:hover': {
                           transform: { xs: 'none', md: 'translateY(-8px)' },
                           boxShadow: { xs: '0 4px 20px rgba(0,0,0,0.08)', md: '0 20px 40px rgba(0,0,0,0.1)' },
                           '& .project-image': {
                             transform: { xs: 'none', md: 'scale(1.05)' }
                           }
+                        },
+                        '&:active': {
+                          transform: { xs: 'scale(0.98)', md: 'translateY(-8px) scale(0.98)' }
                         }
                       }}
                       onClick={() => navigate(`/projects/${project.slug}`)}
@@ -760,7 +921,7 @@ const HomePage: React.FC = () => {
                       <Box
                         className="project-image"
                         sx={{
-                          height: { xs: 150, md: 200 },
+                          height: { xs: 120, sm: 150, md: 180, lg: 200 },
                           background: `linear-gradient(135deg, ${
                             ['#0a4f3c', '#1a7a5e', '#2a9d7f'][index % 3]
                           } 0%, ${
@@ -773,16 +934,19 @@ const HomePage: React.FC = () => {
                           justifyContent: 'center'
                         }}
                       >
-                        <ResearchIcon sx={{ fontSize: { xs: 40, md: 60 }, color: 'rgba(255,255,255,0.3)' }} />
+                        <ResearchIcon sx={{ 
+                          fontSize: { xs: 32, sm: 40, md: 50, lg: 60 }, 
+                          color: 'rgba(255,255,255,0.3)' 
+                        }} />
                         <Box
                           sx={{
                             position: 'absolute',
-                                                        top: { xs: 12, md: 16 },
-                            right: { xs: 12, md: 16 },
+                            top: { xs: 8, sm: 12, md: 16 },
+                            right: { xs: 8, sm: 12, md: 16 },
                             bgcolor: 'rgba(255,255,255,0.9)',
                             borderRadius: 2,
-                            px: { xs: 1.5, md: 2 },
-                            py: 0.5
+                            px: { xs: 1, sm: 1.5, md: 2 },
+                            py: { xs: 0.25, sm: 0.5 }
                           }}
                         >
                           <Typography 
@@ -790,7 +954,7 @@ const HomePage: React.FC = () => {
                             sx={{ 
                               fontWeight: 600, 
                               color: '#0a4f3c',
-                              fontSize: { xs: '0.7rem', md: '0.75rem' }
+                              fontSize: { xs: '0.65rem', sm: '0.7rem', md: '0.75rem' }
                             }}
                           >
                             {project.research_area || 'Research'}
@@ -798,7 +962,7 @@ const HomePage: React.FC = () => {
                         </Box>
                       </Box>
 
-                      <CardContent sx={{ flexGrow: 1, p: { xs: 2, md: 3 } }}>
+                      <CardContent sx={{ flexGrow: 1, p: { xs: 1.5, sm: 2, md: 3 } }}>
                         <Typography
                           variant="h6"
                           sx={{
@@ -809,7 +973,8 @@ const HomePage: React.FC = () => {
                             WebkitLineClamp: 2,
                             WebkitBoxOrient: 'vertical',
                             overflow: 'hidden',
-                            fontSize: { xs: '1rem', md: '1.25rem' }
+                            fontSize: { xs: '0.875rem', sm: '1rem', md: '1.1rem', lg: '1.25rem' },
+                            lineHeight: 1.3
                           }}
                         >
                           {project.title}
@@ -819,19 +984,19 @@ const HomePage: React.FC = () => {
                           variant="body2"
                           sx={{
                             color: 'text.secondary',
-                            mb: 3,
+                            mb: { xs: 2, sm: 3 },
                             display: '-webkit-box',
-                            WebkitLineClamp: 3,
+                            WebkitLineClamp: { xs: 2, sm: 3 },
                             WebkitBoxOrient: 'vertical',
                             overflow: 'hidden',
                             lineHeight: 1.6,
-                            fontSize: { xs: '0.875rem', md: '0.875rem' }
+                            fontSize: { xs: '0.8rem', sm: '0.875rem' }
                           }}
                         >
                           {project.abstract || 'No abstract available'}
                         </Typography>
 
-                        <Box sx={{ mb: 2 }}>
+                        <Box sx={{ mb: { xs: 1.5, sm: 2 } }}>
                           {project.degree_type && (
                             <Chip
                               label={project.degree_type}
@@ -842,7 +1007,8 @@ const HomePage: React.FC = () => {
                                 color: '#2a9d7f',
                                 fontWeight: 600,
                                 border: 'none',
-                                fontSize: { xs: '0.7rem', md: '0.75rem' }
+                                fontSize: { xs: '0.65rem', sm: '0.7rem', md: '0.75rem' },
+                                height: { xs: 20, sm: 24 }
                               }}
                             />
                           )}
@@ -853,39 +1019,46 @@ const HomePage: React.FC = () => {
                             variant="caption" 
                             sx={{ 
                               color: 'text.secondary',
-                              fontSize: { xs: '0.7rem', md: '0.75rem' },
+                              fontSize: { xs: '0.65rem', sm: '0.7rem', md: '0.75rem' },
                               display: '-webkit-box',
                               WebkitLineClamp: 1,
                               WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden'
+                              overflow: 'hidden',
+                              flex: 1,
+                              mr: 1
                             }}
                           >
-                            {project.author_name} • {project.institution}
+                            {project.author_name}{project.institution ? ` • ${project.institution}` : ''}
                           </Typography>
                         </Box>
                       </CardContent>
 
-                      <CardActions sx={{ p: { xs: 2, md: 3 }, pt: 0, borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+                      <CardActions sx={{ 
+                        p: { xs: 1.5, sm: 2, md: 3 }, 
+                        pt: 0, 
+                        borderTop: '1px solid rgba(0,0,0,0.08)',
+                        minHeight: { xs: 50, sm: 60 }
+                      }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 2, md: 3 }, width: '100%' }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <ViewIcon sx={{ fontSize: { xs: 16, md: 18 }, color: 'text.secondary' }} />
+                            <ViewIcon sx={{ fontSize: { xs: 14, sm: 16, md: 18 }, color: 'text.secondary' }} />
                             <Typography 
                               variant="caption" 
                               sx={{ 
                                 color: 'text.secondary',
-                                fontSize: { xs: '0.7rem', md: '0.75rem' }
+                                fontSize: { xs: '0.65rem', sm: '0.7rem', md: '0.75rem' }
                               }}
                             >
                               {project.view_count || 0}
                             </Typography>
                           </Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <DownloadIcon sx={{ fontSize: { xs: 16, md: 18 }, color: 'text.secondary' }} />
+                            <DownloadIcon sx={{ fontSize: { xs: 14, sm: 16, md: 18 }, color: 'text.secondary' }} />
                             <Typography 
                               variant="caption" 
                               sx={{ 
                                 color: 'text.secondary',
-                                fontSize: { xs: '0.7rem', md: '0.75rem' }
+                                fontSize: { xs: '0.65rem', sm: '0.7rem', md: '0.75rem' }
                               }}
                             >
                               {project.download_count || 0}
@@ -900,11 +1073,11 @@ const HomePage: React.FC = () => {
                               display: 'flex',
                               alignItems: 'center',
                               gap: 0.5,
-                              fontSize: { xs: '0.75rem', md: '0.875rem' }
+                              fontSize: { xs: '0.7rem', sm: '0.75rem', md: '0.875rem' }
                             }}
                           >
-                            View Details
-                            <ArrowIcon sx={{ fontSize: { xs: 14, md: 16 } }} />
+                            {isMobile ? 'View' : 'View Details'}
+                            <ArrowIcon sx={{ fontSize: { xs: 12, sm: 14, md: 16 } }} />
                           </Typography>
                         </Box>
                       </CardActions>
@@ -914,7 +1087,7 @@ const HomePage: React.FC = () => {
               ))}
             </Grid>
           ) : (
-            <Box sx={{ textAlign: 'center', py: { xs: 4, md: 8 } }}>
+            <Box sx={{ textAlign: 'center', py: { xs: 3, sm: 4, md: 6, lg: 8 } }}>
               <Typography variant="h6" sx={{ color: 'text.secondary', mb: 2 }}>
                 No featured projects available
               </Typography>
@@ -932,11 +1105,12 @@ const HomePage: React.FC = () => {
               endIcon={<ArrowIcon />}
               fullWidth={isMobile}
               sx={{
-                px: { xs: 3, md: 4 },
+                px: { xs: 3, sm: 4, md: 5 },
                 py: 1.5,
                 borderRadius: 3,
                 textTransform: 'none',
                 fontWeight: 600,
+                fontSize: { xs: '0.875rem', sm: '1rem' },
                 borderColor: '#0a4f3c',
                 color: '#0a4f3c',
                 borderWidth: 2,
@@ -945,6 +1119,9 @@ const HomePage: React.FC = () => {
                   borderWidth: 2,
                   borderColor: '#063d2f',
                   bgcolor: 'rgba(10,79,60,0.04)'
+                },
+                '&:active': {
+                  transform: 'scale(0.98)'
                 }
               }}
             >
@@ -955,8 +1132,8 @@ const HomePage: React.FC = () => {
       </Box>
 
       {/* Modern Features Grid - Mobile Optimized */}
-      <Box sx={{ bgcolor: 'white', py: { xs: 6, md: 10 } }}>
-        <Container maxWidth="lg" sx={{ px: { xs: 2, sm: 3 } }}>
+      <Box sx={{ bgcolor: 'white', py: { xs: 4, sm: 6, md: 8, lg: 10 } }}>
+        <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 2, md: 3 } }}>
           <Box sx={{ textAlign: 'center', mb: { xs: 4, md: 8 } }}>
             <Typography
               variant="overline"
@@ -966,7 +1143,7 @@ const HomePage: React.FC = () => {
                 letterSpacing: 2,
                 mb: 2,
                 display: 'block',
-                fontSize: { xs: '0.75rem', md: '0.875rem' }
+                fontSize: { xs: '0.7rem', sm: '0.75rem', md: '0.875rem' }
               }}
             >
               WHY CHOOSE US
@@ -977,7 +1154,14 @@ const HomePage: React.FC = () => {
                 fontWeight: 700,
                 color: '#0a4f3c',
                 mb: 2,
-                fontSize: { xs: '1.75rem', sm: '2.25rem', md: '3rem' }
+                fontSize: { 
+                  xs: isExtraSmall ? '1.5rem' : '1.75rem', 
+                  sm: '2rem', 
+                  md: '2.5rem', 
+                  lg: '3rem' 
+                },
+                lineHeight: 1.2,
+                px: { xs: 1, sm: 0 }
               }}
             >
               Excellence in Public Health Education
@@ -986,9 +1170,10 @@ const HomePage: React.FC = () => {
               variant="body1"
               sx={{
                 color: 'text.secondary',
-                maxWidth: 600,
+                maxWidth: { xs: '100%', sm: 500, md: 600 },
                 mx: 'auto',
-                fontSize: { xs: '0.875rem', md: '1rem' }
+                fontSize: { xs: '0.875rem', sm: '1rem' },
+                px: { xs: 1, sm: 0 }
               }}
             >
               Our comprehensive approach combines cutting-edge research, practical experience, 
@@ -996,7 +1181,7 @@ const HomePage: React.FC = () => {
             </Typography>
           </Box>
 
-          <Grid container spacing={{ xs: 2, md: 4 }}>
+          <Grid container spacing={{ xs: 1.5, sm: 2, md: 3, lg: 4 }}>
             {[
               {
                 icon: PublicIcon,
@@ -1034,7 +1219,7 @@ const HomePage: React.FC = () => {
                 description: '95% of our graduates secure positions in top health organizations within 6 months of graduation.',
                 color: '#2a9d7f'
               }
-            ].map((feature, index) => (
+            ].slice(0, isMobile ? 4 : 6).map((feature, index) => (
               <Grid item xs={12} sm={6} lg={4} key={index}>
                 <motion.div
                   initial={{ opacity: 0, y: 30 }}
@@ -1044,11 +1229,12 @@ const HomePage: React.FC = () => {
                 >
                   <Box
                     sx={{
-                      p: { xs: 3, md: 4 },
+                      p: { xs: 2, sm: 3, md: 4 },
                       height: '100%',
                       borderRadius: { xs: 3, md: 4 },
                       transition: 'all 0.3s ease',
                       cursor: 'pointer',
+                      minHeight: { xs: 140, sm: 160, md: 180 },
                       '&:hover': {
                         bgcolor: '#f8f9fa',
                         transform: { xs: 'none', md: 'translateY(-4px)' },
@@ -1056,32 +1242,40 @@ const HomePage: React.FC = () => {
                           transform: { xs: 'none', md: 'scale(1.1) rotate(5deg)' },
                           bgcolor: feature.color
                         }
+                      },
+                      '&:active': {
+                        transform: { xs: 'scale(0.98)', md: 'translateY(-4px) scale(0.98)' }
                       }
                     }}
                   >
                     <Box
                       className="feature-icon"
                       sx={{
-                        width: { xs: 60, md: 70 },
-                        height: { xs: 60, md: 70 },
+                        width: { xs: 48, sm: 56, md: 64, lg: 70 },
+                        height: { xs: 48, sm: 56, md: 64, lg: 70 },
                         borderRadius: 3,
                         bgcolor: '#f0f7f5',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        mb: 3,
+                        mb: { xs: 2, sm: 2.5, md: 3 },
                         transition: 'all 0.3s ease'
                       }}
                     >
-                      <feature.icon sx={{ fontSize: { xs: 28, md: 32 }, color: feature.color }} />
+                      <feature.icon sx={{ 
+                        fontSize: { xs: 24, sm: 28, md: 30, lg: 32 }, 
+                        color: feature.color 
+                      }} />
                     </Box>
                     <Typography
                       variant="h6"
                       sx={{
                         fontWeight: 700,
                         color: '#0a4f3c',
-                        mb: 2,
-                        fontSize: { xs: '1.1rem', md: '1.25rem' }
+                        mb: { xs: 1.5, sm: 2 },
+                        fontSize: { xs: '1rem', sm: '1.1rem', md: '1.2rem', lg: '1.25rem' },
+                        lineHeight: 1.3,
+                        textAlign: 'center'
                       }}
                     >
                       {feature.title}
@@ -1091,7 +1285,8 @@ const HomePage: React.FC = () => {
                       sx={{
                         color: 'text.secondary',
                         lineHeight: 1.7,
-                        fontSize: { xs: '0.875rem', md: '0.875rem' }
+                        fontSize: { xs: '0.8rem', sm: '0.875rem' },
+                        textAlign: 'center'
                       }}
                     >
                       {feature.description}
@@ -1104,48 +1299,6 @@ const HomePage: React.FC = () => {
         </Container>
       </Box>
 
-      {/* Mobile Quick Actions Menu */}
-      {isMobile && (
-        <Box
-          sx={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            bgcolor: 'white',
-            borderTop: '1px solid rgba(0,0,0,0.1)',
-            py: 1,
-            px: 2,
-            display: 'flex',
-            justifyContent: 'space-around',
-            alignItems: 'center',
-            zIndex: 1000,
-            boxShadow: '0 -4px 20px rgba(0,0,0,0.1)'
-          }}
-        >
-          <IconButton
-            onClick={() => navigate('/projects')}
-            sx={{ flexDirection: 'column', gap: 0.5 }}
-          >
-            <ResearchIcon sx={{ fontSize: 24, color: '#0a4f3c' }} />
-            <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Research</Typography>
-          </IconButton>
-          <IconButton
-            onClick={() => navigate('/about')}
-            sx={{ flexDirection: 'column', gap: 0.5 }}
-          >
-            <SchoolIcon sx={{ fontSize: 24, color: '#0a4f3c' }} />
-            <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>About</Typography>
-          </IconButton>
-          <IconButton
-            onClick={() => navigate('/contact')}
-            sx={{ flexDirection: 'column', gap: 0.5 }}
-          >
-            <PeopleIcon sx={{ fontSize: 24, color: '#0a4f3c' }} />
-            <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Contact</Typography>
-          </IconButton>
-        </Box>
-      )}
     </Box>
   );
 };

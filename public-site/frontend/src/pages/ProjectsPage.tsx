@@ -26,7 +26,10 @@ import {
   Drawer,
   useTheme,
   useMediaQuery,
-  Collapse
+  Collapse,
+  SwipeableDrawer,
+  Skeleton,
+  Zoom
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -42,7 +45,9 @@ import {
   CalendarToday as CalendarIcon,
   Close as CloseIcon,
   ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon
+  ExpandLess as ExpandLessIcon,
+  TouchApp as TouchIcon,
+  Tune as TuneIcon
 } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiService } from '../services/api';
@@ -61,6 +66,7 @@ const FilterForm: React.FC<{
   academicYears: string[];
   isMobile: boolean;
   isTablet: boolean;
+  isExtraSmall: boolean;
 }> = ({ 
   filters, 
   setFilters, 
@@ -71,10 +77,11 @@ const FilterForm: React.FC<{
   degreeTypes, 
   academicYears,
   isMobile,
-  isTablet
+  isTablet,
+  isExtraSmall
 }) => {
   const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({
-  advanced: !isMobile
+    advanced: !isMobile
 });
   
   const toggleSection = (section: string) => {
@@ -86,39 +93,46 @@ const FilterForm: React.FC<{
 
   return (
     <Box>
-      <Grid container spacing={isMobile ? 1.5 : 2}>
+      <Grid container spacing={{ xs: 1, sm: 1.5, md: 2 }}>
         {/* Search Query */}
         <Grid item xs={12}>
           <TextField
             fullWidth
             label="Search Research Projects"
-            placeholder="Keywords, author, health topics..."
+            placeholder={
+              isExtraSmall 
+                ? "Search..." 
+                : isMobile 
+                  ? "Keywords, author..." 
+                  : "Keywords, author, health topics..."
+            }
             value={filters.query}
             onChange={(e) => setFilters({ ...filters, query: e.target.value })}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-            size={isMobile ? "small" : "medium"}
+            size={isExtraSmall ? "small" : isMobile ? "medium" : "medium"}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
                   <SearchIcon sx={{ 
                     color: '#2e7d32',
-                    fontSize: isMobile ? 20 : 24 
+                    fontSize: { xs: 18, sm: 20, md: 24 }
                   }} />
                 </InputAdornment>
               )
             }}
             sx={{
               '& .MuiOutlinedInput-root': {
+                borderRadius: { xs: 2, sm: 3 },
                 '& fieldset': { 
                   borderColor: '#c8e6c9', 
-                  borderWidth: isMobile ? 1.5 : 2 
+                  borderWidth: { xs: 1, sm: 1.5, md: 2 }
                 },
                 '&:hover fieldset': { borderColor: '#2e7d32' },
                 '&.Mui-focused fieldset': { borderColor: '#1b5e20' }
               },
               '& .MuiInputLabel-root': { 
                 color: '#2e7d32',
-                fontSize: isMobile ? '0.875rem' : '1rem'
+                fontSize: { xs: '0.8rem', sm: '0.875rem', md: '1rem' }
               },
               '& .MuiInputLabel-root.Mui-focused': { color: '#1b5e20' }
             }}
@@ -127,11 +141,11 @@ const FilterForm: React.FC<{
 
         {/* Research Area - Always visible */}
         <Grid item xs={12}>
-          <FormControl fullWidth size={isMobile ? "small" : "medium"}>
+          <FormControl fullWidth size={isExtraSmall ? "small" : isMobile ? "medium" : "medium"}>
             <InputLabel sx={{ 
               color: '#2e7d32', 
               '&.Mui-focused': { color: '#1b5e20' },
-              fontSize: isMobile ? '0.875rem' : '1rem'
+              fontSize: { xs: '0.8rem', sm: '0.875rem', md: '1rem' }
             }}>
               Public Health Area
             </InputLabel>
@@ -140,9 +154,10 @@ const FilterForm: React.FC<{
               label="Public Health Area"
               onChange={(e) => setFilters({ ...filters, research_area: e.target.value })}
               sx={{
+                borderRadius: { xs: 2, sm: 3 },
                 '& .MuiOutlinedInput-notchedOutline': { 
                   borderColor: '#c8e6c9', 
-                  borderWidth: isMobile ? 1.5 : 2 
+                  borderWidth: { xs: 1, sm: 1.5, md: 2 }
                 },
                 '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#2e7d32' },
                 '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#1b5e20' }
@@ -167,11 +182,16 @@ const FilterForm: React.FC<{
                 justifyContent: 'space-between',
                 color: '#2e7d32',
                 textTransform: 'none',
-                fontSize: '0.875rem',
-                py: 1
+                fontSize: { xs: '0.8rem', sm: '0.875rem' },
+                py: { xs: 0.75, sm: 1 },
+                borderRadius: 2,
+                border: '1px solid #e8f5e9',
+                '&:hover': {
+                  bgcolor: '#f5f5f5'
+                }
               }}
             >
-              Advanced Filters
+              {isExtraSmall ? 'More Filters' : 'Advanced Filters'}
             </Button>
           </Grid>
         )}
@@ -179,14 +199,14 @@ const FilterForm: React.FC<{
         {/* Advanced Filters */}
         <Grid item xs={12}>
           <Collapse in={expandedSections.advanced || !isMobile}>
-            <Grid container spacing={isMobile ? 1.5 : 2}>
+            <Grid container spacing={{ xs: 1, sm: 1.5, md: 2 }}>
               {/* Degree Type */}
               <Grid item xs={12} sm={6} md={4}>
-                <FormControl fullWidth size={isMobile ? "small" : "medium"}>
+                <FormControl fullWidth size={isExtraSmall ? "small" : isMobile ? "medium" : "medium"}>
                   <InputLabel sx={{ 
                     color: '#2e7d32', 
                     '&.Mui-focused': { color: '#1b5e20' },
-                    fontSize: isMobile ? '0.875rem' : '1rem'
+                    fontSize: { xs: '0.8rem', sm: '0.875rem', md: '1rem' }
                   }}>
                     Degree Level
                   </InputLabel>
@@ -195,9 +215,10 @@ const FilterForm: React.FC<{
                     label="Degree Level"
                     onChange={(e) => setFilters({ ...filters, degree_type: e.target.value })}
                     sx={{
+                      borderRadius: { xs: 2, sm: 3 },
                       '& .MuiOutlinedInput-notchedOutline': { 
                         borderColor: '#c8e6c9', 
-                        borderWidth: isMobile ? 1.5 : 2 
+                        borderWidth: { xs: 1, sm: 1.5, md: 2 }
                       },
                       '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#2e7d32' },
                       '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#1b5e20' }
@@ -213,11 +234,11 @@ const FilterForm: React.FC<{
 
               {/* Institution */}
               <Grid item xs={12} sm={6} md={4}>
-                <FormControl fullWidth size={isMobile ? "small" : "medium"}>
+                <FormControl fullWidth size={isExtraSmall ? "small" : isMobile ? "medium" : "medium"}>
                   <InputLabel sx={{ 
                     color: '#2e7d32', 
                     '&.Mui-focused': { color: '#1b5e20' },
-                    fontSize: isMobile ? '0.875rem' : '1rem'
+                    fontSize: { xs: '0.8rem', sm: '0.875rem', md: '1rem' }
                   }}>
                     Institution
                   </InputLabel>
@@ -226,9 +247,10 @@ const FilterForm: React.FC<{
                     label="Institution"
                     onChange={(e) => setFilters({ ...filters, institution: e.target.value })}
                     sx={{
+                      borderRadius: { xs: 2, sm: 3 },
                       '& .MuiOutlinedInput-notchedOutline': { 
                         borderColor: '#c8e6c9', 
-                        borderWidth: isMobile ? 1.5 : 2 
+                        borderWidth: { xs: 1, sm: 1.5, md: 2 }
                       },
                       '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#2e7d32' },
                       '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#1b5e20' }
@@ -244,11 +266,11 @@ const FilterForm: React.FC<{
 
               {/* Academic Year */}
               <Grid item xs={12} sm={6} md={4}>
-                <FormControl fullWidth size={isMobile ? "small" : "medium"}>
+                <FormControl fullWidth size={isExtraSmall ? "small" : isMobile ? "medium" : "medium"}>
                   <InputLabel sx={{ 
                     color: '#2e7d32', 
                     '&.Mui-focused': { color: '#1b5e20' },
-                    fontSize: isMobile ? '0.875rem' : '1rem'
+                    fontSize: { xs: '0.8rem', sm: '0.875rem', md: '1rem' }
                   }}>
                     Academic Year
                   </InputLabel>
@@ -257,9 +279,10 @@ const FilterForm: React.FC<{
                     label="Academic Year"
                     onChange={(e) => setFilters({ ...filters, academic_year: e.target.value })}
                     sx={{
+                      borderRadius: { xs: 2, sm: 3 },
                       '& .MuiOutlinedInput-notchedOutline': { 
                         borderColor: '#c8e6c9', 
-                        borderWidth: isMobile ? 1.5 : 2 
+                        borderWidth: { xs: 1, sm: 1.5, md: 2 }
                       },
                       '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#2e7d32' },
                       '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#1b5e20' }
@@ -280,29 +303,32 @@ const FilterForm: React.FC<{
         <Grid item xs={12}>
           <Box sx={{ 
             display: 'flex', 
-            gap: isMobile ? 1 : 2, 
+            gap: { xs: 1, sm: 1.5, md: 2 }, 
             flexDirection: isMobile ? 'column' : 'row' 
           }}>
             <Button
               variant="contained"
               onClick={handleSearch}
               startIcon={<SearchIcon />}
-              size={isMobile ? "medium" : "large"}
+              size={isExtraSmall ? "medium" : isMobile ? "large" : "large"}
               fullWidth={isMobile}
               sx={{
                 bgcolor: '#1b5e20',
                 color: 'white',
-                px: isMobile ? 2 : 4,
-                py: isMobile ? 1 : 1.5,
-                borderRadius: isMobile ? 2 : 3,
+                px: { xs: 2, sm: 3, md: 4 },
+                py: { xs: 1, sm: 1.25, md: 1.5 },
+                borderRadius: { xs: 2, sm: 3 },
                 textTransform: 'none',
-                fontSize: isMobile ? '0.875rem' : '1.1rem',
+                fontSize: { xs: '0.875rem', sm: '1rem', md: '1.1rem' },
                 fontWeight: 'bold',
                 boxShadow: '0 4px 12px rgba(27, 94, 32, 0.3)',
                 '&:hover': {
                   bgcolor: '#0d4715',
                   transform: 'translateY(-1px)',
                   boxShadow: '0 6px 20px rgba(27, 94, 32, 0.4)'
+                },
+                '&:active': {
+                  transform: 'scale(0.98)'
                 }
               }}
             >
@@ -311,26 +337,29 @@ const FilterForm: React.FC<{
             <Button
               variant="outlined"
               onClick={clearFilters}
-              size={isMobile ? "medium" : "large"}
+              size={isExtraSmall ? "medium" : isMobile ? "large" : "large"}
               fullWidth={isMobile}
               sx={{
                 borderColor: '#2e7d32',
                 color: '#2e7d32',
-                px: isMobile ? 2 : 4,
-                py: isMobile ? 1 : 1.5,
-                borderRadius: isMobile ? 2 : 3,
+                px: { xs: 2, sm: 3, md: 4 },
+                py: { xs: 1, sm: 1.25, md: 1.5 },
+                borderRadius: { xs: 2, sm: 3 },
                 textTransform: 'none',
-                fontSize: isMobile ? '0.875rem' : '1.1rem',
+                fontSize: { xs: '0.875rem', sm: '1rem', md: '1.1rem' },
                 fontWeight: 'bold',
-                borderWidth: isMobile ? 1.5 : 2,
+                borderWidth: { xs: 1, sm: 1.5, md: 2 },
                 '&:hover': {
                   borderColor: '#1b5e20',
                   bgcolor: '#e8f5e9',
-                  borderWidth: isMobile ? 1.5 : 2
+                  borderWidth: { xs: 1, sm: 1.5, md: 2 }
+                },
+                '&:active': {
+                  transform: 'scale(0.98)'
                 }
               }}
             >
-              Clear Filters
+              {isExtraSmall ? 'Clear' : 'Clear Filters'}
             </Button>
           </Box>
         </Grid>
@@ -346,6 +375,7 @@ const ProjectsPage: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  const isExtraSmall = useMediaQuery(theme.breakpoints.down(400));
   
   const [searchResponse, setSearchResponse] = useState<SearchResponse>({
     projects: [],
@@ -359,6 +389,7 @@ const ProjectsPage: React.FC = () => {
   const [researchAreas, setResearchAreas] = useState<string[]>([]);
   const [institutions, setInstitutions] = useState<string[]>([]);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
   
   // Form state
   const [filters, setFilters] = useState<SearchFilters>({
@@ -372,6 +403,24 @@ const ProjectsPage: React.FC = () => {
   const degreeTypes = ["Bachelor's", "Master's", "PhD", "Diploma", "Certificate"];
   const academicYears = ["2024-2025", "2023-2024", "2022-2023", "2021-2022", "2020-2021"];
 
+  // Touch gesture handling
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartY(e.touches[0].clientY);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartY) return;
+    
+    const touchEndY = e.changedTouches[0].clientY;
+    const diff = touchStartY - touchEndY;
+    
+    // Pull to refresh gesture
+    if (diff < -100 && window.scrollY === 0) {
+      searchProjects(1);
+    }
+    
+    setTouchStartY(null);
+  };
   useEffect(() => {
     loadFilterOptions();
   }, []);
@@ -451,7 +500,11 @@ const ProjectsPage: React.FC = () => {
   const searchQuery = searchParams.get('search');
 
   return (
-    <Box sx={{ bgcolor: '#fafafa', minHeight: '100vh' }}>
+    <Box 
+      sx={{ bgcolor: '#fafafa', minHeight: '100vh' }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* SEO Head */}
       {searchQuery ? (
         <SEOHead 
@@ -473,7 +526,7 @@ const ProjectsPage: React.FC = () => {
       <Box sx={{ 
         background: 'linear-gradient(135deg, #0d4715 0%, #1b5e20 50%, #2e7d32 100%)',
         color: 'white', 
-        py: { xs: 3, sm: 4, md: 6, lg: 8 },
+        py: { xs: 2, sm: 3, md: 4, lg: 6 },
         position: 'relative',
         '&::before': {
           content: '""',
@@ -489,11 +542,11 @@ const ProjectsPage: React.FC = () => {
         <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 2 }}>
           <Breadcrumbs 
             sx={{ 
-              mb: 2, 
+              mb: { xs: 1.5, sm: 2 }, 
               '& .MuiBreadcrumbs-separator': { color: '#c8e6c9' },
               '& a, & p': { 
                 color: '#e8f5e9', 
-                fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' } 
+                fontSize: { xs: '0.7rem', sm: '0.8rem', md: '0.875rem', lg: '1rem' } 
               }
             }}
           >
@@ -513,19 +566,22 @@ const ProjectsPage: React.FC = () => {
             </Typography>
           </Breadcrumbs>
           
-          <Grid container spacing={{ xs: 2, md: 4 }} alignItems="center">
+          <Grid container spacing={{ xs: 2, sm: 3, md: 4 }} alignItems="center">
             {/* Left side content */}
-            <Grid item xs={12} md={8}>
+            <Grid item xs={12} md={isTablet ? 12 : 8}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2, md: 3 }, mb: 2 }}>
                 <Avatar
                   sx={{
                     bgcolor: 'rgba(255,255,255,0.2)',
-                    width: { xs: 50, sm: 60, md: 80 },
-                    height: { xs: 50, sm: 60, md: 80 },
+                    width: { xs: 40, sm: 50, md: 60, lg: 80 },
+                    height: { xs: 40, sm: 50, md: 60, lg: 80 },
                     border: '3px solid rgba(255,255,255,0.3)'
                   }}
                 >
-                  <ResearchIcon sx={{ fontSize: { xs: 24, sm: 30, md: 40 }, color: 'white' }} />
+                  <ResearchIcon sx={{ 
+                    fontSize: { xs: 20, sm: 24, md: 30, lg: 40 }, 
+                    color: 'white' 
+                  }} />
                 </Avatar>
                 <Box>
                   <Typography 
@@ -535,8 +591,14 @@ const ProjectsPage: React.FC = () => {
                     sx={{ 
                       fontWeight: 'bold',
                       textShadow: '0 4px 8px rgba(0,0,0,0.3)',
-                      fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem', lg: '3rem' },
-                      lineHeight: 1.2
+                      fontSize: { 
+                        xs: isExtraSmall ? '1.25rem' : '1.5rem', 
+                        sm: '1.75rem', 
+                        md: '2.25rem', 
+                        lg: '3rem' 
+                      },
+                      lineHeight: 1.2,
+                      mb: { xs: 0.5, sm: 1 }
                     }}
                   >
                     Public Health Research
@@ -549,7 +611,14 @@ const ProjectsPage: React.FC = () => {
                   opacity: 0.95,
                   textShadow: '0 2px 4px rgba(0,0,0,0.2)',
                   lineHeight: 1.4,
-                  fontSize: { xs: '0.875rem', sm: '1rem', md: '1.25rem', lg: '1.5rem' }
+                  fontSize: { 
+                    xs: isExtraSmall ? '0.8rem' : '0.875rem', 
+                    sm: '1rem', 
+                    md: '1.1rem', 
+                    lg: '1.25rem' 
+                  },
+                  px: { xs: 0, sm: 0 },
+                  textAlign: { xs: 'center', md: 'left' }
                 }}
               >
                 Discover evidence-based research advancing health equity and improving population health outcomes worldwide
@@ -557,7 +626,7 @@ const ProjectsPage: React.FC = () => {
             </Grid>
 
             {/* Right side - Student with telescope image */}
-            {!isTablet && (
+            {!isTablet && !isMobile && (
               <Grid item xs={12} md={4}>
                 <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                   <Box
@@ -594,30 +663,37 @@ const ProjectsPage: React.FC = () => {
         </Container>
       </Box>
 
-      <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3, md: 4 } }}>
+      <Container maxWidth="lg" sx={{ 
+        py: { xs: 2, sm: 3, md: 4 },
+        px: { xs: 1.5, sm: 2, md: 3 },
+        pb: { xs: isMobile ? 10 : 2, sm: isMobile ? 12 : 3, md: 4 }
+      }}>
         {/* Mobile Filter Button */}
         {isMobile && (
-          <Box sx={{ mb: 2 }}>
+          <Box sx={{ mb: { xs: 1.5, sm: 2 } }}>
             <Button
               fullWidth
               variant="contained"
-              startIcon={<FilterIcon />}
+              startIcon={<TuneIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
               onClick={() => setMobileFilterOpen(true)}
               sx={{
                 bgcolor: '#1b5e20',
                 color: 'white',
-                py: 1.25,
+                py: { xs: 1, sm: 1.25 },
                 borderRadius: 2,
                 textTransform: 'none',
-                fontSize: '0.875rem',
+                fontSize: { xs: '0.8rem', sm: '0.875rem' },
                 fontWeight: 'bold',
                 boxShadow: '0 4px 12px rgba(27, 94, 32, 0.3)',
                 '&:hover': {
                   bgcolor: '#0d4715'
+                },
+                '&:active': {
+                  transform: 'scale(0.98)'
                 }
               }}
             >
-              Search & Filter Projects
+              {isExtraSmall ? 'Search & Filter' : 'Search & Filter Projects'}
             </Button>
           </Box>
         )}
@@ -625,18 +701,22 @@ const ProjectsPage: React.FC = () => {
         {/* Desktop Search and Filters */}
         {!isMobile && (
           <Paper sx={{ 
-            p: { sm: 3, md: 4 }, 
+            p: { sm: 2.5, md: 3, lg: 4 }, 
             mb: { sm: 3, md: 4 }, 
             borderRadius: { sm: 3, md: 4 },
             border: '2px solid #c8e6c9',
             background: 'linear-gradient(135deg, #ffffff 0%, #f1f8e9 100%)',
             boxShadow: '0 8px 32px rgba(27, 94, 32, 0.1)'
           }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: { sm: 1.5, md: 2 }, mb: { sm: 2.5, md: 3 } }}>
               <Avatar sx={{ bgcolor: '#1b5e20', width: 40, height: 40 }}>
                 <FilterIcon />
               </Avatar>
-              <Typography variant="h5" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>
+              <Typography variant="h5" sx={{ 
+                color: '#1b5e20', 
+                fontWeight: 'bold',
+                fontSize: { sm: '1.1rem', md: '1.25rem', lg: '1.5rem' }
+              }}>
                 Search & Filter Research Projects
               </Typography>
             </Box>
@@ -652,37 +732,63 @@ const ProjectsPage: React.FC = () => {
               academicYears={academicYears}
               isMobile={isMobile}
               isTablet={isTablet}
+              isExtraSmall={isExtraSmall}
             />
           </Paper>
         )}
 
         {/* Mobile Filter Drawer */}
-        <Drawer
+        <SwipeableDrawer
           anchor="bottom"
           open={mobileFilterOpen}
           onClose={() => setMobileFilterOpen(false)}
+          onOpen={() => setMobileFilterOpen(true)}
+          disableSwipeToOpen={false}
           sx={{
             '& .MuiDrawer-paper': {
-              borderTopLeftRadius: 16,
-              borderTopRightRadius: 16,
+              borderTopLeftRadius: { xs: 12, sm: 16 },
+              borderTopRightRadius: { xs: 12, sm: 16 },
               maxHeight: '90vh',
-              pb: 2
+              pb: { xs: 1.5, sm: 2 }
             }
           }}
         >
-          <Box sx={{ p: 2 }}>
+          <Box sx={{ p: { xs: 1.5, sm: 2 } }}>
+            {/* Drag Handle */}
+            <Box
+              sx={{
+                width: 40,
+                height: 4,
+                bgcolor: '#e0e0e0',
+                borderRadius: 2,
+                mx: 'auto',
+                mb: 2
+              }}
+            />
+            
             <Box sx={{ 
               display: 'flex', 
               justifyContent: 'space-between', 
               alignItems: 'center', 
-              mb: 2,
-              pb: 2,
+              mb: { xs: 1.5, sm: 2 },
+              pb: { xs: 1.5, sm: 2 },
               borderBottom: '1px solid #e0e0e0'
             }}>
-              <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 'bold', fontSize: '1rem' }}>
+              <Typography variant="h6" sx={{ 
+                color: '#1b5e20', 
+                fontWeight: 'bold', 
+                fontSize: { xs: '0.875rem', sm: '1rem' }
+              }}>
                 Search & Filter
               </Typography>
-              <IconButton onClick={() => setMobileFilterOpen(false)} size="small">
+              <IconButton 
+                onClick={() => setMobileFilterOpen(false)} 
+                size="small"
+                sx={{
+                  bgcolor: '#f5f5f5',
+                  '&:hover': { bgcolor: '#e0e0e0' }
+                }}
+              >
                 <CloseIcon />
               </IconButton>
             </Box>
@@ -698,9 +804,10 @@ const ProjectsPage: React.FC = () => {
               academicYears={academicYears}
               isMobile={isMobile}
               isTablet={isTablet}
+              isExtraSmall={isExtraSmall}
             />
           </Box>
-        </Drawer>
+        </SwipeableDrawer>
 
         {/* Results Header */}
         <Box sx={{ 
@@ -708,9 +815,9 @@ const ProjectsPage: React.FC = () => {
           flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between', 
           alignItems: { xs: 'flex-start', sm: 'center' }, 
-          gap: { xs: 1, sm: 2 },
+          gap: { xs: 1, sm: 1.5, md: 2 },
           mb: { xs: 2, sm: 3, md: 4 },
-          p: { xs: 2, sm: 2.5, md: 3 },
+          p: { xs: 1.5, sm: 2, md: 2.5, lg: 3 },
           bgcolor: 'rgba(27, 94, 32, 0.05)',
           borderRadius: { xs: 2, sm: 3 },
           border: '1px solid #c8e6c9'
@@ -718,10 +825,10 @@ const ProjectsPage: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
             <Avatar sx={{ 
               bgcolor: '#2e7d32', 
-              width: { xs: 32, sm: 35, md: 40 }, 
-              height: { xs: 32, sm: 35, md: 40 } 
+              width: { xs: 28, sm: 32, md: 36, lg: 40 }, 
+              height: { xs: 28, sm: 32, md: 36, lg: 40 } 
             }}>
-              <PublicIcon sx={{ fontSize: { xs: 18, sm: 20, md: 24 } }} />
+              <PublicIcon sx={{ fontSize: { xs: 16, sm: 18, md: 20, lg: 24 } }} />
             </Avatar>
             <Box>
               <Typography 
@@ -729,7 +836,12 @@ const ProjectsPage: React.FC = () => {
                 sx={{ 
                   color: '#1b5e20', 
                   fontWeight: 'bold',
-                  fontSize: { xs: '0.875rem', sm: '1.1rem', md: '1.5rem' },
+                  fontSize: { 
+                    xs: isExtraSmall ? '0.8rem' : '0.875rem', 
+                    sm: '1rem', 
+                    md: '1.25rem', 
+                    lg: '1.5rem' 
+                  },
                   lineHeight: 1.2
                 }}
               >
@@ -739,7 +851,7 @@ const ProjectsPage: React.FC = () => {
                 variant="body2" 
                 sx={{ 
                   color: '#2e7d32',
-                  fontSize: { xs: '0.7rem', sm: '0.75rem', md: '0.875rem' },
+                  fontSize: { xs: '0.65rem', sm: '0.7rem', md: '0.8rem', lg: '0.875rem' },
                   display: { xs: 'none', sm: 'block' }
                 }}
               >
@@ -755,8 +867,8 @@ const ProjectsPage: React.FC = () => {
                 bgcolor: '#1b5e20',
                 color: 'white',
                 fontWeight: 'bold',
-                fontSize: { xs: '0.7rem', sm: '0.75rem', md: '0.875rem' },
-                height: { xs: 24, sm: 28 }
+                fontSize: { xs: '0.65rem', sm: '0.7rem', md: '0.8rem', lg: '0.875rem' },
+                height: { xs: 20, sm: 24, md: 28 }
               }}
             />
           )}
@@ -768,12 +880,12 @@ const ProjectsPage: React.FC = () => {
             display: 'flex', 
             justifyContent: 'center', 
             alignItems: 'center',
-            py: { xs: 6, sm: 8, md: 12 },
+            py: { xs: 4, sm: 6, md: 8, lg: 12 },
             flexDirection: 'column',
-            gap: { xs: 2, sm: 3 }
+            gap: { xs: 1.5, sm: 2, md: 3 }
           }}>
             <CircularProgress 
-              size={isMobile ? 50 : isTablet ? 60 : 80} 
+              size={{ xs: 40, sm: 50, md: 60, lg: 80 }}
               sx={{ 
                 color: '#1b5e20',
                 '& .MuiCircularProgress-circle': {
@@ -786,21 +898,37 @@ const ProjectsPage: React.FC = () => {
               sx={{ 
                 color: '#2e7d32', 
                 fontWeight: 600,
-                fontSize: { xs: '0.875rem', sm: '1rem', md: '1.25rem' },
+                fontSize: { xs: '0.8rem', sm: '0.875rem', md: '1rem', lg: '1.25rem' },
                 textAlign: 'center'
               }}
             >
               Searching Public Health Research Database...
             </Typography>
+            {isMobile && (
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: 'text.secondary',
+                  fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                  textAlign: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5
+                }}
+              >
+                <TouchIcon sx={{ fontSize: 14 }} />
+                Pull down to refresh
+              </Typography>
+            )}
           </Box>
         )}
         {/* Projects Grid */}
         {!loading && searchResponse.projects.length > 0 && (
           <>
-            <Grid container spacing={{ xs: 1.5, sm: 2, md: 3, lg: 4 }}>
+            <Grid container spacing={{ xs: 1, sm: 1.5, md: 2, lg: 3 }}>
               {searchResponse.projects.map((project, index) => (
-                <Grid item xs={12} sm={6} lg={4} key={project.id}>
-                  <Fade in timeout={300 + index * 50}>
+                <Grid item xs={12} sm={6} md={4} lg={4} key={project.id}>
+                  <Zoom in timeout={300 + index * 50}>
                     <Card
                       sx={{
                         height: '100%',
@@ -812,25 +940,44 @@ const ProjectsPage: React.FC = () => {
                         border: '2px solid #c8e6c9',
                         background: 'linear-gradient(135deg, #ffffff 0%, #f9fbe7 100%)',
                         boxShadow: '0 4px 16px rgba(27, 94, 32, 0.1)',
+                        position: 'relative',
+                        overflow: 'hidden',
                         '&:hover': {
                           transform: { xs: 'none', sm: 'translateY(-4px)', md: 'translateY(-8px)' },
                           boxShadow: '0 16px 48px rgba(27, 94, 32, 0.2)',
                           border: '2px solid #2e7d32'
+                        },
+                        '&:active': {
+                          transform: { xs: 'scale(0.98)', sm: 'translateY(-4px) scale(0.98)', md: 'translateY(-8px) scale(0.98)' }
                         }
                       }}
                       onClick={() => navigate(`/projects/${project.slug}`)}
                     >
+                      {/* Touch Ripple Effect for Mobile */}
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          background: 'transparent',
+                          zIndex: 1,
+                          pointerEvents: 'none'
+                        }}
+                      />
+                      
                       <CardContent sx={{ flexGrow: 1, p: { xs: 2, sm: 2.5, md: 3 } }}>
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: { xs: 1.5, sm: 2 }, mb: 2 }}>
                           <Avatar
                             sx={{
                               bgcolor: '#1b5e20',
-                              width: { xs: 30, sm: 35, md: 40 },
-                              height: { xs: 30, sm: 35, md: 40 },
+                              width: { xs: 28, sm: 32, md: 36, lg: 40 },
+                              height: { xs: 28, sm: 32, md: 36, lg: 40 },
                               flexShrink: 0
                             }}
                           >
-                            <HealthIcon sx={{ fontSize: { xs: 16, sm: 18, md: 20 } }} />
+                            <HealthIcon sx={{ fontSize: { xs: 14, sm: 16, md: 18, lg: 20 } }} />
                           </Avatar>
                           <Typography 
                             variant="h6" 
@@ -839,11 +986,16 @@ const ProjectsPage: React.FC = () => {
                               fontWeight: 'bold',
                               color: '#1b5e20',
                               display: '-webkit-box',
-                              WebkitLineClamp: 2,
+                              WebkitLineClamp: { xs: 2, sm: 2 },
                               WebkitBoxOrient: 'vertical',
                               overflow: 'hidden',
                               lineHeight: 1.3,
-                              fontSize: { xs: '0.875rem', sm: '1rem', md: '1.25rem' }
+                              fontSize: { 
+                                xs: isExtraSmall ? '0.8rem' : '0.875rem', 
+                                sm: '0.95rem', 
+                                md: '1.1rem', 
+                                lg: '1.25rem' 
+                              }
                             }}
                           >
                             {project.title}
@@ -853,20 +1005,20 @@ const ProjectsPage: React.FC = () => {
                         <Typography 
                           variant="body2" 
                           sx={{ 
-                            mb: { xs: 2, sm: 3 },
+                            mb: { xs: 1.5, sm: 2, md: 3 },
                             color: '#2e7d32',
                             display: '-webkit-box',
-                            WebkitLineClamp: 3,
+                            WebkitLineClamp: { xs: 2, sm: 3 },
                             WebkitBoxOrient: 'vertical',
                             overflow: 'hidden',
                             lineHeight: 1.6,
-                            fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' }
+                            fontSize: { xs: '0.75rem', sm: '0.8rem', md: '0.875rem', lg: '1rem' }
                           }}
                         >
                           {project.abstract || 'Research abstract not available. This study contributes to advancing public health knowledge and evidence-based practice.'}
                         </Typography>
                         
-                        <Box sx={{ mb: { xs: 2, sm: 3 } }}>
+                        <Box sx={{ mb: { xs: 1.5, sm: 2, md: 3 } }}>
                           {project.research_area && (
                             <Chip 
                               label={project.research_area} 
@@ -878,11 +1030,11 @@ const ProjectsPage: React.FC = () => {
                                 bgcolor: '#1b5e20',
                                 color: 'white',
                                 fontWeight: 'bold',
-                                fontSize: { xs: '0.65rem', sm: '0.75rem', md: '0.875rem' },
-                                height: { xs: 24, sm: 28 },
+                                fontSize: { xs: '0.6rem', sm: '0.65rem', md: '0.7rem', lg: '0.75rem' },
+                                height: { xs: 20, sm: 24, md: 28 },
                                 '& .MuiChip-icon': { 
                                   color: 'white',
-                                  fontSize: { xs: 14, sm: 16 }
+                                  fontSize: { xs: 12, sm: 14, md: 16 }
                                 }
                               }}
                             />
@@ -898,11 +1050,11 @@ const ProjectsPage: React.FC = () => {
                                 bgcolor: '#2e7d32',
                                 color: 'white',
                                 fontWeight: 'bold',
-                                fontSize: { xs: '0.65rem', sm: '0.75rem', md: '0.875rem' },
-                                height: { xs: 24, sm: 28 },
+                                fontSize: { xs: '0.6rem', sm: '0.65rem', md: '0.7rem', lg: '0.75rem' },
+                                height: { xs: 20, sm: 24, md: 28 },
                                 '& .MuiChip-icon': { 
                                   color: 'white',
-                                  fontSize: { xs: 14, sm: 16 }
+                                  fontSize: { xs: 12, sm: 14, md: 16 }
                                 }
                               }}
                             />
@@ -910,19 +1062,19 @@ const ProjectsPage: React.FC = () => {
                         </Box>
 
                         <Box sx={{ 
-                          p: { xs: 1, sm: 1.5, md: 2 }, 
+                          p: { xs: 1, sm: 1.25, md: 1.5, lg: 2 }, 
                           bgcolor: 'rgba(27, 94, 32, 0.05)', 
                           borderRadius: { xs: 1.5, sm: 2 },
                           border: '1px solid #e8f5e9'
                         }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1 }, mb: { xs: 0.5, sm: 1 } }}>
-                            <PersonIcon sx={{ fontSize: { xs: 12, sm: 14, md: 16 }, color: '#2e7d32' }} />
+                            <PersonIcon sx={{ fontSize: { xs: 10, sm: 12, md: 14, lg: 16 }, color: '#2e7d32' }} />
                             <Typography 
                               variant="caption" 
                               sx={{ 
                                 color: '#1b5e20', 
                                 fontWeight: 600,
-                                fontSize: { xs: '0.65rem', sm: '0.75rem', md: '0.875rem' },
+                                fontSize: { xs: '0.6rem', sm: '0.65rem', md: '0.75rem', lg: '0.875rem' },
                                 lineHeight: 1.2
                               }}
                             >
@@ -931,14 +1083,18 @@ const ProjectsPage: React.FC = () => {
                           </Box>
                           
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1 } }}>
-                            <SchoolIcon sx={{ fontSize: { xs: 12, sm: 14, md: 16 }, color: '#2e7d32' }} />
+                            <SchoolIcon sx={{ fontSize: { xs: 10, sm: 12, md: 14, lg: 16 }, color: '#2e7d32' }} />
                             <Typography 
                               variant="caption" 
                               sx={{ 
                                 color: '#2e7d32', 
                                 fontWeight: 500,
-                                fontSize: { xs: '0.65rem', sm: '0.75rem', md: '0.875rem' },
-                                lineHeight: 1.2
+                                fontSize: { xs: '0.6rem', sm: '0.65rem', md: '0.75rem', lg: '0.875rem' },
+                                lineHeight: 1.2,
+                                display: '-webkit-box',
+                                WebkitLineClamp: 1,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden'
                               }}
                             >
                               {project.institution}
@@ -948,33 +1104,34 @@ const ProjectsPage: React.FC = () => {
                       </CardContent>
                       
                       <CardActions sx={{ 
-                        p: { xs: 1.5, sm: 2, md: 3 }, 
+                        p: { xs: 1.25, sm: 1.5, md: 2, lg: 3 }, 
                         pt: 0, 
                         justifyContent: 'space-between',
-                        alignItems: 'center'
+                        alignItems: 'center',
+                        minHeight: { xs: 40, sm: 48, md: 56 }
                       }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5, md: 2 } }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <ViewIcon sx={{ fontSize: { xs: 12, sm: 14, md: 16 }, color: '#2e7d32' }} />
+                            <ViewIcon sx={{ fontSize: { xs: 10, sm: 12, md: 14, lg: 16 }, color: '#2e7d32' }} />
                             <Typography 
                               variant="caption" 
                               sx={{ 
                                 color: '#2e7d32', 
                                 fontWeight: 600,
-                                fontSize: { xs: '0.65rem', sm: '0.75rem', md: '0.875rem' }
+                                fontSize: { xs: '0.6rem', sm: '0.65rem', md: '0.75rem', lg: '0.875rem' }
                               }}
                             >
                               {project.view_count}
                             </Typography>
                           </Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <DownloadIcon sx={{ fontSize: { xs: 12, sm: 14, md: 16 }, color: '#2e7d32' }} />
+                            <DownloadIcon sx={{ fontSize: { xs: 10, sm: 12, md: 14, lg: 16 }, color: '#2e7d32' }} />
                             <Typography 
                               variant="caption" 
                               sx={{ 
                                 color: '#2e7d32', 
                                 fontWeight: 600,
-                                fontSize: { xs: '0.65rem', sm: '0.75rem', md: '0.875rem' }
+                                fontSize: { xs: '0.6rem', sm: '0.65rem', md: '0.75rem', lg: '0.875rem' }
                               }}
                             >
                               {project.download_count}
@@ -983,24 +1140,25 @@ const ProjectsPage: React.FC = () => {
                         </Box>
                         <Button
                           size="small"
-                          endIcon={<ArrowIcon sx={{ fontSize: { xs: 14, sm: 16 } }} />}
+                          endIcon={<ArrowIcon sx={{ fontSize: { xs: 12, sm: 14, md: 16 } }} />}
                           sx={{ 
                             textTransform: 'none',
                             color: '#1b5e20',
                             fontWeight: 'bold',
-                            fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' },
-                            px: { xs: 1, sm: 1.5 },
-                            py: { xs: 0.5, sm: 0.75 },
+                            fontSize: { xs: '0.7rem', sm: '0.75rem', md: '0.875rem', lg: '1rem' },
+                            px: { xs: 0.75, sm: 1, md: 1.5 },
+                            py: { xs: 0.25, sm: 0.5, md: 0.75 },
+                            borderRadius: { xs: 1.5, sm: 2 },
                             '&:hover': {
                               bgcolor: '#e8f5e9'
                             }
                           }}
                         >
-                          View
+                          {isExtraSmall ? 'View' : 'View'}
                         </Button>
                       </CardActions>
                     </Card>
-                  </Fade>
+                  </Zoom>
                 </Grid>
               ))}
             </Grid>
@@ -1010,10 +1168,10 @@ const ProjectsPage: React.FC = () => {
               <Box sx={{ 
                 display: 'flex', 
                 justifyContent: 'center', 
-                mt: { xs: 3, sm: 4, md: 6, lg: 8 } 
+                mt: { xs: 2, sm: 3, md: 4, lg: 6 } 
               }}>
                 <Paper sx={{ 
-                  p: { xs: 0.5, sm: 1, md: 2 }, 
+                  p: { xs: 0.5, sm: 0.75, md: 1, lg: 2 }, 
                   borderRadius: { xs: 2, sm: 3 },
                   border: '2px solid #c8e6c9',
                   boxShadow: '0 4px 16px rgba(27, 94, 32, 0.1)'
@@ -1022,18 +1180,18 @@ const ProjectsPage: React.FC = () => {
                     count={searchResponse.total_pages}
                     page={searchResponse.page}
                     onChange={handlePageChange}
-                    size={isMobile ? "small" : isTablet ? "medium" : "large"}
+                    size={isExtraSmall ? "small" : isMobile ? "medium" : isTablet ? "medium" : "large"}
                     showFirstButton={!isMobile}
                     showLastButton={!isMobile}
-                    siblingCount={isMobile ? 0 : 1}
-                    boundaryCount={isMobile ? 1 : 2}
+                    siblingCount={isExtraSmall ? 0 : isMobile ? 0 : 1}
+                    boundaryCount={isExtraSmall ? 1 : isMobile ? 1 : 2}
                     sx={{
                       '& .MuiPaginationItem-root': {
                         color: '#2e7d32',
                         fontWeight: 600,
-                        fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' },
-                        minWidth: { xs: 28, sm: 32, md: 40 },
-                        height: { xs: 28, sm: 32, md: 40 },
+                        fontSize: { xs: '0.7rem', sm: '0.75rem', md: '0.875rem', lg: '1rem' },
+                        minWidth: { xs: 24, sm: 28, md: 32, lg: 40 },
+                        height: { xs: 24, sm: 28, md: 32, lg: 40 },
                         '&:hover': {
                           bgcolor: '#e8f5e9'
                         },
@@ -1056,7 +1214,7 @@ const ProjectsPage: React.FC = () => {
         {/* No Results */}
         {!loading && searchResponse.projects.length === 0 && (
           <Paper sx={{ 
-            p: { xs: 3, sm: 4, md: 6, lg: 8 }, 
+            p: { xs: 2, sm: 3, md: 4, lg: 6 }, 
             textAlign: 'center',
             borderRadius: { xs: 2, sm: 3, md: 4 },
             border: '2px solid #c8e6c9',
@@ -1066,13 +1224,13 @@ const ProjectsPage: React.FC = () => {
             <Avatar
               sx={{
                 bgcolor: '#2e7d32',
-                width: { xs: 50, sm: 60, md: 80 },
-                height: { xs: 50, sm: 60, md: 80 },
+                width: { xs: 40, sm: 50, md: 60, lg: 80 },
+                height: { xs: 40, sm: 50, md: 60, lg: 80 },
                 mx: 'auto',
                 mb: { xs: 2, sm: 3 }
               }}
             >
-              <ResearchIcon sx={{ fontSize: { xs: 24, sm: 30, md: 40 } }} />
+              <ResearchIcon sx={{ fontSize: { xs: 20, sm: 24, md: 30, lg: 40 } }} />
             </Avatar>
             <Typography 
               variant="h4" 
@@ -1080,7 +1238,12 @@ const ProjectsPage: React.FC = () => {
               sx={{ 
                 color: '#1b5e20', 
                 fontWeight: 'bold',
-                fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' }
+                fontSize: { 
+                  xs: isExtraSmall ? '1.1rem' : '1.25rem', 
+                  sm: '1.4rem', 
+                  md: '1.75rem', 
+                  lg: '2.125rem' 
+                }
               }}
             >
               No Research Projects Found
@@ -1090,10 +1253,11 @@ const ProjectsPage: React.FC = () => {
               sx={{ 
                 color: '#2e7d32', 
                 mb: { xs: 3, sm: 4 }, 
-                maxWidth: '500px', 
+                maxWidth: { xs: '100%', sm: '400px', md: '500px' }, 
                 mx: 'auto',
-                fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' },
-                lineHeight: 1.6
+                fontSize: { xs: '0.8rem', sm: '0.875rem', md: '1rem' },
+                lineHeight: 1.6,
+                px: { xs: 1, sm: 0 }
               }}
             >
               We couldn't find any public health research matching your criteria. 
@@ -1101,27 +1265,30 @@ const ProjectsPage: React.FC = () => {
             </Typography>
             <Box sx={{ 
               display: 'flex', 
-              gap: { xs: 1, sm: 2 }, 
+              gap: { xs: 1, sm: 1.5, md: 2 }, 
               justifyContent: 'center', 
               flexDirection: { xs: 'column', sm: 'row' },
-              px: { xs: 2, sm: 0 }
+              px: { xs: 1, sm: 0 }
             }}>
               <Button
                 variant="contained"
                 onClick={clearFilters}
-                size={isMobile ? "medium" : "large"}
+                size={isExtraSmall ? "medium" : isMobile ? "large" : "large"}
                 fullWidth={isMobile}
                 sx={{
                   bgcolor: '#1b5e20',
                   color: 'white',
-                  px: { xs: 3, sm: 4 },
+                  px: { xs: 2.5, sm: 3, md: 4 },
                   py: { xs: 1, sm: 1.5 },
                   borderRadius: { xs: 2, sm: 3 },
                   textTransform: 'none',
-                  fontSize: { xs: '0.875rem', sm: '1rem', md: '1.1rem' },
+                  fontSize: { xs: '0.8rem', sm: '0.875rem', md: '1rem', lg: '1.1rem' },
                   fontWeight: 'bold',
                   '&:hover': {
                     bgcolor: '#0d4715'
+                  },
+                  '&:active': {
+                    transform: 'scale(0.98)'
                   }
                 }}
               >
@@ -1130,22 +1297,25 @@ const ProjectsPage: React.FC = () => {
               <Button
                 variant="outlined"
                 onClick={() => navigate('/')}
-                size={isMobile ? "medium" : "large"}
+                size={isExtraSmall ? "medium" : isMobile ? "large" : "large"}
                 fullWidth={isMobile}
                 sx={{
                   borderColor: '#2e7d32',
                   color: '#2e7d32',
-                  px: { xs: 3, sm: 4 },
+                  px: { xs: 2.5, sm: 3, md: 4 },
                   py: { xs: 1, sm: 1.5 },
                   borderRadius: { xs: 2, sm: 3 },
                   textTransform: 'none',
-                  fontSize: { xs: '0.875rem', sm: '1rem', md: '1.1rem' },
+                  fontSize: { xs: '0.8rem', sm: '0.875rem', md: '1rem', lg: '1.1rem' },
                   fontWeight: 'bold',
                   borderWidth: { xs: 1.5, sm: 2 },
                   '&:hover': {
                     borderColor: '#1b5e20',
                     bgcolor: '#e8f5e9',
                     borderWidth: { xs: 1.5, sm: 2 }
+                  },
+                  '&:active': {
+                    transform: 'scale(0.98)'
                   }
                 }}
               >
