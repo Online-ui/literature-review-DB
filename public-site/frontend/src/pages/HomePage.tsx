@@ -870,14 +870,17 @@ const HomePage: React.FC = () => {
             </Typography>
           </Box>
 
+
           {loading ? (
             <Grid container spacing={{ xs: 1.5, sm: 2, md: 3, lg: 4 }}>
               {[1, 2, 3].map((item) => (
                 <Grid item xs={12} sm={6} lg={4} key={item}>
                   <Skeleton 
                     variant="rectangular" 
-                    height={{ xs: 300, sm: 350, md: 400 }} 
-                    sx={{ borderRadius: { xs: 3, md: 4 } }} 
+                    sx={{ 
+                      height: { xs: 300, sm: 350, md: 400 },
+                      borderRadius: { xs: 3, md: 4 } 
+                    }} 
                   />
                 </Grid>
               ))}
