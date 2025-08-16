@@ -618,7 +618,7 @@ const HomePage: React.FC = () => {
                       }}
                     >
                       {loading ? (
-                        <Skeleton width={{ xs: 60, sm: 80 }} sx={{ mx: 'auto' }} />
+                        <Skeleton sx={{ width: { xs: 60, sm: 80 }, mx: 'auto' }} />
                       ) : (
                         `${stat.number.toLocaleString()}${stat.number >= 1000 ? '+' : ''}`
                       )}
