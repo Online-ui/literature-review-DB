@@ -885,9 +885,10 @@ const ProjectsPage: React.FC = () => {
             gap: { xs: 1.5, sm: 2, md: 3 }
           }}>
             <CircularProgress 
-              size={{ xs: 40, sm: 50, md: 60, lg: 80 }}
               sx={{ 
                 color: '#1b5e20',
+                width: { xs: 40, sm: 50, md: 60, lg: 80 },
+                height: { xs: 40, sm: 50, md: 60, lg: 80 },
                 '& .MuiCircularProgress-circle': {
                   strokeLinecap: 'round',
                 }
