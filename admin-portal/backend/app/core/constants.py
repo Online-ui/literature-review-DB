@@ -1,4 +1,3 @@
-# Predefined research areas for UHAS (University of Health and Allied Sciences)
 RESEARCH_AREAS = [
     "Medicine and Health Sciences",
     "Nursing and Midwifery", 
@@ -46,15 +45,6 @@ ACADEMIC_YEARS = [f"{year}/{year+1}" for year in range(current_year, current_yea
 
 # UHAS specific institutions/campuses
 INSTITUTIONS = [
-    "UHAS - Ho Campus",
-    "UHAS - Hohoe Campus", 
-    "UHAS - Nursing and Midwifery Training College",
-    "UHAS - School of Medicine",
-    "UHAS - School of Nursing and Midwifery",
     "UHAS - School of Public Health",
-    "UHAS - School of Pharmacy",
-    "UHAS - School of Basic and Biomedical Sciences",
-    "UHAS - School of Allied Health Sciences",
-    "UHAS - Institute of Traditional and Alternative Medicine",
     "Others"
 ]
