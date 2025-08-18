@@ -24,7 +24,7 @@ def create_admin():
         
         # Get admin credentials from environment or use defaults
         admin_username = os.getenv("ADMIN_USERNAME", "admin")
-        admin_password = os.getenv("ADMIN_PASSWORD", "admin24@H2")
+        admin_password = os.getenv("ADMIN_PASSWORD", "aFGWREGF")
         admin_email = os.getenv("ADMIN_EMAIL", "admin@literature-db.com")
         
         # Create admin user
