@@ -26,7 +26,7 @@ def upgrade() -> None:
         op.create_table('users',
             sa.Column('id', sa.Integer(), nullable=False),
             sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=True),
             sa.Column('username', sa.String(), nullable=False),
             sa.Column('email', sa.String(), nullable=False),
             sa.Column('hashed_password', sa.String(), nullable=False),
@@ -62,6 +62,9 @@ def upgrade() -> None:
         # Check for missing columns and add them
         existing_columns = [col['name'] for col in inspector.get_columns('users')]
         
+        if 'updated_at' not in existing_columns:
+            op.add_column('users', sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=True))
+        
         if 'profile_image' not in existing_columns:
             op.add_column('users', sa.Column('profile_image', sa.String(), nullable=True))
         
@@ -90,12 +93,16 @@ def upgrade() -> None:
                           for fk in existing_fks)
             if not fk_exists:
                 op.create_foreign_key(None, 'projects', 'users', ['created_by_id'], ['id'])
+        
+        # Also check for updated_at column in projects
+        if 'updated_at' not in existing_columns:
+            op.add_column('projects', sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=True))
     else:
         # Create projects table if it doesn't exist
         op.create_table('projects',
             sa.Column('id', sa.Integer(), nullable=False),
             sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=True),
             sa.Column('title', sa.String(), nullable=False),
             sa.Column('slug', sa.String(), nullable=False),
             sa.Column('abstract', sa.Text(), nullable=True),
@@ -128,7 +135,7 @@ def upgrade() -> None:
         op.create_index(op.f('ix_projects_slug'), 'projects', ['slug'], unique=True)
         op.create_index(op.f('ix_projects_title'), 'projects', ['title'], unique=False)
     
-    # Create project_images table
+    # Create or update project_images table
     if 'project_images' not in existing_tables:
         op.create_table('project_images',
             sa.Column('id', sa.Integer(), nullable=False),
@@ -140,13 +147,23 @@ def upgrade() -> None:
             sa.Column('order_index', sa.Integer(), nullable=True, default=0),
             sa.Column('is_featured', sa.Boolean(), nullable=True, default=False),
             sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
-            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
+            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=True),
             sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
             sa.PrimaryKeyConstraint('id')
         )
         op.create_index(op.f('ix_project_images_id'), 'project_images', ['id'], unique=False)
         op.create_index(op.f('ix_project_images_project_id'), 'project_images', ['project_id'], unique=False)
         op.create_index(op.f('ix_project_images_is_featured'), 'project_images', ['is_featured'], unique=False)
+    else:
+        # If project_images table exists, check for missing updated_at column
+        existing_columns = [col['name'] for col in inspector.get_columns('project_images')]
+        if 'updated_at' not in existing_columns:
+            op.add_column('project_images', 
+                sa.Column('updated_at', sa.DateTime(timezone=True), 
+                         server_default=sa.func.now(), 
+                         onupdate=sa.func.now(), 
+                         nullable=True))
+            print("Added missing updated_at column to project_images table")
 
 def downgrade() -> None:
     # Get connection and inspector
