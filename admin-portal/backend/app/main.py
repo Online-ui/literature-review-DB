@@ -36,7 +36,7 @@ print(f"📁 Static directory: {STATIC_DIR}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://research-hub-admin-portal.onrender.com",
+        "https://literature-rev-admin-portal.onrender.com",
         "http://localhost:3000",
         "http://localhost:3001"
     ],
