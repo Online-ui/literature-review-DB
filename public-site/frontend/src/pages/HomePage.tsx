@@ -94,6 +94,7 @@ const HomePage: React.FC = () => {
     
     setTouchStartY(null);
   };
+
   useEffect(() => {
     // Add homepage structured data
     const homepageSchema = {
@@ -387,68 +388,72 @@ const HomePage: React.FC = () => {
                 </Grid>
               </Grid>
               
-              {/* Hero Illustration - Hidden on mobile */}
-              {!isTablet && (
-                <Grid item xs={12} md={5}>
-                  <motion.div
-                    initial={{ opacity: 0, x: 50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.8, delay: 0.3 }}
+              {/* Hero Illustration - Mobile Optimized */}
+              <Grid item xs={12} md={5}>
+                <motion.div
+                  initial={{ opacity: 0, x: 50 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.8, delay: 0.3 }}
+                >
+                  <Box
+                    sx={{
+                      position: 'relative',
+                      height: { xs: 200, sm: 300, md: 500 },
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      mt: { xs: 2, sm: 0 }
+                    }}
                   >
+                    {/* Mobile-optimized animated circles */}
                     <Box
                       sx={{
-                        position: 'relative',
-                        height: { xs: 300, md: 500 },
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
+                        position: 'absolute',
+                        width: { xs: 150, sm: 250, md: 400 },
+                        height: { xs: 150, sm: 250, md: 400 },
+                        borderRadius: '50%',
+                        border: '2px solid rgba(255,255,255,0.3)',
+                        animation: 'pulse 4s ease-in-out infinite',
+                        '@keyframes pulse': {
+                          '0%, 100%': {
+                            transform: 'scale(1)',
+                            opacity: 0.3
+                          },
+                          '50%': {
+                            transform: 'scale(1.1)',
+                            opacity: 0.5
+                          }
+                        }
                       }}
-                    >
-                      {/* Animated circles representing global health impact */}
-                      <Box
-                        component={motion.div}
-                        animate={{
-                          scale: [1, 1.2, 1],
-                          opacity: [0.3, 0.5, 0.3]
-                        }}
-                        transition={{
-                          duration: 4,
-                          repeat: Infinity,
-                          ease: "easeInOut"
-                        }}
-                        sx={{
-                          position: 'absolute',
-                          width: { xs: 250, md: 400 },
-                          height: { xs: 250, md: 400 },
-                          borderRadius: '50%',
-                          border: '2px solid rgba(255,255,255,0.3)',
-                        }}
-                      />
-                      <Box
-                        component={motion.div}
-                        animate={{
-                          scale: [1.2, 1, 1.2],
-                          opacity: [0.2, 0.4, 0.2]
-                        }}
-                        transition={{
-                          duration: 4,
-                          repeat: Infinity,
-                          ease: "easeInOut",
-                          delay: 1
-                        }}
-                        sx={{
-                          position: 'absolute',
-                          width: { xs: 200, md: 300 },
-                          height: { xs: 200, md: 300 },
-                          borderRadius: '50%',
-                          border: '2px solid rgba(255,255,255,0.4)',
-                        }}
-                      />
-                      <PublicIcon sx={{ fontSize: { xs: 80, md: 120 }, color: 'rgba(255,255,255,0.9)' }} />
-                    </Box>
-                  </motion.div>
-                </Grid>
-              )}
+                    />
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        width: { xs: 120, sm: 200, md: 300 },
+                        height: { xs: 120, sm: 200, md: 300 },
+                        borderRadius: '50%',
+                        border: '2px solid rgba(255,255,255,0.4)',
+                        animation: 'pulse 4s ease-in-out infinite 1s',
+                        '@keyframes pulse': {
+                          '0%, 100%': {
+                            transform: 'scale(1)',
+                            opacity: 0.2
+                          },
+                          '50%': {
+                            transform: 'scale(1.15)',
+                            opacity: 0.4
+                          }
+                        }
+                      }}
+                    />
+                    <PublicIcon sx={{ 
+                      fontSize: { xs: 60, sm: 80, md: 120 }, 
+                      color: 'rgba(255,255,255,0.9)',
+                      zIndex: 1
+                    }} />
+                  </Box>
+                </motion.div>
+              </Grid>
             </Grid>
           </motion.div>
         </Container>
@@ -467,7 +472,7 @@ const HomePage: React.FC = () => {
               color: 'white',
               opacity: 0.7
             }}
-                      >
+          >
             <Typography variant="caption">Scroll to explore</Typography>
           </Box>
         )}
@@ -869,7 +874,6 @@ const HomePage: React.FC = () => {
               Discover groundbreaking research that's shaping the future of public health
             </Typography>
           </Box>
-
 
           {loading ? (
             <Grid container spacing={{ xs: 1.5, sm: 2, md: 3, lg: 4 }}>
