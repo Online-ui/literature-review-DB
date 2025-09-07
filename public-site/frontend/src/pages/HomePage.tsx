@@ -262,79 +262,94 @@ const HomePage: React.FC = () => {
                 </Typography>
 
                 {/* Modern Search Bar - Mobile Optimized */}
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: { xs: 0.2, sm: 0.3, md: 0.5 },
-                    display: 'flex',
-                    alignItems: 'center',
-                    maxWidth: { xs: '100%', sm: 500, md: 600 },
-                    mx: { xs: 'auto', md: 0 },
-                    borderRadius: '50px',
-                    bgcolor: 'rgba(255,255,255,0.95)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255,255,255,0.3)',
-                    mb: { xs: 3, md: 4 },
-                    flexDirection: { xs: 'column', sm: 'row' },
-                    gap: { xs: 0.5, sm: 0 }
-                  }}
-                >
-                  <TextField
-                    fullWidth
-                    placeholder={
-                      isExtraSmall 
-                        ? "Search..." 
-                        : isMobile 
-                          ? "Search research..." 
-                          : "Discover research, programs, and more..."
-                    }
-                    variant="standard"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    InputProps={{
-                      disableUnderline: true,
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon sx={{ 
-                            color: '#0a4f3c', 
-                            ml: { xs: 0.5, sm: 1, md: 2 },
-                            fontSize: { xs: 20, sm: 24 }
-                          }} />
-                        </InputAdornment>
-                      ),
-                      sx: { 
-                        px: { xs: 0.5, sm: 1, md: 2 }, 
-                        py: { xs: 0.75, sm: 1 },
-                        fontSize: { xs: '0.875rem', sm: '1rem' }
-                      }
-                    }}
-                  />
-                  <Button
-                    variant="contained"
-                    onClick={handleSearch}
+                <Box sx={{ 
+                  width: '100%', 
+                  maxWidth: { xs: '100%', sm: 500, md: 600 },
+                  mx: { xs: 'auto', md: 0 },
+                  mb: { xs: 3, md: 4 }
+                }}>
+                  <Paper
+                    elevation={0}
                     sx={{
-                      borderRadius: '50px',
-                      px: { xs: 2.5, sm: 3, md: 4 },
-                      py: { xs: 1, sm: 1.5 },
-                      mr: { xs: 0, sm: 0.5 },
-                      mb: { xs: 0.5, sm: 0 },
-                      width: { xs: '100%', sm: 'auto' },
-                      minWidth: { xs: 'auto', sm: 100 },
-                      bgcolor: '#0a4f3c',
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      fontSize: { xs: '0.875rem', sm: '1rem' },
-                      boxShadow: 'none',
-                      '&:hover': {
-                        bgcolor: '#063d2f',
-                        boxShadow: '0 4px 20px rgba(10,79,60,0.3)'
-                      }
+                      p: { xs: 1, sm: 1.5 },
+                      borderRadius: { xs: 2, sm: '50px' },
+                      bgcolor: 'rgba(255,255,255,0.95)',
+                      backdropFilter: 'blur(10px)',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
                     }}
                   >
-                    Search
-                  </Button>
-                </Paper>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center',
+                      gap: { xs: 1, sm: 1.5 }
+                    }}>
+                      <SearchIcon sx={{ 
+                        color: '#0a4f3c', 
+                        ml: { xs: 1, sm: 2 },
+                        fontSize: { xs: 22, sm: 24 },
+                        flexShrink: 0
+                      }} />
+                      
+                      <TextField
+                        fullWidth
+                        placeholder={isExtraSmall ? "Search projects..." : "Search research projects..."}
+                        variant="standard"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        InputProps={{
+                          disableUnderline: true,
+                          sx: { 
+                            fontSize: { xs: '0.9rem', sm: '1rem' },
+                            fontWeight: 500,
+                            color: '#333',
+                            '&::placeholder': {
+                              color: 'rgba(0,0,0,0.5)',
+                              opacity: 1
+                            }
+                          }
+                        }}
+                        sx={{
+                          '& input': {
+                            py: { xs: 1.2, sm: 1.5 },
+                            '&::placeholder': {
+                              color: 'rgba(0,0,0,0.5)',
+                              opacity: 1
+                            }
+                          }
+                        }}
+                      />
+                      
+                      <Button
+                        variant="contained"
+                        onClick={handleSearch}
+                        sx={{
+                          borderRadius: { xs: 1.5, sm: '50px' },
+                          px: { xs: 2.5, sm: 3, md: 4 },
+                          py: { xs: 1, sm: 1.25 },
+                          minWidth: { xs: 'auto', sm: 100 },
+                          bgcolor: '#0a4f3c',
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          fontSize: { xs: '0.875rem', sm: '1rem' },
+                          boxShadow: 'none',
+                          flexShrink: 0,
+                          '&:hover': {
+                            bgcolor: '#063d2f',
+                            transform: 'translateY(-1px)',
+                            boxShadow: '0 4px 20px rgba(10,79,60,0.3)'
+                          },
+                          '&:active': {
+                            transform: 'translateY(0)'
+                          }
+                        }}
+                      >
+                        {isMobile ? 'Go' : 'Search'}
+                      </Button>
+                    </Box>
+                  </Paper>
+                </Box>
 
                 {/* Quick Stats - Mobile Optimized */}
                 <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ justifyContent: { xs: 'center', md: 'flex-start' } }}>
