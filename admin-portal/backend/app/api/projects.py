@@ -83,16 +83,21 @@ def serialize_project(project: Project, include_images: bool = True) -> dict:
             "publication_date": project.publication_date.isoformat() if project.publication_date else None,
             "meta_description": project.meta_description,
             "meta_keywords": project.meta_keywords,
-            "document_url": f"/api/projects/{project.id}/download" if project.document_filename else None,
             "document_filename": project.document_filename,
             "document_size": project.document_size,
+            "document_content_type": project.document_content_type,
+            "document_storage": project.document_storage,
             "view_count": project.view_count or 0,
             "download_count": project.download_count or 0,
             "created_at": project.created_at.isoformat() if project.created_at else None,
             "updated_at": project.updated_at.isoformat() if project.updated_at else None,
+            "created_by_id": project.created_by_id,
             "created_by": None,
             "image_records": [],
-            "featured_image": None
+            "images": [],  # Legacy field for backward compatibility
+            "featured_image_index": 0,  # Legacy field
+            "featured_image": None,
+            "document_url": f"/api/projects/{project.id}/download" if project.document_filename else None
         }
         
         # Add creator info if available
@@ -108,30 +113,48 @@ def serialize_project(project: Project, include_images: bool = True) -> dict:
         if include_images and hasattr(project, 'image_records'):
             try:
                 images = []
-                for img in project.image_records:
+                legacy_images = []  # For backward compatibility
+                
+                for idx, img in enumerate(project.image_records):
+                    # Properly format image data to match ProjectImageResponse schema
                     image_data = {
                         "id": img.id,
-                        "image_url": f"/api/projects/{project.id}/images/{img.id}",
+                        "project_id": project.id,  # Add required project_id
                         "filename": img.filename,
-                        "size": img.image_size,
+                        "content_type": img.content_type or "image/png",  # Add required content_type
+                        "image_size": img.image_size,  # Correct field name (not 'size')
                         "order_index": img.order_index,
-                        "is_featured": img.is_featured
+                        "is_featured": img.is_featured,
+                        "created_at": img.created_at.isoformat() if img.created_at else datetime.utcnow().isoformat(),  # Add required created_at
+                        "updated_at": img.updated_at.isoformat() if hasattr(img, 'updated_at') and img.updated_at else None
                     }
                     images.append(image_data)
                     
+                    # Add to legacy images list
+                    image_url = f"/api/projects/{project.id}/images/{img.id}"
+                    legacy_images.append(image_url)
+                    
                     # Set featured image
                     if img.is_featured:
-                        result["featured_image"] = f"/api/projects/{project.id}/images/{img.id}"
+                        result["featured_image"] = image_url
+                        result["featured_image_index"] = idx
                 
                 result["image_records"] = images
+                result["images"] = legacy_images  # Legacy field for backward compatibility
                 
                 # If no featured image set, use first image
                 if not result["featured_image"] and images:
-                    result["featured_image"] = images[0]["image_url"]
+                    result["featured_image"] = f"/api/projects/{project.id}/images/{images[0]['id']}"
+                    result["featured_image_index"] = 0
                     
             except Exception as e:
                 logger.warning(f"Could not serialize images for project {project.id}: {str(e)}")
                 result["image_records"] = []
+                result["images"] = []
+        else:
+            # Ensure empty lists even when no images
+            result["image_records"] = []
+            result["images"] = []
         
         return result
         
@@ -188,7 +211,8 @@ async def get_projects(
         result = []
         for project in projects:
             try:
-                result.append(serialize_project(project))
+                serialized = serialize_project(project, include_images=True)
+                result.append(serialized)
             except Exception as e:
                 logger.error(f"Error serializing project {project.id}: {str(e)}")
                 continue
@@ -197,7 +221,7 @@ async def get_projects(
         
     except Exception as e:
         logger.error(f"Error fetching projects: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to fetch projects")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch projects: {str(e)}")
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(
@@ -220,13 +244,13 @@ async def get_project(
         if current_user.role != "main_coordinator" and project.created_by_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not enough permissions")
         
-        return serialize_project(project)
+        return serialize_project(project, include_images=True)
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error fetching project {project_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to fetch project")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch project: {str(e)}")
 
 @router.post("/", response_model=ProjectResponse)
 async def create_project(
@@ -331,6 +355,7 @@ async def create_project(
             meta_description=meta_description,
             meta_keywords=meta_keywords,
             is_published=is_published,
+            publication_date=datetime.utcnow() if is_published else None,
             document_filename=document_filename,
             document_size=document_size,
             document_data=document_data,
@@ -364,7 +389,7 @@ async def create_project(
             joinedload(Project.image_records)
         ).filter(Project.id == db_project.id).first()
         
-        return serialize_project(db_project)
+        return serialize_project(db_project, include_images=True)
         
     except HTTPException:
         raise
@@ -373,7 +398,7 @@ async def create_project(
         logger.error(f"Failed to create project: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create project"
+            detail=f"Failed to create project: {str(e)}"
         )
 
 @router.put("/{project_id}", response_model=ProjectResponse)
@@ -474,6 +499,8 @@ async def update_project(
             project.meta_keywords = meta_keywords
         if is_published is not None:
             project.is_published = is_published
+            if is_published and not project.publication_date:
+                project.publication_date = datetime.utcnow()
         
         # Handle file removal
         if remove_file:
@@ -524,7 +551,7 @@ async def update_project(
             joinedload(Project.image_records)
         ).filter(Project.id == project_id).first()
         
-        return serialize_project(project)
+        return serialize_project(project, include_images=True)
         
     except HTTPException:
         raise
@@ -533,7 +560,7 @@ async def update_project(
         logger.error(f"Failed to update project: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update project"
+            detail=f"Failed to update project: {str(e)}"
         )
 
 @router.delete("/{project_id}")
@@ -564,7 +591,7 @@ async def delete_project(
         logger.error(f"Failed to delete project: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete project"
+            detail=f"Failed to delete project: {str(e)}"
         )
 
 # Document management endpoints
@@ -1001,6 +1028,8 @@ async def toggle_project_publish_status(
             raise HTTPException(status_code=403, detail="Not enough permissions")
         
         project.is_published = not project.is_published
+        if project.is_published and not project.publication_date:
+            project.publication_date = datetime.utcnow()
         
         db.commit()
         db.refresh(project)
@@ -1116,12 +1145,14 @@ async def batch_publish_projects(
                 detail="Only main coordinators can perform batch operations"
             )
         
-        updated = db.query(Project).filter(
-            Project.id.in_(project_ids)
-        ).update(
-            {"is_published": True},
-            synchronize_session=False
-        )
+        # Update projects and set publication_date if not set
+        projects = db.query(Project).filter(Project.id.in_(project_ids)).all()
+        updated = 0
+        for project in projects:
+            project.is_published = True
+            if not project.publication_date:
+                project.publication_date = datetime.utcnow()
+            updated += 1
         
         db.commit()
         
@@ -1286,7 +1317,7 @@ async def advanced_search(
         result = []
         for project in projects:
             try:
-                result.append(serialize_project(project))
+                result.append(serialize_project(project, include_images=True))
             except Exception as e:
                 logger.error(f"Error serializing project {project.id}: {str(e)}")
                 continue
