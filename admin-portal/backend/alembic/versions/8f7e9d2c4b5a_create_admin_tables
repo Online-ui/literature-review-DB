@@ -16,17 +16,21 @@ branch_labels = None
 depends_on = None
 
 def upgrade() -> None:
+    """Create or update admin tables with all required columns"""
     # Get connection and inspector
     conn = op.get_bind()
     inspector = inspect(conn)
     existing_tables = inspector.get_table_names()
     
-    # Create users table only if it doesn't exist
+    print("🔍 Starting migration: Create admin tables and project images")
+    
+    # ==================== USERS TABLE ====================
     if 'users' not in existing_tables:
+        print("📋 Creating users table...")
         op.create_table('users',
             sa.Column('id', sa.Integer(), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=True),
+            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
             sa.Column('username', sa.String(), nullable=False),
             sa.Column('email', sa.String(), nullable=False),
             sa.Column('hashed_password', sa.String(), nullable=False),
@@ -47,62 +51,84 @@ def upgrade() -> None:
         op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
         op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
         op.create_index(op.f('ix_users_reset_token'), 'users', ['reset_token'], unique=False)
+        print("✅ Users table created successfully")
     else:
+        print("ℹ️  Users table already exists, checking for missing columns/indexes...")
         # Check if indexes exist and create them if they don't
         existing_indexes = [idx['name'] for idx in inspector.get_indexes('users')]
         if 'ix_users_email' not in existing_indexes:
             op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
+            print("  ✓ Added index: ix_users_email")
         if 'ix_users_id' not in existing_indexes:
             op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
+            print("  ✓ Added index: ix_users_id")
         if 'ix_users_username' not in existing_indexes:
             op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
+            print("  ✓ Added index: ix_users_username")
         if 'ix_users_reset_token' not in existing_indexes:
             op.create_index(op.f('ix_users_reset_token'), 'users', ['reset_token'], unique=False)
+            print("  ✓ Added index: ix_users_reset_token")
         
         # Check for missing columns and add them
         existing_columns = [col['name'] for col in inspector.get_columns('users')]
         
         if 'updated_at' not in existing_columns:
-            op.add_column('users', sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=True))
+            op.add_column('users', sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False))
+            print("  ✓ Added column: updated_at")
         
         if 'profile_image' not in existing_columns:
             op.add_column('users', sa.Column('profile_image', sa.String(), nullable=True))
+            print("  ✓ Added column: profile_image")
         
         if 'about' not in existing_columns:
             op.add_column('users', sa.Column('about', sa.Text(), nullable=True))
+            print("  ✓ Added column: about")
         
         if 'disciplines' not in existing_columns:
             op.add_column('users', sa.Column('disciplines', sa.Text(), nullable=True))
+            print("  ✓ Added column: disciplines")
         
         if 'reset_token' not in existing_columns:
             op.add_column('users', sa.Column('reset_token', sa.String(), nullable=True))
+            print("  ✓ Added column: reset_token")
         
         if 'reset_token_expires' not in existing_columns:
             op.add_column('users', sa.Column('reset_token_expires', sa.DateTime(), nullable=True))
+            print("  ✓ Added column: reset_token_expires")
+        
+        print("✅ Users table updated successfully")
     
-    # Handle projects table
+    # ==================== PROJECTS TABLE ====================
     if 'projects' in existing_tables:
+        print("ℹ️  Projects table already exists, checking for missing columns...")
         # Add created_by_id column to existing projects table if it doesn't exist
         existing_columns = [col['name'] for col in inspector.get_columns('projects')]
+        
         if 'created_by_id' not in existing_columns:
             op.add_column('projects', sa.Column('created_by_id', sa.Integer(), nullable=True))
+            print("  ✓ Added column: created_by_id")
             
             # Check if foreign key already exists
             existing_fks = inspector.get_foreign_keys('projects')
             fk_exists = any(fk['referred_table'] == 'users' and 'created_by_id' in fk['constrained_columns'] 
                           for fk in existing_fks)
             if not fk_exists:
-                op.create_foreign_key(None, 'projects', 'users', ['created_by_id'], ['id'])
+                op.create_foreign_key('fk_projects_created_by_id_users', 'projects', 'users', ['created_by_id'], ['id'])
+                print("  ✓ Added foreign key: created_by_id -> users.id")
         
-        # Also check for updated_at column in projects
+        # Check for updated_at column in projects
         if 'updated_at' not in existing_columns:
-            op.add_column('projects', sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=True))
+            op.add_column('projects', sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False))
+            print("  ✓ Added column: updated_at")
+        
+        print("✅ Projects table updated successfully")
     else:
+        print("📋 Creating projects table...")
         # Create projects table if it doesn't exist
         op.create_table('projects',
             sa.Column('id', sa.Integer(), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=True),
+            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
             sa.Column('title', sa.String(), nullable=False),
             sa.Column('slug', sa.String(), nullable=False),
             sa.Column('abstract', sa.Text(), nullable=True),
@@ -116,17 +142,21 @@ def upgrade() -> None:
             sa.Column('author_name', sa.String(), nullable=False),
             sa.Column('author_email', sa.String(), nullable=True),
             sa.Column('is_published', sa.Boolean(), nullable=True),
-            sa.Column('publication_date', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+            sa.Column('publication_date', sa.DateTime(timezone=True), nullable=True),
             sa.Column('meta_description', sa.Text(), nullable=True),
             sa.Column('meta_keywords', sa.Text(), nullable=True),
-            sa.Column('document_url', sa.String(), nullable=True),
             sa.Column('document_filename', sa.String(), nullable=True),
             sa.Column('document_size', sa.Integer(), nullable=True),
-            sa.Column('view_count', sa.Integer(), nullable=True),
-            sa.Column('download_count', sa.Integer(), nullable=True),
+            sa.Column('document_data', sa.LargeBinary(), nullable=True),
+            sa.Column('document_content_type', sa.String(), nullable=True),
+            sa.Column('document_storage', sa.String(), default='database', nullable=True),
+            sa.Column('images', sa.JSON(), nullable=True),
+            sa.Column('featured_image_index', sa.Integer(), default=0, nullable=True),
+            sa.Column('view_count', sa.Integer(), default=0, nullable=True),
+            sa.Column('download_count', sa.Integer(), default=0, nullable=True),
             sa.Column('created_by_id', sa.Integer(), nullable=True),
             sa.PrimaryKeyConstraint('id'),
-            sa.ForeignKeyConstraint(['created_by_id'], ['users.id'], )
+            sa.ForeignKeyConstraint(['created_by_id'], ['users.id'], name='fk_projects_created_by_id_users')
         )
         op.create_index(op.f('ix_projects_id'), 'projects', ['id'], unique=False)
         op.create_index(op.f('ix_projects_institution'), 'projects', ['institution'], unique=False)
@@ -134,45 +164,65 @@ def upgrade() -> None:
         op.create_index(op.f('ix_projects_research_area'), 'projects', ['research_area'], unique=False)
         op.create_index(op.f('ix_projects_slug'), 'projects', ['slug'], unique=True)
         op.create_index(op.f('ix_projects_title'), 'projects', ['title'], unique=False)
+        print("✅ Projects table created successfully")
     
-    # Create or update project_images table
+    # ==================== PROJECT_IMAGES TABLE ====================
     if 'project_images' not in existing_tables:
+        print("📋 Creating project_images table...")
         op.create_table('project_images',
             sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
             sa.Column('project_id', sa.Integer(), nullable=False),
             sa.Column('filename', sa.String(), nullable=False),
-            sa.Column('content_type', sa.String(), nullable=True),
+            sa.Column('content_type', sa.String(), default='image/png', nullable=True),
             sa.Column('image_size', sa.Integer(), nullable=True),
             sa.Column('image_data', sa.LargeBinary(), nullable=False),
-            sa.Column('order_index', sa.Integer(), nullable=True, default=0),
-            sa.Column('is_featured', sa.Boolean(), nullable=True, default=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
-            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=True),
-            sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
+            sa.Column('order_index', sa.Integer(), default=0, nullable=True),
+            sa.Column('is_featured', sa.Boolean(), default=False, nullable=True),
+            sa.ForeignKeyConstraint(['project_id'], ['projects.id'], name='fk_project_images_project_id_projects', ondelete='CASCADE'),
             sa.PrimaryKeyConstraint('id')
         )
         op.create_index(op.f('ix_project_images_id'), 'project_images', ['id'], unique=False)
         op.create_index(op.f('ix_project_images_project_id'), 'project_images', ['project_id'], unique=False)
         op.create_index(op.f('ix_project_images_is_featured'), 'project_images', ['is_featured'], unique=False)
+        print("✅ Project_images table created successfully")
     else:
+        print("ℹ️  Project_images table already exists, checking for missing columns...")
         # If project_images table exists, check for missing updated_at column
         existing_columns = [col['name'] for col in inspector.get_columns('project_images')]
+        
         if 'updated_at' not in existing_columns:
             op.add_column('project_images', 
                 sa.Column('updated_at', sa.DateTime(timezone=True), 
-                         server_default=sa.func.now(), 
-                         onupdate=sa.func.now(), 
-                         nullable=True))
-            print("Added missing updated_at column to project_images table")
+                         server_default=sa.text('now()'), 
+                         nullable=False))
+            print("  ✓ Added column: updated_at to project_images")
+        
+        if 'created_at' not in existing_columns:
+            op.add_column('project_images', 
+                sa.Column('created_at', sa.DateTime(timezone=True), 
+                         server_default=sa.text('now()'), 
+                         nullable=False))
+            print("  ✓ Added column: created_at to project_images")
+        
+        print("✅ Project_images table updated successfully")
+    
+    print("🎉 Migration completed successfully!")
+
 
 def downgrade() -> None:
+    """Rollback migration changes"""
     # Get connection and inspector
     conn = op.get_bind()
     inspector = inspect(conn)
     existing_tables = inspector.get_table_names()
     
+    print("🔄 Rolling back migration: Create admin tables and project images")
+    
     # Drop project_images table and its indexes if they exist
     if 'project_images' in existing_tables:
+        print("🗑️  Dropping project_images table...")
         existing_indexes = [idx['name'] for idx in inspector.get_indexes('project_images')]
         if 'ix_project_images_is_featured' in existing_indexes:
             op.drop_index(op.f('ix_project_images_is_featured'), table_name='project_images')
@@ -181,9 +231,11 @@ def downgrade() -> None:
         if 'ix_project_images_id' in existing_indexes:
             op.drop_index(op.f('ix_project_images_id'), table_name='project_images')
         op.drop_table('project_images')
+        print("✅ Project_images table dropped")
     
+    # Remove created_by_id from projects if it exists
     if 'projects' in existing_tables:
-        # Check if created_by_id column exists
+        print("🗑️  Removing created_by_id from projects...")
         columns = [col['name'] for col in inspector.get_columns('projects')]
         if 'created_by_id' in columns:
             # Find and drop the foreign key constraint
@@ -192,9 +244,11 @@ def downgrade() -> None:
                 if 'created_by_id' in fk['constrained_columns']:
                     op.drop_constraint(fk['name'], 'projects', type_='foreignkey')
             op.drop_column('projects', 'created_by_id')
+        print("✅ Removed created_by_id from projects")
     
     # Drop users table and its indexes if they exist
     if 'users' in existing_tables:
+        print("🗑️  Dropping users table...")
         existing_indexes = [idx['name'] for idx in inspector.get_indexes('users')]
         if 'ix_users_reset_token' in existing_indexes:
             op.drop_index(op.f('ix_users_reset_token'), table_name='users')
@@ -205,3 +259,6 @@ def downgrade() -> None:
         if 'ix_users_email' in existing_indexes:
             op.drop_index(op.f('ix_users_email'), table_name='users')
         op.drop_table('users')
+        print("✅ Users table dropped")
+    
+    print("🎉 Rollback completed successfully!")
