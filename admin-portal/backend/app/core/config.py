@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     
     # Password Reset
-    RESET_TOKEN_EXPIRE_MINUTES: int = 15
+    RESET_TOKEN_EXPIRE_MINUTES: int = 30
     
     # Email Configuration (Gmail SMTP)
     MAIL_USERNAME: str
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # Frontend URL for password reset links
     FRONTEND_URL: str = "https://literature-rev-admin-portal.onrender.com"
 
-     # Backend URL (for API calls)
+    # Backend URL (for API calls)
     BACKEND_URL: str = "https://literature-review-admin-backend.onrender.com"
     
     # CORS
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
         "https://literature-admin-backend.onrender.com"
     ]
 
-    # Add these settings to your Settings class
+    # Upload settings
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
     ALLOWED_IMAGE_EXTENSIONS: set = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
