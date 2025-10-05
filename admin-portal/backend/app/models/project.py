@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, func, ForeignKey, LargeBinary
+from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, ForeignKey, LargeBinary
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSON
 from .base import BaseModel
@@ -26,7 +26,7 @@ class Project(BaseModel):
     
     # Publication Status
     is_published = Column(Boolean, default=True, index=True)
-    publication_date = Column(DateTime(timezone=True), server_default=func.now())
+    publication_date = Column(DateTime(timezone=True))
     
     # SEO Fields
     meta_description = Column(Text)
@@ -52,14 +52,16 @@ class Project(BaseModel):
     created_by_user = relationship("User", back_populates="created_projects")
     
     # Relationship to images stored in database
-    image_records = relationship("ProjectImage", back_populates="project", cascade="all, delete-orphan", order_by="ProjectImage.order_index")
+    image_records = relationship(
+        "ProjectImage", 
+        back_populates="project", 
+        cascade="all, delete-orphan", 
+        order_by="ProjectImage.order_index"
+    )
 
 
 class ProjectImage(BaseModel):
     __tablename__ = "project_images"
-    
-    # Primary key
-    id = Column(Integer, primary_key=True, index=True)
     
     # Foreign key to project
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -76,8 +78,7 @@ class ProjectImage(BaseModel):
     order_index = Column(Integer, default=0)
     is_featured = Column(Boolean, default=False, index=True)
     
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # Note: created_at and updated_at are inherited from BaseModel
     
     # Relationship back to project
     project = relationship("Project", back_populates="image_records")
